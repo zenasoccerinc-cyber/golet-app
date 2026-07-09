@@ -47,10 +47,17 @@ const TelegramLoginWidget = ({ onAuth }) => {
 };
 
 export default function App() {
-  // --- NEW: Checking the Browser's Pocket (Local Storage) on Load ---
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("goleth_user");
-    return savedUser ? JSON.parse(savedUser) : null;
+    // Extra safety check: verify the saved pocket ID hasn't expired yet
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      if (parsedUser.vipUntil && new Date(parsedUser.vipUntil) < new Date()) {
+        parsedUser.isVIP = false; // Expired!
+      }
+      return parsedUser;
+    }
+    return null;
   });
 
   const [activeTab, setActiveTab] = useState("ዜና");
@@ -132,7 +139,25 @@ export default function App() {
 
     let currentUser;
     if (data) {
-      currentUser = { id: data.id, name: data.name, isVIP: data.is_vip };
+      // --- NEW: Check if their 30 days have expired ---
+      let currentlyValidVIP = false;
+      if (data.is_vip && data.vip_until) {
+        currentlyValidVIP = new Date(data.vip_until) > new Date(); // Is the expiration date in the future?
+
+        // If it expired, secretly update the database to remove their VIP badge
+        if (!currentlyValidVIP) {
+          await supabase
+            .from("users")
+            .update({ is_vip: false })
+            .eq("id", userIdString);
+        }
+      }
+      currentUser = {
+        id: data.id,
+        name: data.name,
+        isVIP: currentlyValidVIP,
+        vipUntil: data.vip_until,
+      };
     } else {
       const newUser = {
         id: userIdString,
@@ -144,18 +169,17 @@ export default function App() {
         id: newUser.id,
         name: newUser.name,
         isVIP: newUser.is_vip,
+        vipUntil: null,
       };
     }
 
     setUser(currentUser);
-    // NEW: Save the ID badge to Local Storage!
     localStorage.setItem("goleth_user", JSON.stringify(currentUser));
   };
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       setUser(null);
-      // NEW: Throw away the ID badge
       localStorage.removeItem("goleth_user");
       setActiveTab("ዜና");
     }
@@ -163,18 +187,28 @@ export default function App() {
 
   const handleTelebirrPayment = async () => {
     setPaymentStatus("loading");
+
+    // --- NEW: Calculate exact date 30 days from right now ---
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + 30);
+    const expirationIsoString = expirationDate.toISOString();
+
     setTimeout(async () => {
+      // Update database with BOTH the VIP status and the new expiration clock
       const { error } = await supabase
         .from("users")
-        .update({ is_vip: true })
+        .update({ is_vip: true, vip_until: expirationIsoString })
         .eq("id", user.id);
 
       if (!error) {
         setPaymentStatus("success");
         setTimeout(() => {
-          const updatedUser = { ...user, isVIP: true };
+          const updatedUser = {
+            ...user,
+            isVIP: true,
+            vipUntil: expirationIsoString,
+          };
           setUser(updatedUser);
-          // NEW: Update the ID badge in Local Storage with the VIP status!
           localStorage.setItem("goleth_user", JSON.stringify(updatedUser));
           setPaymentStatus("idle");
         }, 1500);
