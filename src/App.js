@@ -11,6 +11,7 @@ import {
   PlusCircle,
   UploadCloud,
   Trash2,
+  Edit,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -27,9 +28,11 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
 
+  // Edit State
+  const [editingId, setEditingId] = useState(null);
+
   // Read More State
   const [expandedPosts, setExpandedPosts] = useState({});
-
   const toggleReadMore = (id) => {
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -104,10 +107,37 @@ export default function App() {
     }
   };
 
+  const handleEdit = (item, table) => {
+    setEditingId(item.id);
+    setAdminTab(table);
+    setFormData({
+      title: item.title || item.name || "",
+      subtitle: item.subtitle || "",
+      author: item.author || "",
+      body: item.body || "",
+      price: item.price || "",
+      category: item.category || "",
+      league: item.league_name || "",
+      teamA: item.team_a_name || "",
+      teamB: item.team_b_name || "",
+      score: item.score || "",
+      details: item.match_details || "",
+      image_url: item.image_url || null,
+    });
+    setShowAdmin(true);
+  };
+
+  const closeAdmin = () => {
+    setShowAdmin(false);
+    setEditingId(null);
+    setFormData({});
+    setImageFile(null);
+  };
+
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
-    let finalImageUrl = null;
+    let finalImageUrl = formData.image_url;
 
     if (imageFile) {
       const fileExt = imageFile.name.split(".").pop();
@@ -121,55 +151,46 @@ export default function App() {
       }
     }
 
+    const payload = {};
     if (adminTab === "news" || adminTab === "gossip") {
-      await supabase.from(adminTab).insert([
-        {
-          title: formData.title,
-          subtitle: formData.subtitle,
-          author: formData.author || "ZenaSoccer",
-          body: formData.body,
-          image_url: finalImageUrl,
-        },
-      ]);
+      payload.title = formData.title;
+      payload.subtitle = formData.subtitle;
+      payload.author = formData.author || "ZenaSoccer";
+      payload.body = formData.body;
+      payload.image_url = finalImageUrl;
     } else if (adminTab === "products") {
-      await supabase.from("products").insert([
-        {
-          name: formData.title,
-          price: Number(formData.price),
-          category: formData.category,
-          image_url: finalImageUrl,
-        },
-      ]);
+      payload.name = formData.title;
+      payload.price = Number(formData.price);
+      payload.category = formData.category;
+      payload.image_url = finalImageUrl;
     } else if (adminTab === "results") {
-      await supabase.from("results").insert([
-        {
-          league_name: formData.league,
-          team_a_name: formData.teamA,
-          team_b_name: formData.teamB,
-          score: formData.score,
-          match_details: formData.details,
-        },
-      ]);
+      payload.league_name = formData.league;
+      payload.team_a_name = formData.teamA;
+      payload.team_b_name = formData.teamB;
+      payload.score = formData.score;
+      payload.match_details = formData.details;
     } else if (adminTab === "predictions") {
-      await supabase
-        .from("predictions")
-        .update({ is_active: false })
-        .neq("id", 0);
-      await supabase.from("predictions").insert([
-        {
-          league_name: formData.league,
-          team_a_name: formData.teamA,
-          team_b_name: formData.teamB,
-        },
-      ]);
+      payload.league_name = formData.league;
+      payload.team_a_name = formData.teamA;
+      payload.team_b_name = formData.teamB;
     }
 
-    setFormData({});
-    setImageFile(null);
+    if (editingId) {
+      await supabase.from(adminTab).update(payload).eq("id", editingId);
+    } else {
+      if (adminTab === "predictions") {
+        await supabase
+          .from("predictions")
+          .update({ is_active: false })
+          .neq("id", 0);
+      }
+      await supabase.from(adminTab).insert([payload]);
+    }
+
+    closeAdmin();
     setUploading(false);
-    setShowAdmin(false);
     fetchData();
-    alert("Published successfully!");
+    alert(editingId ? "Updated successfully!" : "Published successfully!");
   };
 
   const formatDate = (dateString) => {
@@ -191,12 +212,20 @@ export default function App() {
         className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative"
       >
         {isCEO && (
-          <button
-            onClick={() => handleDelete(table, item.id)}
-            className="absolute top-2 right-2 bg-red-600 p-2 rounded-full z-10 hover:bg-red-700"
-          >
-            <Trash2 size={16} className="text-white" />
-          </button>
+          <div className="absolute top-2 right-2 flex space-x-2 z-10">
+            <button
+              onClick={() => handleEdit(item, table)}
+              className="bg-blue-600 p-2 rounded-full hover:bg-blue-700"
+            >
+              <Edit size={16} className="text-white" />
+            </button>
+            <button
+              onClick={() => handleDelete(table, item.id)}
+              className="bg-red-600 p-2 rounded-full hover:bg-red-700"
+            >
+              <Trash2 size={16} className="text-white" />
+            </button>
+          </div>
         )}
         {item.image_url && (
           <img
@@ -253,12 +282,20 @@ export default function App() {
           className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center shadow-lg relative"
         >
           {isCEO && (
-            <button
-              onClick={() => handleDelete("results", item.id)}
-              className="absolute top-2 right-2 text-red-500"
-            >
-              <Trash2 size={16} />
-            </button>
+            <div className="absolute top-2 right-2 flex space-x-2">
+              <button
+                onClick={() => handleEdit(item, "results")}
+                className="text-blue-500 hover:text-blue-400"
+              >
+                <Edit size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete("results", item.id)}
+                className="text-red-500 hover:text-red-400"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           )}
           <p className="text-zinc-400 text-sm mb-4 font-bold tracking-wide">
             {item.league_name}
@@ -307,12 +344,20 @@ export default function App() {
         ) : (
           <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl relative">
             {isCEO && (
-              <button
-                onClick={() => handleDelete("predictions", activeMatch.id)}
-                className="absolute top-2 right-2 text-red-500"
-              >
-                <Trash2 size={16} />
-              </button>
+              <div className="absolute top-2 right-2 flex space-x-2">
+                <button
+                  onClick={() => handleEdit(activeMatch, "predictions")}
+                  className="text-blue-500 hover:text-blue-400"
+                >
+                  <Edit size={16} />
+                </button>
+                <button
+                  onClick={() => handleDelete("predictions", activeMatch.id)}
+                  className="text-red-500 hover:text-red-400"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             )}
             <p className="text-zinc-400 text-xs font-bold tracking-wide mb-2">
               {activeMatch.league_name}
@@ -358,12 +403,20 @@ export default function App() {
           className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex flex-col relative"
         >
           {isCEO && (
-            <button
-              onClick={() => handleDelete("products", item.id)}
-              className="absolute top-2 right-2 bg-red-600 p-1.5 rounded-full z-10"
-            >
-              <Trash2 size={14} className="text-white" />
-            </button>
+            <div className="absolute top-2 right-2 flex space-x-1 z-10">
+              <button
+                onClick={() => handleEdit(item, "products")}
+                className="bg-blue-600 p-1.5 rounded-full"
+              >
+                <Edit size={14} className="text-white" />
+              </button>
+              <button
+                onClick={() => handleDelete("products", item.id)}
+                className="bg-red-600 p-1.5 rounded-full"
+              >
+                <Trash2 size={14} className="text-white" />
+              </button>
+            </div>
           )}
           {item.image_url ? (
             <img
@@ -395,35 +448,39 @@ export default function App() {
     <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
       <div className="flex justify-between items-center mb-6 mt-4">
         <h2 className="text-amber-500 font-black text-2xl tracking-wide">
-          CEO Dashboard
+          {editingId ? "Edit Item" : "CEO Dashboard"}
         </h2>
-        <button
-          onClick={() => setShowAdmin(false)}
-          className="bg-zinc-900 p-2 rounded-full"
-        >
+        <button onClick={closeAdmin} className="bg-zinc-900 p-2 rounded-full">
           <X className="text-white w-6 h-6" />
         </button>
       </div>
-      <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
-        {["news", "gossip", "products", "results", "predictions"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setAdminTab(tab)}
-            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${
-              adminTab === tab
-                ? "bg-amber-500 text-black"
-                : "bg-zinc-900 text-zinc-400"
-            }`}
-          >
-            {tab.toUpperCase()}
-          </button>
-        ))}
-      </div>
+
+      {!editingId && (
+        <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+          {["news", "gossip", "products", "results", "predictions"].map(
+            (tab) => (
+              <button
+                key={tab}
+                onClick={() => setAdminTab(tab)}
+                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${
+                  adminTab === tab
+                    ? "bg-amber-500 text-black"
+                    : "bg-zinc-900 text-zinc-400"
+                }`}
+              >
+                {tab.toUpperCase()}
+              </button>
+            )
+          )}
+        </div>
+      )}
+
       <form onSubmit={handleAdminSubmit} className="space-y-4">
         {(adminTab === "news" || adminTab === "gossip") && (
           <>
             <input
               required
+              value={formData.title || ""}
               placeholder="Main Title (ርዕስ)"
               onChange={(e) =>
                 setFormData({ ...formData, title: e.target.value })
@@ -431,6 +488,7 @@ export default function App() {
               className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
             />
             <input
+              value={formData.subtitle || ""}
               placeholder="Subtitle (ንዑስ ርዕስ)"
               onChange={(e) =>
                 setFormData({ ...formData, subtitle: e.target.value })
@@ -438,6 +496,7 @@ export default function App() {
               className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
             />
             <input
+              value={formData.author || ""}
               placeholder="Author (ደራሲ)"
               onChange={(e) =>
                 setFormData({ ...formData, author: e.target.value })
@@ -446,6 +505,7 @@ export default function App() {
             />
             <textarea
               required
+              value={formData.body || ""}
               rows="4"
               placeholder="Body (ጽሑፍ)"
               onChange={(e) =>
@@ -461,12 +521,110 @@ export default function App() {
             />
           </>
         )}
+
+        {adminTab === "products" && (
+          <>
+            <input
+              required
+              value={formData.title || ""}
+              placeholder="Product Name"
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <input
+              required
+              value={formData.price || ""}
+              placeholder="Price"
+              onChange={(e) =>
+                setFormData({ ...formData, price: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <input
+              required
+              value={formData.category || ""}
+              placeholder="Category"
+              onChange={(e) =>
+                setFormData({ ...formData, category: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files[0])}
+              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white"
+            />
+          </>
+        )}
+
+        {(adminTab === "results" || adminTab === "predictions") && (
+          <>
+            <input
+              required
+              value={formData.league || ""}
+              placeholder="League (የሊግ ስም)"
+              onChange={(e) =>
+                setFormData({ ...formData, league: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                required
+                value={formData.teamA || ""}
+                placeholder="Team A (ቡድን 1)"
+                onChange={(e) =>
+                  setFormData({ ...formData, teamA: e.target.value })
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+              />
+              <input
+                required
+                value={formData.teamB || ""}
+                placeholder="Team B (ቡድን 2)"
+                onChange={(e) =>
+                  setFormData({ ...formData, teamB: e.target.value })
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+              />
+            </div>
+            {adminTab === "results" && (
+              <>
+                <input
+                  required
+                  value={formData.score || ""}
+                  placeholder="Score (ምሳሌ: 2 - 1)"
+                  onChange={(e) =>
+                    setFormData({ ...formData, score: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+                />
+                <input
+                  value={formData.details || ""}
+                  placeholder="Scorers (ሳካ 12', ኦዴጋርድ 45')"
+                  onChange={(e) =>
+                    setFormData({ ...formData, details: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+                />
+              </>
+            )}
+          </>
+        )}
+
         <button
           disabled={uploading}
           type="submit"
           className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4 flex justify-center"
         >
-          {uploading ? "Uploading..." : "Publish (አትም)"}
+          {uploading
+            ? "Saving..."
+            : editingId
+            ? "Update Info (አስተካክል)"
+            : "Publish (አትም)"}
         </button>
       </form>
     </div>
