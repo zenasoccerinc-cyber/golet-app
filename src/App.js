@@ -348,7 +348,7 @@ export default function App() {
   );
 
   const renderPredict = () => {
-    // 1. GUEST MODE: If they are not logged in, ask them to log in here!
+    // 1. GUEST MODE: If they are not logged in, ask them to log in AND explain the VIP cost!
     if (!user) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -356,9 +356,16 @@ export default function App() {
             <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
               <Target size={30} className="text-amber-500" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-2">መግባት ያስፈልጋል</h2>
-            <p className="text-zinc-400 text-sm mb-6">
-              ግምት ለማስቀመጥ እና ሽልማቶችን ለማሸነፍ እባክዎ በቴሌግራም ይግቡ።
+            <h2 className="text-2xl font-black text-white mb-2">የቪአይፒ ጨዋታ</h2>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              ግምት ለማስቀመጥ እና የገንዘብ ሽልማቶችን ለማሸነፍ በወር <b>50 ብር</b> የቪአይፒ (VIP) አባል
+              መሆን ያስፈልጋል። ለመጀመር እባክዎ በቴሌግራም ይግቡ።
+              <br />
+              <br />
+              <span className="text-xs text-zinc-500">
+                (Become a VIP for 50 Birr/month to predict and win. Log in below
+                to start.)
+              </span>
             </p>
             <p className="text-xs text-zinc-500 font-bold mb-2 uppercase tracking-widest">
               Secure Login
