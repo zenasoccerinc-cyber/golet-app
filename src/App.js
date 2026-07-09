@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   LogOut,
   Lock,
+  ChevronRight,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -534,90 +535,83 @@ export default function App() {
         </div>
       );
 
-    // --- NEW: The Psychological "Rabbit Hole" Screen ---
     if (existingPrediction) {
+      // Find the absolute newest gossip (or news if no gossip exists) to use as the "Hook"
+      const hookContent =
+        gossip.length > 0 ? gossip[0] : news.length > 0 ? news[0] : null;
+      const hookTabName = gossip.length > 0 ? "ሹክሹክታ" : "ዜና";
+
       return (
-        <div className="pb-24 flex flex-col items-center pt-6">
-          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-zinc-800 shadow-2xl relative mb-6">
-            <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-              <Lock size={20} className="text-amber-500" />
+        <div className="pb-24 flex flex-col items-center pt-4">
+          {/* COMPACTED PREDICTION CARD */}
+          <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
+            <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
+              <Lock size={16} className="text-amber-500" />
             </div>
-            <h2 className="text-amber-500 font-black text-xl mb-1">
+            <h2 className="text-amber-500 font-black text-lg mb-1">
               ግምትዎ ተቀምጧል!
             </h2>
-            <p className="text-zinc-400 text-xs font-bold mb-6">
-              (Your guess is locked in)
-            </p>
-            <p className="text-zinc-500 text-[10px] uppercase font-bold mb-2 tracking-widest">
+            <p className="text-zinc-500 text-[10px] uppercase font-bold mb-3 tracking-widest">
               {activeMatch.league_name}
             </p>
-            <div className="flex justify-between items-center bg-black p-4 rounded-xl border border-zinc-800">
-              <span className="text-white font-bold w-1/3">
+            <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-zinc-800">
+              <span className="text-white font-bold w-1/3 text-sm">
                 {activeMatch.team_a_name}
               </span>
               <div className="flex space-x-3 items-center">
-                <span className="text-3xl font-black text-amber-500">
+                <span className="text-2xl font-black text-amber-500">
                   {existingPrediction.team_a_score}
                 </span>
-                <span className="text-zinc-500">-</span>
-                <span className="text-3xl font-black text-amber-500">
+                <span className="text-zinc-600">-</span>
+                <span className="text-2xl font-black text-amber-500">
                   {existingPrediction.team_b_score}
                 </span>
               </div>
-              <span className="text-white font-bold w-1/3">
+              <span className="text-white font-bold w-1/3 text-sm">
                 {activeMatch.team_b_name}
               </span>
             </div>
           </div>
 
-          {/* Cross-Pollination / Upsell Section */}
-          <div className="w-full max-w-sm">
-            <div className="flex items-center justify-center mb-4 space-x-2">
-              <div className="h-px bg-zinc-800 flex-grow"></div>
-              <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest">
-                እስከዛው ይዝናኑ (Keep Exploring)
+          {/* DYNAMIC CONTENT HOOK (THE RABBIT HOLE) */}
+          {hookContent && (
+            <div className="w-full max-w-sm text-left">
+              <h3 className="text-zinc-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center">
+                <Flame size={14} className="text-amber-500 mr-2" />
+                ትኩስ መረጃ (Trending Now)
               </h3>
-              <div className="h-px bg-zinc-800 flex-grow"></div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <button
-                onClick={() => setActiveTab("ሹክሹክታ")}
-                className="bg-zinc-900 border border-zinc-800 hover:border-amber-500 hover:bg-black p-4 rounded-xl flex flex-col items-center justify-center transition-all group"
+              <div
+                onClick={() => setActiveTab(hookTabName)}
+                className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer hover:border-amber-500 transition-colors group shadow-lg"
               >
-                <Flame
-                  className="text-amber-500 mb-2 group-hover:scale-110 transition-transform"
-                  size={24}
-                />
-                <span className="text-white font-bold text-xs">
-                  ሹክሹክታ (Gossip)
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTab("ሱቅ")}
-                className="bg-zinc-900 border border-zinc-800 hover:border-amber-500 hover:bg-black p-4 rounded-xl flex flex-col items-center justify-center transition-all group"
-              >
-                <ShoppingBag
-                  className="text-amber-500 mb-2 group-hover:scale-110 transition-transform"
-                  size={24}
-                />
-                <span className="text-white font-bold text-xs">ሱቅ (Shop)</span>
-              </button>
+                {hookContent.image_url ? (
+                  <img
+                    src={hookContent.image_url}
+                    className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-500"
+                    alt="News"
+                  />
+                ) : (
+                  <div className="w-full h-20 bg-black flex items-center justify-center">
+                    <span className="text-zinc-800 font-black text-2xl tracking-widest">
+                      GOLETH
+                    </span>
+                  </div>
+                )}
+                <div className="p-4 flex flex-col justify-between">
+                  <h4 className="text-white font-bold text-sm mb-3 line-clamp-2 leading-relaxed">
+                    {hookContent.title}
+                  </h4>
+                  <div className="flex items-center justify-between text-amber-500">
+                    <span className="text-xs font-black">
+                      አሁኑኑ ያንብቡ (Read More)
+                    </span>
+                    <ChevronRight size={16} />
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <button
-              onClick={() => setActiveTab("ውጤቶች")}
-              className="w-full bg-zinc-900 border border-zinc-800 hover:border-blue-500 hover:bg-black p-4 rounded-xl flex items-center justify-center space-x-3 transition-all group"
-            >
-              <Trophy
-                className="text-blue-500 group-hover:scale-110 transition-transform"
-                size={20}
-              />
-              <span className="text-white font-bold text-xs">
-                ያለፉ ውጤቶችን ይመልከቱ (Past Results)
-              </span>
-            </button>
-          </div>
+          )}
         </div>
       );
     }
