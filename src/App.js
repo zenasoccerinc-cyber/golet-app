@@ -74,9 +74,11 @@ export default function App() {
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
   const [existingPrediction, setExistingPrediction] = useState(null);
-
-  // --- NEW: The Laser Pointer for the Second Box ---
   const teamBInputRef = useRef(null);
+
+  // --- NEW: Leaderboard States ---
+  const [predictTab, setPredictTab] = useState("play"); // "play" or "leaderboard"
+  const [leaderboard, setLeaderboard] = useState([]);
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -119,11 +121,20 @@ export default function App() {
       .select("*")
       .eq("is_active", true)
       .order("created_at", { ascending: false });
+
+    // --- NEW: Fetch Top 10 VIP Users by Points ---
+    const { data: lData } = await supabase
+      .from("users")
+      .select("name, total_points")
+      .order("total_points", { ascending: false })
+      .limit(10);
+
     if (nData) setNews(nData);
     if (gData) setGossip(gData);
     if (pData) setProducts(pData);
     if (rData) setResults(rData);
     if (prData) setPredictions(prData);
+    if (lData) setLeaderboard(lData);
   };
 
   const checkExistingPrediction = async (matchId) => {
@@ -135,9 +146,6 @@ export default function App() {
       .single();
     if (data) setExistingPrediction(data);
   };
-
-  const toggleReadMore = (id) =>
-    setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleLogoTap = () => {
     const newCount = tapCount + 1;
@@ -185,6 +193,7 @@ export default function App() {
         id: userIdString,
         name: telegramUser.first_name,
         is_vip: false,
+        total_points: 0,
       };
       await supabase.from("users").insert([newUser]);
       currentUser = {
@@ -530,176 +539,270 @@ export default function App() {
       );
     }
 
-    const activeMatch = predictions[0];
-    if (!activeMatch)
-      return (
-        <div className="pb-24 pt-10 text-center text-zinc-500">
-          ምንም ጨዋታ የለም (No match)
-        </div>
-      );
-
-    if (existingPrediction) {
-      const hookContent =
-        gossip.length > 0 ? gossip[0] : news.length > 0 ? news[0] : null;
-      const hookTabName = gossip.length > 0 ? "ሹክሹክታ" : "ዜና";
-
-      return (
-        <div className="pb-24 flex flex-col items-center pt-4">
-          <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
-            <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
-              <Lock size={16} className="text-amber-500" />
-            </div>
-            <h2 className="text-amber-500 font-black text-lg mb-1">
-              ግምትዎ ተቀምጧል!
-            </h2>
-            <p className="text-zinc-500 text-[10px] uppercase font-bold mb-3 tracking-widest">
-              {activeMatch.league_name}
-            </p>
-            <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-zinc-800">
-              <span className="text-white font-bold w-1/3 text-sm">
-                {activeMatch.team_a_name}
-              </span>
-              <div className="flex space-x-3 items-center">
-                <span className="text-2xl font-black text-amber-500">
-                  {existingPrediction.team_a_score}
-                </span>
-                <span className="text-zinc-600">-</span>
-                <span className="text-2xl font-black text-amber-500">
-                  {existingPrediction.team_b_score}
-                </span>
-              </div>
-              <span className="text-white font-bold w-1/3 text-sm">
-                {activeMatch.team_b_name}
-              </span>
-            </div>
-          </div>
-
-          {hookContent && (
-            <div className="w-full max-w-sm text-left">
-              <h3 className="text-zinc-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center">
-                <Flame size={14} className="text-amber-500 mr-2" />
-                ትኩስ መረጃ (Trending Now)
-              </h3>
-
-              <div
-                onClick={() => setActiveTab(hookTabName)}
-                className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer hover:border-amber-500 transition-colors group shadow-lg"
-              >
-                {hookContent.image_url ? (
-                  <img
-                    src={hookContent.image_url}
-                    className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-500"
-                    alt="News"
-                  />
-                ) : (
-                  <div className="w-full h-20 bg-black flex items-center justify-center">
-                    <span className="text-zinc-800 font-black text-2xl tracking-widest">
-                      GOLETH
-                    </span>
-                  </div>
-                )}
-                <div className="p-4 flex flex-col justify-between">
-                  <h4 className="text-white font-bold text-sm mb-3 line-clamp-2 leading-relaxed">
-                    {hookContent.title}
-                  </h4>
-                  <div className="flex items-center justify-between text-amber-500">
-                    <span className="text-xs font-black">
-                      አሁኑኑ ያንብቡ (Read More)
-                    </span>
-                    <ChevronRight size={16} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
+    // --- NEW: THE TOGGLE SWITCH & LEADERBOARD UI ---
     return (
-      <div className="pb-24 flex flex-col items-center pt-10">
-        <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative shadow-2xl">
-          {isCEO && (
-            <div className="absolute top-2 right-2 flex space-x-2">
-              <button
-                onClick={() => handleEdit(activeMatch, "predictions")}
-                className="text-blue-500"
-              >
-                <Edit size={16} />
-              </button>
-              <button
-                onClick={() => handleDelete("predictions", activeMatch.id)}
-                className="text-red-500"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
-          <p className="text-zinc-400 text-[10px] uppercase font-bold tracking-widest mb-2">
-            {activeMatch.league_name}
-          </p>
-          <h2 className="text-amber-500 font-black text-2xl mb-8">
-            የሳምንቱ ጨዋታ ግምት
-          </h2>
-
-          <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800 shadow-inner">
-            <span className="text-white font-bold w-1/3 text-sm">
-              {activeMatch.team_a_name}
-            </span>
-            <div className="flex space-x-2 items-center">
-              {/* --- UPDATED: The Auto-Jumping Box --- */}
-              <input
-                type="number"
-                min="0"
-                placeholder="-"
-                value={teamAScore}
-                onChange={(e) => {
-                  setTeamAScore(e.target.value);
-                  // The magic jump logic!
-                  if (e.target.value !== "" && teamBInputRef.current) {
-                    teamBInputRef.current.focus();
-                  }
-                }}
-                className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
-              />
-
-              <span className="text-zinc-500 font-bold">-</span>
-
-              {/* --- UPDATED: The Target Box --- */}
-              <input
-                ref={teamBInputRef} // The laser pointer points here
-                type="number"
-                min="0"
-                placeholder="-"
-                value={teamBScore}
-                onChange={(e) => setTeamBScore(e.target.value)}
-                className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
-              />
-            </div>
-            <span className="text-white font-bold w-1/3 text-sm">
-              {activeMatch.team_b_name}
-            </span>
-          </div>
-
+      <div className="pb-24 pt-6 flex flex-col items-center">
+        {/* Toggle Switch */}
+        <div className="flex justify-center mb-6 space-x-3 bg-zinc-900 p-1 rounded-full border border-zinc-800 shadow-lg">
           <button
-            onClick={() => handlePredictSubmit(activeMatch.id)}
-            disabled={predictionStatus !== "idle"}
-            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors disabled:opacity-75"
+            onClick={() => setPredictTab("play")}
+            className={`px-6 py-2 rounded-full font-bold text-xs transition-all ${
+              predictTab === "play"
+                ? "bg-amber-500 text-black shadow-md"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
           >
-            {predictionStatus === "idle" && <span>አስገባ (Submit)</span>}
-            {predictionStatus === "loading" && (
-              <>
-                <Loader2 className="animate-spin" size={20} />{" "}
-                <span>Saving...</span>
-              </>
-            )}
-            {predictionStatus === "success" && (
-              <>
-                <CheckCircle2 size={20} /> <span>Saved!</span>
-              </>
-            )}
+            ጨዋታ (Play)
+          </button>
+          <button
+            onClick={() => setPredictTab("leaderboard")}
+            className={`px-6 py-2 rounded-full font-bold text-xs transition-all ${
+              predictTab === "leaderboard"
+                ? "bg-amber-500 text-black shadow-md"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            ደረጃ (Leaderboard)
           </button>
         </div>
+
+        {/* LEADERBOARD VIEW */}
+        {predictTab === "leaderboard" && (
+          <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
+            <div className="bg-black p-5 border-b border-zinc-800 text-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-amber-500/10 to-transparent"></div>
+              <Trophy
+                className="text-amber-500 mx-auto mb-2 relative z-10"
+                size={28}
+              />
+              <h2 className="text-white font-black text-xl relative z-10">
+                Top 10 VIPs
+              </h2>
+              <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1 relative z-10">
+                የወሩ አሸናፊዎች
+              </p>
+            </div>
+            <div className="p-2">
+              {leaderboard.length === 0 ? (
+                <div className="text-center p-6 text-zinc-500 text-sm">
+                  No points awarded yet!
+                </div>
+              ) : (
+                leaderboard.map((player, index) => {
+                  let rankColor = "text-zinc-600";
+                  if (index === 0) rankColor = "text-amber-400";
+                  if (index === 1) rankColor = "text-zinc-300";
+                  if (index === 2) rankColor = "text-amber-700";
+
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/50 transition-colors rounded-lg"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <span
+                          className={`font-black w-6 text-center text-lg ${rankColor}`}
+                        >
+                          #{index + 1}
+                        </span>
+                        <div className="w-8 h-8 bg-zinc-800 rounded-full flex items-center justify-center overflow-hidden border border-zinc-700">
+                          <span className="text-zinc-400 font-bold text-xs uppercase">
+                            {player.name.charAt(0)}
+                          </span>
+                        </div>
+                        <span className="text-white font-bold text-sm">
+                          {player.name}
+                        </span>
+                      </div>
+                      <div className="bg-black px-3 py-1 rounded border border-zinc-800">
+                        <span className="text-amber-500 font-black">
+                          {player.total_points || 0} pts
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PLAY VIEW */}
+        {predictTab === "play" && (
+          <>
+            {(() => {
+              const activeMatch = predictions[0];
+              if (!activeMatch)
+                return (
+                  <div className="text-center text-zinc-500 mt-10">
+                    ምንም ጨዋታ የለም (No match)
+                  </div>
+                );
+
+              if (existingPrediction) {
+                const hookContent =
+                  gossip.length > 0
+                    ? gossip[0]
+                    : news.length > 0
+                    ? news[0]
+                    : null;
+                const hookTabName = gossip.length > 0 ? "ሹክሹክታ" : "ዜና";
+
+                return (
+                  <>
+                    <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
+                      <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
+                        <Lock size={16} className="text-amber-500" />
+                      </div>
+                      <h2 className="text-amber-500 font-black text-lg mb-1">
+                        ግምትዎ ተቀምጧል!
+                      </h2>
+                      <p className="text-zinc-500 text-[10px] uppercase font-bold mb-3 tracking-widest">
+                        {activeMatch.league_name}
+                      </p>
+                      <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-zinc-800">
+                        <span className="text-white font-bold w-1/3 text-sm">
+                          {activeMatch.team_a_name}
+                        </span>
+                        <div className="flex space-x-3 items-center">
+                          <span className="text-2xl font-black text-amber-500">
+                            {existingPrediction.team_a_score}
+                          </span>
+                          <span className="text-zinc-600">-</span>
+                          <span className="text-2xl font-black text-amber-500">
+                            {existingPrediction.team_b_score}
+                          </span>
+                        </div>
+                        <span className="text-white font-bold w-1/3 text-sm">
+                          {activeMatch.team_b_name}
+                        </span>
+                      </div>
+                    </div>
+
+                    {hookContent && (
+                      <div className="w-full max-w-sm text-left">
+                        <h3 className="text-zinc-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center">
+                          <Flame size={14} className="text-amber-500 mr-2" />
+                          ትኩስ መረጃ (Trending Now)
+                        </h3>
+                        <div
+                          onClick={() => setActiveTab(hookTabName)}
+                          className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer hover:border-amber-500 transition-colors group shadow-lg"
+                        >
+                          {hookContent.image_url ? (
+                            <img
+                              src={hookContent.image_url}
+                              className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-500"
+                              alt="News"
+                            />
+                          ) : (
+                            <div className="w-full h-20 bg-black flex items-center justify-center">
+                              <span className="text-zinc-800 font-black text-2xl tracking-widest">
+                                GOLETH
+                              </span>
+                            </div>
+                          )}
+                          <div className="p-4 flex flex-col justify-between">
+                            <h4 className="text-white font-bold text-sm mb-3 line-clamp-2 leading-relaxed">
+                              {hookContent.title}
+                            </h4>
+                            <div className="flex items-center justify-between text-amber-500">
+                              <span className="text-xs font-black">
+                                አሁኑኑ ያንብቡ (Read More)
+                              </span>
+                              <ChevronRight size={16} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              }
+
+              return (
+                <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative shadow-2xl">
+                  {isCEO && (
+                    <div className="absolute top-2 right-2 flex space-x-2">
+                      <button
+                        onClick={() => handleEdit(activeMatch, "predictions")}
+                        className="text-blue-500"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleDelete("predictions", activeMatch.id)
+                        }
+                        className="text-red-500"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-zinc-400 text-[10px] uppercase font-bold tracking-widest mb-2">
+                    {activeMatch.league_name}
+                  </p>
+                  <h2 className="text-amber-500 font-black text-2xl mb-8">
+                    የሳምንቱ ጨዋታ ግምት
+                  </h2>
+
+                  <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800 shadow-inner">
+                    <span className="text-white font-bold w-1/3 text-sm">
+                      {activeMatch.team_a_name}
+                    </span>
+                    <div className="flex space-x-2 items-center">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="-"
+                        value={teamAScore}
+                        onChange={(e) => {
+                          setTeamAScore(e.target.value);
+                          if (e.target.value !== "" && teamBInputRef.current)
+                            teamBInputRef.current.focus();
+                        }}
+                        className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
+                      />
+                      <span className="text-zinc-500 font-bold">-</span>
+                      <input
+                        ref={teamBInputRef}
+                        type="number"
+                        min="0"
+                        placeholder="-"
+                        value={teamBScore}
+                        onChange={(e) => setTeamBScore(e.target.value)}
+                        className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
+                      />
+                    </div>
+                    <span className="text-white font-bold w-1/3 text-sm">
+                      {activeMatch.team_b_name}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handlePredictSubmit(activeMatch.id)}
+                    disabled={predictionStatus !== "idle"}
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors disabled:opacity-75"
+                  >
+                    {predictionStatus === "idle" && <span>አስገባ (Submit)</span>}
+                    {predictionStatus === "loading" && (
+                      <>
+                        <Loader2 className="animate-spin" size={20} />{" "}
+                        <span>Saving...</span>
+                      </>
+                    )}
+                    {predictionStatus === "success" && (
+                      <>
+                        <CheckCircle2 size={20} /> <span>Saved!</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
+          </>
+        )}
       </div>
     );
   };
