@@ -69,11 +69,10 @@ export default function App() {
   const [expandedPosts, setExpandedPosts] = useState({});
   const [paymentStatus, setPaymentStatus] = useState("idle");
 
-  // --- UPDATED: Game Engine States ---
-  const [teamAScore, setTeamAScore] = useState(""); // Now completely blank!
-  const [teamBScore, setTeamBScore] = useState(""); // Now completely blank!
+  const [teamAScore, setTeamAScore] = useState("");
+  const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
-  const [existingPrediction, setExistingPrediction] = useState(null); // Tracks if they already guessed
+  const [existingPrediction, setExistingPrediction] = useState(null);
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -88,7 +87,6 @@ export default function App() {
     fetchData();
   }, []);
 
-  // --- NEW: Check if user already guessed the active match ---
   useEffect(() => {
     if (user && predictions.length > 0) {
       checkExistingPrediction(predictions[0].id);
@@ -238,7 +236,6 @@ export default function App() {
   };
 
   const handlePredictSubmit = async (matchId) => {
-    // Stop them if they left a box blank
     if (teamAScore === "" || teamBScore === "") {
       alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ (Please enter a score for both teams)");
       return;
@@ -261,7 +258,7 @@ export default function App() {
       setPredictionStatus("success");
       setTimeout(() => {
         setPredictionStatus("idle");
-        setExistingPrediction(newGuess); // Instantly update the screen to the locked state!
+        setExistingPrediction(newGuess);
       }, 1500);
     } else {
       alert("Something went wrong saving your guess. Try again!");
@@ -537,12 +534,12 @@ export default function App() {
         </div>
       );
 
-    // --- NEW: Locked In Screen ---
+    // --- NEW: The Psychological "Rabbit Hole" Screen ---
     if (existingPrediction) {
       return (
-        <div className="pb-24 flex flex-col items-center pt-10">
-          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-zinc-800 shadow-2xl relative">
-            <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-3">
+        <div className="pb-24 flex flex-col items-center pt-6">
+          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-zinc-800 shadow-2xl relative mb-6">
+            <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
               <Lock size={20} className="text-amber-500" />
             </div>
             <h2 className="text-amber-500 font-black text-xl mb-1">
@@ -571,6 +568,55 @@ export default function App() {
                 {activeMatch.team_b_name}
               </span>
             </div>
+          </div>
+
+          {/* Cross-Pollination / Upsell Section */}
+          <div className="w-full max-w-sm">
+            <div className="flex items-center justify-center mb-4 space-x-2">
+              <div className="h-px bg-zinc-800 flex-grow"></div>
+              <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest">
+                እስከዛው ይዝናኑ (Keep Exploring)
+              </h3>
+              <div className="h-px bg-zinc-800 flex-grow"></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <button
+                onClick={() => setActiveTab("ሹክሹክታ")}
+                className="bg-zinc-900 border border-zinc-800 hover:border-amber-500 hover:bg-black p-4 rounded-xl flex flex-col items-center justify-center transition-all group"
+              >
+                <Flame
+                  className="text-amber-500 mb-2 group-hover:scale-110 transition-transform"
+                  size={24}
+                />
+                <span className="text-white font-bold text-xs">
+                  ሹክሹክታ (Gossip)
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("ሱቅ")}
+                className="bg-zinc-900 border border-zinc-800 hover:border-amber-500 hover:bg-black p-4 rounded-xl flex flex-col items-center justify-center transition-all group"
+              >
+                <ShoppingBag
+                  className="text-amber-500 mb-2 group-hover:scale-110 transition-transform"
+                  size={24}
+                />
+                <span className="text-white font-bold text-xs">ሱቅ (Shop)</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setActiveTab("ውጤቶች")}
+              className="w-full bg-zinc-900 border border-zinc-800 hover:border-blue-500 hover:bg-black p-4 rounded-xl flex items-center justify-center space-x-3 transition-all group"
+            >
+              <Trophy
+                className="text-blue-500 group-hover:scale-110 transition-transform"
+                size={20}
+              />
+              <span className="text-white font-bold text-xs">
+                ያለፉ ውጤቶችን ይመልከቱ (Past Results)
+              </span>
+            </button>
           </div>
         </div>
       );
