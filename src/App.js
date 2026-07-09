@@ -76,8 +76,7 @@ export default function App() {
   const [existingPrediction, setExistingPrediction] = useState(null);
   const teamBInputRef = useRef(null);
 
-  // --- NEW: Leaderboard States ---
-  const [predictTab, setPredictTab] = useState("play"); // "play" or "leaderboard"
+  const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
 
   const [news, setNews] = useState([]);
@@ -122,19 +121,46 @@ export default function App() {
       .eq("is_active", true)
       .order("created_at", { ascending: false });
 
-    // --- NEW: Fetch Top 10 VIP Users by Points ---
-    const { data: lData } = await supabase
-      .from("users")
-      .select("name, total_points")
-      .order("total_points", { ascending: false })
-      .limit(10);
+    // --- UPDATED: Smart Leaderboard Fetching ---
+    let lData = [];
+    if (prData && prData.length > 0) {
+      const activeMatch = prData[0];
+      // 1. Get all guesses for this specific match
+      const { data: matchGuesses } = await supabase
+        .from("user_predictions")
+        .select("*")
+        .eq("match_id", activeMatch.id);
+
+      if (matchGuesses && matchGuesses.length > 0) {
+        // 2. Get the user profiles for the people who guessed
+        const userIds = matchGuesses.map((g) => g.user_id);
+        const { data: guessUsers } = await supabase
+          .from("users")
+          .select("id, name, total_points")
+          .in("id", userIds);
+
+        if (guessUsers) {
+          // 3. Combine the guess data with their points and name
+          lData = matchGuesses.map((guess) => {
+            const u = guessUsers.find((user) => user.id === guess.user_id);
+            return {
+              ...guess,
+              name: u ? u.name : "Unknown",
+              total_points: u ? u.total_points : 0,
+            };
+          });
+          // 4. Sort by who has the most points overall
+          lData.sort((a, b) => b.total_points - a.total_points);
+        }
+      }
+    }
 
     if (nData) setNews(nData);
     if (gData) setGossip(gData);
     if (pData) setProducts(pData);
     if (rData) setResults(rData);
     if (prData) setPredictions(prData);
-    if (lData) setLeaderboard(lData);
+    setLeaderboard(lData);
   };
 
   const checkExistingPrediction = async (matchId) => {
@@ -272,6 +298,7 @@ export default function App() {
       setTimeout(() => {
         setPredictionStatus("idle");
         setExistingPrediction(newGuess);
+        fetchData(); // Instantly refresh leaderboard so they see themselves
       }, 1500);
     } else {
       alert("Something went wrong saving your guess. Try again!");
@@ -539,14 +566,21 @@ export default function App() {
       );
     }
 
-    // --- NEW: THE TOGGLE SWITCH & LEADERBOARD UI ---
+    const activeMatch = predictions[0];
+    if (!activeMatch)
+      return (
+        <div className="pb-24 pt-10 text-center text-zinc-500">
+          ምንም ጨዋታ የለም (No match)
+        </div>
+      );
+
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
-        {/* Toggle Switch */}
-        <div className="flex justify-center mb-6 space-x-3 bg-zinc-900 p-1 rounded-full border border-zinc-800 shadow-lg">
+        {/* --- UPDATED: Bigger Toggle Buttons --- */}
+        <div className="flex justify-center mb-6 space-x-2 bg-zinc-900 p-1.5 rounded-full border border-zinc-800 shadow-lg w-full max-w-sm">
           <button
             onClick={() => setPredictTab("play")}
-            className={`px-6 py-2 rounded-full font-bold text-xs transition-all ${
+            className={`flex-1 py-3 rounded-full font-black text-sm transition-all ${
               predictTab === "play"
                 ? "bg-amber-500 text-black shadow-md"
                 : "text-zinc-500 hover:text-zinc-300"
@@ -556,7 +590,7 @@ export default function App() {
           </button>
           <button
             onClick={() => setPredictTab("leaderboard")}
-            className={`px-6 py-2 rounded-full font-bold text-xs transition-all ${
+            className={`flex-1 py-3 rounded-full font-black text-sm transition-all ${
               predictTab === "leaderboard"
                 ? "bg-amber-500 text-black shadow-md"
                 : "text-zinc-500 hover:text-zinc-300"
@@ -566,26 +600,22 @@ export default function App() {
           </button>
         </div>
 
-        {/* LEADERBOARD VIEW */}
+        {/* --- UPDATED: Match Contenders Leaderboard --- */}
         {predictTab === "leaderboard" && (
-          <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden shadow-2xl">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden shadow-2xl mb-6">
             <div className="bg-black p-5 border-b border-zinc-800 text-center relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-amber-500/10 to-transparent"></div>
-              <Trophy
-                className="text-amber-500 mx-auto mb-2 relative z-10"
-                size={28}
-              />
               <h2 className="text-white font-black text-xl relative z-10">
-                Top 10 VIPs
+                {activeMatch.team_a_name} vs {activeMatch.team_b_name}
               </h2>
-              <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1 relative z-10">
-                የወሩ አሸናፊዎች
+              <p className="text-zinc-500 text-[11px] uppercase font-bold tracking-widest mt-1 relative z-10">
+                ተወዳዳሪዎች (Contenders)
               </p>
             </div>
             <div className="p-2">
               {leaderboard.length === 0 ? (
-                <div className="text-center p-6 text-zinc-500 text-sm">
-                  No points awarded yet!
+                <div className="text-center p-8 text-zinc-500 text-sm font-bold">
+                  ምንም ግምት የለም (No predictions yet)
                 </div>
               ) : (
                 leaderboard.map((player, index) => {
@@ -599,9 +629,9 @@ export default function App() {
                       key={index}
                       className="flex items-center justify-between p-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/50 transition-colors rounded-lg"
                     >
-                      <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-3">
                         <span
-                          className={`font-black w-6 text-center text-lg ${rankColor}`}
+                          className={`font-black w-5 text-center text-base ${rankColor}`}
                         >
                           #{index + 1}
                         </span>
@@ -610,13 +640,23 @@ export default function App() {
                             {player.name.charAt(0)}
                           </span>
                         </div>
-                        <span className="text-white font-bold text-sm">
-                          {player.name}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-white font-bold text-sm">
+                            {player.name}
+                          </span>
+                          <span className="text-zinc-500 text-[10px] font-bold">
+                            Total: {player.total_points || 0} pts
+                          </span>
+                        </div>
                       </div>
-                      <div className="bg-black px-3 py-1 rounded border border-zinc-800">
-                        <span className="text-amber-500 font-black">
-                          {player.total_points || 0} pts
+
+                      {/* Shows their specific guess! */}
+                      <div className="bg-black px-3 py-1.5 rounded border border-zinc-800 text-center min-w-[70px]">
+                        <span className="text-zinc-500 text-[9px] uppercase block leading-none mb-1 font-bold">
+                          Guess
+                        </span>
+                        <span className="text-amber-500 font-black leading-none">
+                          {player.team_a_score} - {player.team_b_score}
                         </span>
                       </div>
                     </div>
@@ -627,18 +667,9 @@ export default function App() {
           </div>
         )}
 
-        {/* PLAY VIEW */}
         {predictTab === "play" && (
           <>
             {(() => {
-              const activeMatch = predictions[0];
-              if (!activeMatch)
-                return (
-                  <div className="text-center text-zinc-500 mt-10">
-                    ምንም ጨዋታ የለም (No match)
-                  </div>
-                );
-
               if (existingPrediction) {
                 const hookContent =
                   gossip.length > 0
