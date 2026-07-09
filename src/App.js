@@ -23,9 +23,16 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("ዜና");
   const [isVIP, setIsVIP] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [isCEO, setIsCEO] = useState(false); // New state to show CEO controls
+  const [isCEO, setIsCEO] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
+
+  // Read More State
+  const [expandedPosts, setExpandedPosts] = useState({});
+
+  const toggleReadMore = (id) => {
+    setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Database States
   const [news, setNews] = useState([]);
@@ -144,7 +151,6 @@ export default function App() {
         },
       ]);
     } else if (adminTab === "predictions") {
-      // Deactivate old predictions first
       await supabase
         .from("predictions")
         .update({ is_active: false })
@@ -166,59 +172,73 @@ export default function App() {
     alert("Published successfully!");
   };
 
-  // Helper to format date
   const formatDate = (dateString) => {
     const options = { year: "numeric", month: "long", day: "numeric" };
     return new Date(dateString).toLocaleDateString("am-ET", options);
   };
 
-  // --- UI COMPONENTS ---
+  const renderArticle = (item, table) => {
+    const isExpanded = expandedPosts[item.id];
+    const shouldTruncate = item.body && item.body.length > 150;
+    const displayBody =
+      shouldTruncate && !isExpanded
+        ? item.body.substring(0, 150) + "..."
+        : item.body;
 
-  const renderArticle = (item, table) => (
-    <div
-      key={item.id}
-      className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative"
-    >
-      {isCEO && (
-        <button
-          onClick={() => handleDelete(table, item.id)}
-          className="absolute top-2 right-2 bg-red-600 p-2 rounded-full z-10 hover:bg-red-700"
-        >
-          <Trash2 size={16} className="text-white" />
-        </button>
-      )}
-      {item.image_url && (
-        <img
-          src={item.image_url}
-          alt={item.title}
-          className="w-full h-56 object-cover"
-        />
-      )}
-      <div className="p-5">
-        <h3 className="text-amber-500 font-black text-xl mb-1 leading-tight">
-          {item.title}
-        </h3>
-        {item.subtitle && (
-          <h4 className="text-white text-md font-bold mb-3">{item.subtitle}</h4>
-        )}
-
-        <div className="flex items-center text-zinc-500 text-xs font-bold uppercase tracking-wider mb-4 border-b border-zinc-800 pb-3">
-          <span>{item.author || "ZenaSoccer"}</span>
-          <span className="mx-2">•</span>
-          <span>{formatDate(item.created_at)}</span>
-        </div>
-
-        <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-          {item.body}
-        </p>
-        <div className="flex justify-end mt-4">
-          <button className="bg-zinc-800 p-2 rounded-full text-zinc-400 hover:text-amber-500">
-            <Share2 size={18} />
+    return (
+      <div
+        key={item.id}
+        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative"
+      >
+        {isCEO && (
+          <button
+            onClick={() => handleDelete(table, item.id)}
+            className="absolute top-2 right-2 bg-red-600 p-2 rounded-full z-10 hover:bg-red-700"
+          >
+            <Trash2 size={16} className="text-white" />
           </button>
+        )}
+        {item.image_url && (
+          <img
+            src={item.image_url}
+            alt={item.title}
+            className="w-full h-56 object-cover"
+          />
+        )}
+        <div className="p-5">
+          <h3 className="text-amber-500 font-black text-xl mb-1 leading-tight">
+            {item.title}
+          </h3>
+          {item.subtitle && (
+            <h4 className="text-white text-md font-bold mb-3">
+              {item.subtitle}
+            </h4>
+          )}
+          <div className="flex items-center text-zinc-500 text-xs font-bold uppercase tracking-wider mb-4 border-b border-zinc-800 pb-3">
+            <span>{item.author || "ZenaSoccer"}</span>
+            <span className="mx-2">•</span>
+            <span>{formatDate(item.created_at)}</span>
+          </div>
+          <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+            {displayBody}
+          </p>
+          {shouldTruncate && (
+            <button
+              onClick={() => toggleReadMore(item.id)}
+              className="text-amber-500 text-xs font-bold mt-2 hover:underline focus:outline-none"
+            >
+              {isExpanded ? "Show Less (አሳጥር)" : "Read More (ሙሉውን አንብብ)"}
+            </button>
+          )}
+          <div className="flex justify-end mt-4">
+            <button className="bg-zinc-800 p-2 rounded-full text-zinc-400 hover:text-amber-500">
+              <Share2 size={18} />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderResults = () => (
     <div className="space-y-4 pb-24">
@@ -266,7 +286,6 @@ export default function App() {
 
   const renderPredict = () => {
     const activeMatch = predictions[0];
-
     return (
       <div className="pb-24 flex flex-col items-center justify-center pt-10">
         {!isVIP ? (
@@ -385,7 +404,6 @@ export default function App() {
           <X className="text-white w-6 h-6" />
         </button>
       </div>
-
       <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
         {["news", "gossip", "products", "results", "predictions"].map((tab) => (
           <button
@@ -401,7 +419,6 @@ export default function App() {
           </button>
         ))}
       </div>
-
       <form onSubmit={handleAdminSubmit} className="space-y-4">
         {(adminTab === "news" || adminTab === "gossip") && (
           <>
@@ -421,7 +438,7 @@ export default function App() {
               className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
             />
             <input
-              placeholder="Author (ደራሲ - Default: ZenaSoccer)"
+              placeholder="Author (ደራሲ)"
               onChange={(e) =>
                 setFormData({ ...formData, author: e.target.value })
               }
@@ -444,57 +461,6 @@ export default function App() {
             />
           </>
         )}
-
-        {(adminTab === "results" || adminTab === "predictions") && (
-          <>
-            <input
-              required
-              placeholder="League (የሊግ ስም)"
-              onChange={(e) =>
-                setFormData({ ...formData, league: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <input
-                required
-                placeholder="Team A (ቡድን 1)"
-                onChange={(e) =>
-                  setFormData({ ...formData, teamA: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
-              <input
-                required
-                placeholder="Team B (ቡድን 2)"
-                onChange={(e) =>
-                  setFormData({ ...formData, teamB: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
-            </div>
-            {adminTab === "results" && (
-              <>
-                <input
-                  required
-                  placeholder="Score (ምሳሌ: 2 - 1)"
-                  onChange={(e) =>
-                    setFormData({ ...formData, score: e.target.value })
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-                />
-                <input
-                  placeholder="Scorers (ሳካ 12', ኦዴጋርድ 45')"
-                  onChange={(e) =>
-                    setFormData({ ...formData, details: e.target.value })
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-                />
-              </>
-            )}
-          </>
-        )}
-
         <button
           disabled={uploading}
           type="submit"
@@ -556,7 +522,6 @@ export default function App() {
           )}
         </div>
       </header>
-
       <main className="p-4 max-w-lg mx-auto">
         {activeTab === "ዜና" && (
           <div className="space-y-4 pb-24">
@@ -572,9 +537,7 @@ export default function App() {
         {activeTab === "ግምት" && renderPredict()}
         {activeTab === "ሱቅ" && renderShop()}
       </main>
-
       {showAdmin && renderAdmin()}
-
       <nav className="fixed bottom-0 w-full bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
         {tabs.map((tab) => {
           const Icon = tab.icon;
