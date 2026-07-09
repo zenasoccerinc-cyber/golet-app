@@ -47,7 +47,12 @@ const TelegramLoginWidget = ({ onAuth }) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  // --- NEW: Checking the Browser's Pocket (Local Storage) on Load ---
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem("goleth_user");
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
@@ -116,46 +121,49 @@ export default function App() {
     }
   };
 
-  // --- NEW: LONG TERM MEMORY LOGIN ---
   const handleRealLogin = async (telegramUser) => {
-    const userIdString = telegramUser.id.toString(); // Convert to text for our DB
+    const userIdString = telegramUser.id.toString();
 
-    // 1. Check if user already exists in Supabase
     const { data, error } = await supabase
       .from("users")
       .select("*")
       .eq("id", userIdString)
       .single();
 
+    let currentUser;
     if (data) {
-      // 2. They exist! Load their exact VIP status from the database
-      setUser({ id: data.id, name: data.name, isVIP: data.is_vip });
+      currentUser = { id: data.id, name: data.name, isVIP: data.is_vip };
     } else {
-      // 3. They are new! Save them to the database
       const newUser = {
         id: userIdString,
         name: telegramUser.first_name,
         is_vip: false,
       };
       await supabase.from("users").insert([newUser]);
-      setUser({ id: newUser.id, name: newUser.name, isVIP: newUser.is_vip });
+      currentUser = {
+        id: newUser.id,
+        name: newUser.name,
+        isVIP: newUser.is_vip,
+      };
     }
+
+    setUser(currentUser);
+    // NEW: Save the ID badge to Local Storage!
+    localStorage.setItem("goleth_user", JSON.stringify(currentUser));
   };
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       setUser(null);
+      // NEW: Throw away the ID badge
+      localStorage.removeItem("goleth_user");
       setActiveTab("ዜና");
     }
   };
 
-  // --- NEW: LONG TERM MEMORY PAYMENT ---
   const handleTelebirrPayment = async () => {
     setPaymentStatus("loading");
-
-    // Simulate payment processing time
     setTimeout(async () => {
-      // Tell the database this user is now a VIP!
       const { error } = await supabase
         .from("users")
         .update({ is_vip: true })
@@ -164,7 +172,10 @@ export default function App() {
       if (!error) {
         setPaymentStatus("success");
         setTimeout(() => {
-          setUser((prev) => ({ ...prev, isVIP: true }));
+          const updatedUser = { ...user, isVIP: true };
+          setUser(updatedUser);
+          // NEW: Update the ID badge in Local Storage with the VIP status!
+          localStorage.setItem("goleth_user", JSON.stringify(updatedUser));
           setPaymentStatus("idle");
         }, 1500);
       } else {
