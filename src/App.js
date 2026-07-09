@@ -8,9 +8,9 @@ import {
   X,
   Trash2,
   Edit,
-  Send,
   Loader2,
   CheckCircle2,
+  LogOut,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -19,45 +19,35 @@ const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- NEW: Official Telegram Login Widget ---
+// --- Official Telegram Login Widget ---
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    // This tells the window to listen for Telegram's successful login
-    window.onTelegramAuth = (user) => {
-      onAuth(user);
-    };
-
-    // Injecting the official Telegram script
+    window.onTelegramAuth = (user) => onAuth(user);
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", "goleth_app_bot"); // Your exact bot name!
+    script.setAttribute("data-telegram-login", "goleth_app_bot");
     script.setAttribute("data-size", "large");
     script.setAttribute("data-onauth", "onTelegramAuth(user)");
     script.setAttribute("data-request-access", "write");
     script.async = true;
 
-    if (containerRef.current) {
-      containerRef.current.appendChild(script);
-    }
+    if (containerRef.current) containerRef.current.appendChild(script);
 
     return () => {
       delete window.onTelegramAuth;
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
-      }
+      if (containerRef.current) containerRef.current.innerHTML = "";
     };
   }, [onAuth]);
 
   return (
-    <div ref={containerRef} className="flex justify-center mt-2 w-full"></div>
+    <div ref={containerRef} className="flex justify-center mt-4 w-full"></div>
   );
 };
-// -------------------------------------------
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // null means they are a Guest
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
@@ -102,7 +92,6 @@ export default function App() {
       .select("*")
       .eq("is_active", true)
       .order("created_at", { ascending: false });
-
     if (nData) setNews(nData);
     if (gData) setGossip(gData);
     if (pData) setProducts(pData);
@@ -127,14 +116,19 @@ export default function App() {
     }
   };
 
-  // --- NEW: Real Authentication Handler ---
   const handleRealLogin = (telegramUser) => {
-    // telegramUser contains their real ID, first_name, and username
     setUser({
       id: telegramUser.id,
       name: telegramUser.first_name,
-      isVIP: false, // We will link this to Supabase in the next step!
+      isVIP: false,
     });
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      setUser(null);
+      setActiveTab("ዜና"); // Send them back to the news tab
+    }
   };
 
   const handleTelebirrPayment = () => {
@@ -223,7 +217,6 @@ export default function App() {
           match_details: formData.details,
         });
     }
-
     if (editingId)
       await supabase.from(adminTab).update(payload).eq("id", editingId);
     else {
@@ -355,10 +348,31 @@ export default function App() {
   );
 
   const renderPredict = () => {
-    const activeMatch = predictions[0];
-    return (
-      <div className="pb-24 flex flex-col items-center justify-center pt-10">
-        {!user.isVIP ? (
+    // 1. GUEST MODE: If they are not logged in, ask them to log in here!
+    if (!user) {
+      return (
+        <div className="pb-24 flex flex-col items-center justify-center pt-10">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl">
+            <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Target size={30} className="text-amber-500" />
+            </div>
+            <h2 className="text-2xl font-black text-white mb-2">መግባት ያስፈልጋል</h2>
+            <p className="text-zinc-400 text-sm mb-6">
+              ግምት ለማስቀመጥ እና ሽልማቶችን ለማሸነፍ እባክዎ በቴሌግራም ይግቡ።
+            </p>
+            <p className="text-xs text-zinc-500 font-bold mb-2 uppercase tracking-widest">
+              Secure Login
+            </p>
+            <TelegramLoginWidget onAuth={handleRealLogin} />
+          </div>
+        </div>
+      );
+    }
+
+    // 2. LOGGED IN, BUT FREE TIER: Show Telebirr Paywall
+    if (!user.isVIP) {
+      return (
+        <div className="pb-24 flex flex-col items-center justify-center pt-10">
           <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
             <h2 className="text-2xl font-black text-white mb-3 mt-4">
@@ -388,58 +402,69 @@ export default function App() {
               )}
             </button>
           </div>
-        ) : !activeMatch ? (
-          <p className="text-zinc-500">ምንም ጨዋታ የለም (No match)</p>
-        ) : (
-          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative">
-            {isCEO && (
-              <div className="absolute top-2 right-2 flex space-x-2">
-                <button
-                  onClick={() => handleEdit(activeMatch, "predictions")}
-                  className="text-blue-500"
-                >
-                  <Edit size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete("predictions", activeMatch.id)}
-                  className="text-red-500"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )}
-            <p className="text-zinc-400 text-xs font-bold mb-2">
-              {activeMatch.league_name}
-            </p>
-            <h2 className="text-amber-500 font-black text-xl mb-6">
-              የሳምንቱ ጨዋታ ግምት
-            </h2>
-            <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
-              <span className="text-white font-bold w-1/3">
-                {activeMatch.team_a_name}
-              </span>
-              <div className="flex space-x-2 items-center">
-                <input
-                  type="number"
-                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
-                  defaultValue="0"
-                />
-                <span>-</span>
-                <input
-                  type="number"
-                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
-                  defaultValue="0"
-                />
-              </div>
-              <span className="text-white font-bold w-1/3">
-                {activeMatch.team_b_name}
-              </span>
+        </div>
+      );
+    }
+
+    // 3. LOGGED IN & VIP: Show the Game!
+    const activeMatch = predictions[0];
+    if (!activeMatch)
+      return (
+        <div className="pb-24 pt-10 text-center text-zinc-500">
+          ምንም ጨዋታ የለም (No match)
+        </div>
+      );
+
+    return (
+      <div className="pb-24 flex flex-col items-center pt-10">
+        <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative">
+          {isCEO && (
+            <div className="absolute top-2 right-2 flex space-x-2">
+              <button
+                onClick={() => handleEdit(activeMatch, "predictions")}
+                className="text-blue-500"
+              >
+                <Edit size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete("predictions", activeMatch.id)}
+                className="text-red-500"
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
-            <button className="w-full bg-amber-500 text-black font-black py-3 rounded-xl">
-              አስገባ (Submit)
-            </button>
+          )}
+          <p className="text-zinc-400 text-xs font-bold mb-2">
+            {activeMatch.league_name}
+          </p>
+          <h2 className="text-amber-500 font-black text-xl mb-6">
+            የሳምንቱ ጨዋታ ግምት
+          </h2>
+          <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
+            <span className="text-white font-bold w-1/3">
+              {activeMatch.team_a_name}
+            </span>
+            <div className="flex space-x-2 items-center">
+              <input
+                type="number"
+                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
+                defaultValue="0"
+              />
+              <span>-</span>
+              <input
+                type="number"
+                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
+                defaultValue="0"
+              />
+            </div>
+            <span className="text-white font-bold w-1/3">
+              {activeMatch.team_b_name}
+            </span>
           </div>
-        )}
+          <button className="w-full bg-amber-500 text-black font-black py-3 rounded-xl">
+            አስገባ (Submit)
+          </button>
+        </div>
       </div>
     );
   };
@@ -489,159 +514,6 @@ export default function App() {
     </div>
   );
 
-  const renderAdmin = () => (
-    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6">
-      <div className="flex justify-between items-center mb-6 mt-4">
-        <h2 className="text-amber-500 font-black text-2xl tracking-wide">
-          {editingId ? "Edit Item" : "CEO Dashboard"}
-        </h2>
-        <button onClick={closeAdmin} className="bg-zinc-900 p-2 rounded-full">
-          <X className="text-white" />
-        </button>
-      </div>
-      {!editingId && (
-        <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
-          {["news", "gossip", "products", "results", "predictions"].map(
-            (tab) => (
-              <button
-                key={tab}
-                onClick={() => setAdminTab(tab)}
-                className={`px-4 py-2 rounded-full text-xs font-bold ${
-                  adminTab === tab
-                    ? "bg-amber-500 text-black"
-                    : "bg-zinc-900 text-zinc-400"
-                }`}
-              >
-                {tab.toUpperCase()}
-              </button>
-            )
-          )}
-        </div>
-      )}
-      <form onSubmit={handleAdminSubmit} className="space-y-4">
-        {(adminTab === "news" || adminTab === "gossip") && (
-          <>
-            <input
-              required
-              value={formData.title || ""}
-              placeholder="Title"
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            />
-            <input
-              value={formData.subtitle || ""}
-              placeholder="Subtitle"
-              onChange={(e) =>
-                setFormData({ ...formData, subtitle: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            />
-            <textarea
-              required
-              value={formData.body || ""}
-              rows="4"
-              placeholder="Body"
-              onChange={(e) =>
-                setFormData({ ...formData, body: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            ></textarea>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImageFile(e.target.files[0])}
-              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800"
-            />
-          </>
-        )}
-        {adminTab === "products" && (
-          <>
-            <input
-              required
-              value={formData.title || ""}
-              placeholder="Product Name"
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            />
-            <input
-              required
-              value={formData.price || ""}
-              placeholder="Price"
-              onChange={(e) =>
-                setFormData({ ...formData, price: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            />
-            <input
-              required
-              value={formData.category || ""}
-              placeholder="Category"
-              onChange={(e) =>
-                setFormData({ ...formData, category: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            />
-          </>
-        )}
-        {(adminTab === "results" || adminTab === "predictions") && (
-          <>
-            <input
-              required
-              value={formData.league || ""}
-              placeholder="League"
-              onChange={(e) =>
-                setFormData({ ...formData, league: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <input
-                required
-                value={formData.teamA || ""}
-                placeholder="Team A"
-                onChange={(e) =>
-                  setFormData({ ...formData, teamA: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
-              <input
-                required
-                value={formData.teamB || ""}
-                placeholder="Team B"
-                onChange={(e) =>
-                  setFormData({ ...formData, teamB: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
-            </div>
-            {adminTab === "results" && (
-              <input
-                required
-                value={formData.score || ""}
-                placeholder="Score"
-                onChange={(e) =>
-                  setFormData({ ...formData, score: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
-            )}
-          </>
-        )}
-        <button
-          disabled={uploading}
-          type="submit"
-          className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4"
-        >
-          {uploading ? "Saving..." : editingId ? "Update" : "Publish"}
-        </button>
-      </form>
-    </div>
-  );
-
   const tabs = [
     { id: "ዜና", icon: Home },
     { id: "ውጤቶች", icon: Trophy },
@@ -649,33 +521,6 @@ export default function App() {
     { id: "ግምት", icon: Target },
     { id: "ሱቅ", icon: ShoppingBag },
   ];
-
-  // --- THE NEW LOGIN SCREEN ---
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 font-sans">
-        <div className="w-20 h-20 rounded-full bg-amber-500 flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] mb-6">
-          <span className="text-black font-black text-2xl tracking-tighter">
-            GOL
-          </span>
-        </div>
-        <h1 className="text-white font-black text-4xl tracking-widest mb-2">
-          GOLETH
-        </h1>
-        <p className="text-zinc-400 text-center mb-12">
-          The heartbeat of Ethiopian football.
-        </p>
-
-        <div className="w-full max-w-sm flex flex-col items-center justify-center bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
-          <p className="text-sm font-bold text-zinc-300 mb-4 tracking-wide">
-            SECURE LOGIN
-          </p>
-          {/* The widget we created at the top renders right here */}
-          <TelegramLoginWidget onAuth={handleRealLogin} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-black font-sans text-white">
@@ -688,17 +533,40 @@ export default function App() {
             GOL<span className="text-amber-500">ETH</span>
           </h1>
         </div>
-        <div className="flex items-center space-x-3 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800">
-          <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center overflow-hidden">
-            <span className="text-black font-bold text-[10px] uppercase">
-              {user.name.charAt(0)}
-            </span>
-          </div>
-          <span className="text-xs font-bold text-zinc-300">{user.name}</span>
-          {user.isVIP && (
-            <span className="text-[10px] font-black bg-amber-500 text-black px-2 py-0.5 rounded uppercase">
-              VIP
-            </span>
+
+        {/* Dynamic Header: Shows Login button if Guest, or Profile/Logout if logged in */}
+        <div className="flex items-center space-x-3">
+          {user ? (
+            <div className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800">
+              <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center overflow-hidden">
+                <span className="text-black font-bold text-[10px] uppercase">
+                  {user.name.charAt(0)}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-zinc-300">
+                {user.name}
+              </span>
+              {user.isVIP && (
+                <span className="text-[10px] font-black bg-amber-500 text-black px-2 py-0.5 rounded uppercase">
+                  VIP
+                </span>
+              )}
+              {/* The New Logout Button */}
+              <button
+                onClick={handleLogout}
+                className="ml-2 text-zinc-500 hover:text-red-500 transition-colors p-1"
+                title="Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setActiveTab("ግምት")}
+              className="text-xs font-bold bg-[#229ED9] hover:bg-[#1CA0DE] px-4 py-2 rounded-full text-white transition-colors"
+            >
+              Login
+            </button>
           )}
         </div>
       </header>
@@ -718,8 +586,6 @@ export default function App() {
         {activeTab === "ግምት" && renderPredict()}
         {activeTab === "ሱቅ" && renderShop()}
       </main>
-
-      {showAdmin && renderAdmin()}
 
       <nav className="fixed bottom-0 w-full bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
         {tabs.map((tab) => {
