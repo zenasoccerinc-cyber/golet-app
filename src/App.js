@@ -49,11 +49,10 @@ const TelegramLoginWidget = ({ onAuth }) => {
 export default function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("goleth_user");
-    // Extra safety check: verify the saved pocket ID hasn't expired yet
     if (savedUser) {
       const parsedUser = JSON.parse(savedUser);
       if (parsedUser.vipUntil && new Date(parsedUser.vipUntil) < new Date()) {
-        parsedUser.isVIP = false; // Expired!
+        parsedUser.isVIP = false;
       }
       return parsedUser;
     }
@@ -68,6 +67,11 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
   const [paymentStatus, setPaymentStatus] = useState("idle");
+
+  // --- NEW: States for the Game Engine ---
+  const [teamAScore, setTeamAScore] = useState(0);
+  const [teamBScore, setTeamBScore] = useState(0);
+  const [predictionStatus, setPredictionStatus] = useState("idle");
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -139,12 +143,9 @@ export default function App() {
 
     let currentUser;
     if (data) {
-      // --- NEW: Check if their 30 days have expired ---
       let currentlyValidVIP = false;
       if (data.is_vip && data.vip_until) {
-        currentlyValidVIP = new Date(data.vip_until) > new Date(); // Is the expiration date in the future?
-
-        // If it expired, secretly update the database to remove their VIP badge
+        currentlyValidVIP = new Date(data.vip_until) > new Date();
         if (!currentlyValidVIP) {
           await supabase
             .from("users")
@@ -188,13 +189,11 @@ export default function App() {
   const handleTelebirrPayment = async () => {
     setPaymentStatus("loading");
 
-    // --- NEW: Calculate exact date 30 days from right now ---
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + 30);
     const expirationIsoString = expirationDate.toISOString();
 
     setTimeout(async () => {
-      // Update database with BOTH the VIP status and the new expiration clock
       const { error } = await supabase
         .from("users")
         .update({ is_vip: true, vip_until: expirationIsoString })
@@ -217,6 +216,29 @@ export default function App() {
         setPaymentStatus("idle");
       }
     }, 2500);
+  };
+
+  // --- NEW: Submit Prediction Function ---
+  const handlePredictSubmit = async (matchId) => {
+    setPredictionStatus("loading");
+
+    const { error } = await supabase.from("user_predictions").insert([
+      {
+        user_id: user.id,
+        match_id: matchId,
+        team_a_score: Number(teamAScore),
+        team_b_score: Number(teamBScore),
+      },
+    ]);
+
+    if (!error) {
+      setPredictionStatus("success");
+      // Change back to idle after 3 seconds so they see the success message
+      setTimeout(() => setPredictionStatus("idle"), 3000);
+    } else {
+      alert("Something went wrong saving your guess. Try again!");
+      setPredictionStatus("idle");
+    }
   };
 
   const handleDelete = async (table, id) => {
@@ -521,6 +543,8 @@ export default function App() {
           <h2 className="text-amber-500 font-black text-xl mb-6">
             የሳምንቱ ጨዋታ ግምት
           </h2>
+
+          {/* --- NEW: Interactive Input Boxes --- */}
           <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
             <span className="text-white font-bold w-1/3">
               {activeMatch.team_a_name}
@@ -528,22 +552,43 @@ export default function App() {
             <div className="flex space-x-2 items-center">
               <input
                 type="number"
-                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
-                defaultValue="0"
+                min="0"
+                value={teamAScore}
+                onChange={(e) => setTeamAScore(e.target.value)}
+                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold outline-none focus:border-amber-500 transition-colors"
               />
               <span>-</span>
               <input
                 type="number"
-                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
-                defaultValue="0"
+                min="0"
+                value={teamBScore}
+                onChange={(e) => setTeamBScore(e.target.value)}
+                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold outline-none focus:border-amber-500 transition-colors"
               />
             </div>
             <span className="text-white font-bold w-1/3">
               {activeMatch.team_b_name}
             </span>
           </div>
-          <button className="w-full bg-amber-500 text-black font-black py-3 rounded-xl">
-            አስገባ (Submit)
+
+          {/* --- NEW: Smart Submit Button --- */}
+          <button
+            onClick={() => handlePredictSubmit(activeMatch.id)}
+            disabled={predictionStatus !== "idle"}
+            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl flex justify-center items-center space-x-2 transition-colors disabled:opacity-75"
+          >
+            {predictionStatus === "idle" && <span>አስገባ (Submit)</span>}
+            {predictionStatus === "loading" && (
+              <>
+                <Loader2 className="animate-spin" size={20} />{" "}
+                <span>Saving...</span>
+              </>
+            )}
+            {predictionStatus === "success" && (
+              <>
+                <CheckCircle2 size={20} /> <span>Saved!</span>
+              </>
+            )}
           </button>
         </div>
       </div>
