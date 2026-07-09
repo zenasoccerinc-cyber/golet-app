@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Home,
   Trophy,
@@ -6,7 +6,6 @@ import {
   Target,
   ShoppingBag,
   X,
-  UploadCloud,
   Trash2,
   Edit,
   Send,
@@ -20,34 +19,59 @@ const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export default function App() {
-  // Authentication State
-  const [user, setUser] = useState(null);
+// --- NEW: Official Telegram Login Widget ---
+const TelegramLoginWidget = ({ onAuth }) => {
+  const containerRef = useRef(null);
 
-  // Navigation & UI States
+  useEffect(() => {
+    // This tells the window to listen for Telegram's successful login
+    window.onTelegramAuth = (user) => {
+      onAuth(user);
+    };
+
+    // Injecting the official Telegram script
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.setAttribute("data-telegram-login", "goleth_app_bot"); // Your exact bot name!
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+    script.setAttribute("data-request-access", "write");
+    script.async = true;
+
+    if (containerRef.current) {
+      containerRef.current.appendChild(script);
+    }
+
+    return () => {
+      delete window.onTelegramAuth;
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
+    };
+  }, [onAuth]);
+
+  return (
+    <div ref={containerRef} className="flex justify-center mt-2 w-full"></div>
+  );
+};
+// -------------------------------------------
+
+export default function App() {
+  const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
-
-  // Edit State
   const [editingId, setEditingId] = useState(null);
-
-  // Read More State
   const [expandedPosts, setExpandedPosts] = useState({});
+  const [paymentStatus, setPaymentStatus] = useState("idle");
 
-  // Telebirr Simulation State
-  const [paymentStatus, setPaymentStatus] = useState("idle"); // idle, loading, success
-
-  // Database States
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
   const [products, setProducts] = useState([]);
   const [results, setResults] = useState([]);
   const [predictions, setPredictions] = useState([]);
-
-  // Admin Form States
   const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
   const [imageFile, setImageFile] = useState(null);
@@ -80,37 +104,36 @@ export default function App() {
       .order("created_at", { ascending: false });
 
     if (nData) setNews(nData);
-    if (gossip) setGossip(gData);
+    if (gData) setGossip(gData);
     if (pData) setProducts(pData);
     if (rData) setResults(rData);
     if (prData) setPredictions(prData);
   };
 
-  const toggleReadMore = (id) => {
+  const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
 
   const handleLogoTap = () => {
     const newCount = tapCount + 1;
     setTapCount(newCount);
     setTimeout(() => setTapCount(0), 3000);
-
     if (newCount >= 5) {
       const password = window.prompt("Enter CEO Password:");
       if (password === "admin123") {
         setIsCEO(true);
         setShowAdmin(true);
-      } else if (password !== null) {
-        alert("Access Denied");
       }
       setTapCount(0);
     }
   };
 
-  const handleMockLogin = () => {
+  // --- NEW: Real Authentication Handler ---
+  const handleRealLogin = (telegramUser) => {
+    // telegramUser contains their real ID, first_name, and username
     setUser({
-      name: "Goleth Fan",
-      isVIP: false,
+      id: telegramUser.id,
+      name: telegramUser.first_name,
+      isVIP: false, // We will link this to Supabase in the next step!
     });
   };
 
@@ -119,14 +142,14 @@ export default function App() {
     setTimeout(() => {
       setPaymentStatus("success");
       setTimeout(() => {
-        setUser((prevUser) => ({ ...prevUser, isVIP: true }));
+        setUser((prev) => ({ ...prev, isVIP: true }));
         setPaymentStatus("idle");
       }, 1500);
     }, 2500);
   };
 
   const handleDelete = async (table, id) => {
-    if (window.confirm("Are you sure you want to delete this? (እርግጠኛ ነዎት?)")) {
+    if (window.confirm("Are you sure?")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
     }
@@ -163,65 +186,65 @@ export default function App() {
     e.preventDefault();
     setUploading(true);
     let finalImageUrl = formData.image_url;
-
     if (imageFile) {
-      const fileExt = imageFile.name.split(".").pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
+      const fileName = `${Date.now()}.${imageFile.name.split(".").pop()}`;
+      const { error } = await supabase.storage
         .from("images")
         .upload(fileName, imageFile);
-      if (!uploadError) {
-        const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-        finalImageUrl = data.publicUrl;
-      }
+      if (!error)
+        finalImageUrl = supabase.storage.from("images").getPublicUrl(fileName)
+          .data.publicUrl;
     }
-
     const payload = {};
-    if (adminTab === "news" || adminTab === "gossip") {
-      payload.title = formData.title;
-      payload.subtitle = formData.subtitle;
-      payload.author = formData.author || "Goleth";
-      payload.body = formData.body;
-      payload.image_url = finalImageUrl;
+    if (["news", "gossip"].includes(adminTab)) {
+      Object.assign(payload, {
+        title: formData.title,
+        subtitle: formData.subtitle,
+        author: formData.author || "Goleth",
+        body: formData.body,
+        image_url: finalImageUrl,
+      });
     } else if (adminTab === "products") {
-      payload.name = formData.title;
-      payload.price = Number(formData.price);
-      payload.category = formData.category;
-      payload.image_url = finalImageUrl;
-    } else if (adminTab === "results") {
-      payload.league_name = formData.league;
-      payload.team_a_name = formData.teamA;
-      payload.team_b_name = formData.teamB;
-      payload.score = formData.score;
-      payload.match_details = formData.details;
-    } else if (adminTab === "predictions") {
-      payload.league_name = formData.league;
-      payload.team_a_name = formData.teamA;
-      payload.team_b_name = formData.teamB;
+      Object.assign(payload, {
+        name: formData.title,
+        price: Number(formData.price),
+        category: formData.category,
+        image_url: finalImageUrl,
+      });
+    } else if (["results", "predictions"].includes(adminTab)) {
+      Object.assign(payload, {
+        league_name: formData.league,
+        team_a_name: formData.teamA,
+        team_b_name: formData.teamB,
+      });
+      if (adminTab === "results")
+        Object.assign(payload, {
+          score: formData.score,
+          match_details: formData.details,
+        });
     }
 
-    if (editingId) {
+    if (editingId)
       await supabase.from(adminTab).update(payload).eq("id", editingId);
-    } else {
-      if (adminTab === "predictions") {
+    else {
+      if (adminTab === "predictions")
         await supabase
           .from("predictions")
           .update({ is_active: false })
           .neq("id", 0);
-      }
       await supabase.from(adminTab).insert([payload]);
     }
-
     closeAdmin();
     setUploading(false);
     fetchData();
-    alert(editingId ? "Updated successfully!" : "Published successfully!");
   };
 
-  const formatDate = (dateString) => {
-    const options = { year: "numeric", month: "long", day: "numeric" };
-    return new Date(dateString).toLocaleDateString("am-ET", options);
-  };
+  const formatDate = (dateString) =>
+    new Date(dateString).toLocaleDateString("am-ET", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
   const renderArticle = (item, table) => {
     const isExpanded = expandedPosts[item.id];
@@ -230,23 +253,22 @@ export default function App() {
       shouldTruncate && !isExpanded
         ? item.body.substring(0, 150) + "..."
         : item.body;
-
     return (
       <div
         key={item.id}
-        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative"
+        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative mb-4"
       >
         {isCEO && (
           <div className="absolute top-2 right-2 flex space-x-2 z-10">
             <button
               onClick={() => handleEdit(item, table)}
-              className="bg-blue-600 p-2 rounded-full hover:bg-blue-700"
+              className="bg-blue-600 p-2 rounded-full"
             >
               <Edit size={16} className="text-white" />
             </button>
             <button
               onClick={() => handleDelete(table, item.id)}
-              className="bg-red-600 p-2 rounded-full hover:bg-red-700"
+              className="bg-red-600 p-2 rounded-full"
             >
               <Trash2 size={16} className="text-white" />
             </button>
@@ -260,7 +282,7 @@ export default function App() {
           />
         )}
         <div className="p-5">
-          <h3 className="text-amber-500 font-black text-xl mb-1 leading-tight">
+          <h3 className="text-amber-500 font-black text-xl mb-1">
             {item.title}
           </h3>
           {item.subtitle && (
@@ -279,7 +301,7 @@ export default function App() {
           {shouldTruncate && (
             <button
               onClick={() => toggleReadMore(item.id)}
-              className="text-amber-500 text-xs font-bold mt-2 hover:underline focus:outline-none"
+              className="text-amber-500 text-xs font-bold mt-2"
             >
               {isExpanded ? "Show Less (አሳጥር)" : "Read More (ሙሉውን አንብብ)"}
             </button>
@@ -291,11 +313,6 @@ export default function App() {
 
   const renderResults = () => (
     <div className="space-y-4 pb-24">
-      {results.length === 0 && (
-        <p className="text-zinc-500 text-center mt-10">
-          ምንም ውጤት የለም (No Results)
-        </p>
-      )}
       {results.map((item) => (
         <div
           key={item.id}
@@ -305,34 +322,30 @@ export default function App() {
             <div className="absolute top-2 right-2 flex space-x-2">
               <button
                 onClick={() => handleEdit(item, "results")}
-                className="text-blue-500 hover:text-blue-400"
+                className="text-blue-500"
               >
                 <Edit size={16} />
               </button>
               <button
                 onClick={() => handleDelete("results", item.id)}
-                className="text-red-500 hover:text-red-400"
+                className="text-red-500"
               >
                 <Trash2 size={16} />
               </button>
             </div>
           )}
-          <p className="text-zinc-400 text-sm mb-4 font-bold tracking-wide">
+          <p className="text-zinc-400 text-sm mb-4 font-bold">
             {item.league_name}
           </p>
           <div className="flex justify-between items-center mb-6 px-4">
-            <div className="flex flex-col items-center w-1/3">
-              <span className="text-white font-bold">{item.team_a_name}</span>
-            </div>
+            <div className="w-1/3 text-white font-bold">{item.team_a_name}</div>
             <div className="text-3xl font-black text-amber-500 bg-black px-4 py-2 rounded-lg border border-zinc-800">
               {item.score}
             </div>
-            <div className="flex flex-col items-center w-1/3">
-              <span className="text-white font-bold">{item.team_b_name}</span>
-            </div>
+            <div className="w-1/3 text-white font-bold">{item.team_b_name}</div>
           </div>
           {item.match_details && (
-            <div className="text-sm text-zinc-400 bg-black p-3 rounded-lg border border-zinc-800">
+            <div className="text-sm text-zinc-400 bg-black p-3 rounded-lg">
               <p>{item.match_details}</p>
             </div>
           )}
@@ -352,13 +365,12 @@ export default function App() {
               የቪአይፒ አባልነት ያስፈልጋል
             </h2>
             <p className="text-zinc-400 text-sm mb-8">
-              በወር 50 ብር በመክፈል የቪአይፒ አባል ይሁኑ እና በየሳምንቱ ግምት በማስቀመጥ የገንዘብ ሽልማቶችን
-              ያሸንፉ!
+              በወር 50 ብር በመክፈል የቪአይፒ አባል ይሁኑ!
             </p>
             <button
               onClick={handleTelebirrPayment}
               disabled={paymentStatus !== "idle"}
-              className="w-full bg-[#8bc53f] hover:bg-[#7ab036] text-white font-black py-4 rounded-xl flex items-center justify-center space-x-2 transition-colors"
+              className="w-full bg-[#8bc53f] hover:bg-[#7ab036] text-white font-black py-4 rounded-xl flex justify-center space-x-2"
             >
               {paymentStatus === "idle" && (
                 <span>በቴሌብር ክፈሉ (Pay with Telebirr)</span>
@@ -377,26 +389,26 @@ export default function App() {
             </button>
           </div>
         ) : !activeMatch ? (
-          <p className="text-zinc-500">ምንም ጨዋታ የለም (No active match)</p>
+          <p className="text-zinc-500">ምንም ጨዋታ የለም (No match)</p>
         ) : (
-          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl relative">
+          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative">
             {isCEO && (
               <div className="absolute top-2 right-2 flex space-x-2">
                 <button
                   onClick={() => handleEdit(activeMatch, "predictions")}
-                  className="text-blue-500 hover:text-blue-400"
+                  className="text-blue-500"
                 >
                   <Edit size={16} />
                 </button>
                 <button
                   onClick={() => handleDelete("predictions", activeMatch.id)}
-                  className="text-red-500 hover:text-red-400"
+                  className="text-red-500"
                 >
                   <Trash2 size={16} />
                 </button>
               </div>
             )}
-            <p className="text-zinc-400 text-xs font-bold tracking-wide mb-2">
+            <p className="text-zinc-400 text-xs font-bold mb-2">
               {activeMatch.league_name}
             </p>
             <h2 className="text-amber-500 font-black text-xl mb-6">
@@ -409,13 +421,13 @@ export default function App() {
               <div className="flex space-x-2 items-center">
                 <input
                   type="number"
-                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg text-lg font-bold"
+                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
                   defaultValue="0"
                 />
-                <span className="text-zinc-600">-</span>
+                <span>-</span>
                 <input
                   type="number"
-                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg text-lg font-bold"
+                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold"
                   defaultValue="0"
                 />
               </div>
@@ -456,16 +468,12 @@ export default function App() {
             </div>
           )}
           {item.image_url ? (
-            <img
-              src={item.image_url}
-              alt={item.name}
-              className="w-full h-40 object-cover"
-            />
+            <img src={item.image_url} className="w-full h-40 object-cover" />
           ) : (
             <div className="w-full h-40 bg-black" />
           )}
           <div className="p-4 flex flex-col flex-grow">
-            <span className="text-xs text-zinc-500 mb-1 font-bold uppercase">
+            <span className="text-xs text-zinc-500 mb-1 font-bold">
               {item.category}
             </span>
             <h3 className="text-white font-bold text-sm mb-2">{item.name}</h3>
@@ -482,16 +490,15 @@ export default function App() {
   );
 
   const renderAdmin = () => (
-    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6">
       <div className="flex justify-between items-center mb-6 mt-4">
         <h2 className="text-amber-500 font-black text-2xl tracking-wide">
           {editingId ? "Edit Item" : "CEO Dashboard"}
         </h2>
         <button onClick={closeAdmin} className="bg-zinc-900 p-2 rounded-full">
-          <X className="text-white w-6 h-6" />
+          <X className="text-white" />
         </button>
       </div>
-
       {!editingId && (
         <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
           {["news", "gossip", "products", "results", "predictions"].map(
@@ -499,7 +506,7 @@ export default function App() {
               <button
                 key={tab}
                 onClick={() => setAdminTab(tab)}
-                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${
+                className={`px-4 py-2 rounded-full text-xs font-bold ${
                   adminTab === tab
                     ? "bg-amber-500 text-black"
                     : "bg-zinc-900 text-zinc-400"
@@ -511,54 +518,44 @@ export default function App() {
           )}
         </div>
       )}
-
       <form onSubmit={handleAdminSubmit} className="space-y-4">
         {(adminTab === "news" || adminTab === "gossip") && (
           <>
             <input
               required
               value={formData.title || ""}
-              placeholder="Main Title (ርዕስ)"
+              placeholder="Title"
               onChange={(e) =>
                 setFormData({ ...formData, title: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             />
             <input
               value={formData.subtitle || ""}
-              placeholder="Subtitle (ንዑስ ርዕስ)"
+              placeholder="Subtitle"
               onChange={(e) =>
                 setFormData({ ...formData, subtitle: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
-            <input
-              value={formData.author || ""}
-              placeholder="Author (ደራሲ)"
-              onChange={(e) =>
-                setFormData({ ...formData, author: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             />
             <textarea
               required
               value={formData.body || ""}
               rows="4"
-              placeholder="Body (ጽሑፍ)"
+              placeholder="Body"
               onChange={(e) =>
                 setFormData({ ...formData, body: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             ></textarea>
             <input
               type="file"
               accept="image/*"
               onChange={(e) => setImageFile(e.target.files[0])}
-              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white"
+              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800"
             />
           </>
         )}
-
         {adminTab === "products" && (
           <>
             <input
@@ -568,7 +565,7 @@ export default function App() {
               onChange={(e) =>
                 setFormData({ ...formData, title: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             />
             <input
               required
@@ -577,7 +574,7 @@ export default function App() {
               onChange={(e) =>
                 setFormData({ ...formData, price: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             />
             <input
               required
@@ -586,33 +583,26 @@ export default function App() {
               onChange={(e) =>
                 setFormData({ ...formData, category: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImageFile(e.target.files[0])}
-              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             />
           </>
         )}
-
         {(adminTab === "results" || adminTab === "predictions") && (
           <>
             <input
               required
               value={formData.league || ""}
-              placeholder="League (የሊግ ስም)"
+              placeholder="League"
               onChange={(e) =>
                 setFormData({ ...formData, league: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
             />
             <div className="grid grid-cols-2 gap-4">
               <input
                 required
                 value={formData.teamA || ""}
-                placeholder="Team A (ቡድን 1)"
+                placeholder="Team A"
                 onChange={(e) =>
                   setFormData({ ...formData, teamA: e.target.value })
                 }
@@ -621,7 +611,7 @@ export default function App() {
               <input
                 required
                 value={formData.teamB || ""}
-                placeholder="Team B (ቡድን 2)"
+                placeholder="Team B"
                 onChange={(e) =>
                   setFormData({ ...formData, teamB: e.target.value })
                 }
@@ -629,39 +619,24 @@ export default function App() {
               />
             </div>
             {adminTab === "results" && (
-              <>
-                <input
-                  required
-                  value={formData.score || ""}
-                  placeholder="Score (ምሳሌ: 2 - 1)"
-                  onChange={(e) =>
-                    setFormData({ ...formData, score: e.target.value })
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-                />
-                <input
-                  value={formData.details || ""}
-                  placeholder="Scorers (সাকা 12', ኦዴጋርድ 45')"
-                  onChange={(e) =>
-                    setFormData({ ...formData, details: e.target.value })
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-                />
-              </>
+              <input
+                required
+                value={formData.score || ""}
+                placeholder="Score"
+                onChange={(e) =>
+                  setFormData({ ...formData, score: e.target.value })
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+              />
             )}
           </>
         )}
-
         <button
           disabled={uploading}
           type="submit"
-          className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4 flex justify-center"
+          className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4"
         >
-          {uploading
-            ? "Saving..."
-            : editingId
-            ? "Update Info (አስተካክል)"
-            : "Publish (አትም)"}
+          {uploading ? "Saving..." : editingId ? "Update" : "Publish"}
         </button>
       </form>
     </div>
@@ -675,6 +650,7 @@ export default function App() {
     { id: "ሱቅ", icon: ShoppingBag },
   ];
 
+  // --- THE NEW LOGIN SCREEN ---
   if (!user) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 font-sans">
@@ -690,20 +666,20 @@ export default function App() {
           The heartbeat of Ethiopian football.
         </p>
 
-        <button
-          onClick={handleMockLogin}
-          className="w-full max-w-sm bg-[#229ED9] hover:bg-[#1CA0DE] text-white font-bold py-4 rounded-xl flex items-center justify-center space-x-3 transition-colors"
-        >
-          <Send size={20} />
-          <span>Log in with Telegram</span>
-        </button>
+        <div className="w-full max-w-sm flex flex-col items-center justify-center bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+          <p className="text-sm font-bold text-zinc-300 mb-4 tracking-wide">
+            SECURE LOGIN
+          </p>
+          {/* The widget we created at the top renders right here */}
+          <TelegramLoginWidget onAuth={handleRealLogin} />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-black font-sans text-white">
-      <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center shadow-md">
+      <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center">
         <div
           className="flex items-center space-x-3 cursor-pointer select-none"
           onClick={handleLogoTap}
@@ -713,8 +689,10 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center space-x-3 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800">
-          <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center">
-            <span className="text-black font-bold text-[10px]">GF</span>
+          <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center overflow-hidden">
+            <span className="text-black font-bold text-[10px] uppercase">
+              {user.name.charAt(0)}
+            </span>
           </div>
           <span className="text-xs font-bold text-zinc-300">{user.name}</span>
           {user.isVIP && (
