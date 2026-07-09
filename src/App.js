@@ -75,6 +75,9 @@ export default function App() {
   const [predictionStatus, setPredictionStatus] = useState("idle");
   const [existingPrediction, setExistingPrediction] = useState(null);
 
+  // --- NEW: The Laser Pointer for the Second Box ---
+  const teamBInputRef = useRef(null);
+
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
   const [products, setProducts] = useState([]);
@@ -536,14 +539,12 @@ export default function App() {
       );
 
     if (existingPrediction) {
-      // Find the absolute newest gossip (or news if no gossip exists) to use as the "Hook"
       const hookContent =
         gossip.length > 0 ? gossip[0] : news.length > 0 ? news[0] : null;
       const hookTabName = gossip.length > 0 ? "ሹክሹክታ" : "ዜና";
 
       return (
         <div className="pb-24 flex flex-col items-center pt-4">
-          {/* COMPACTED PREDICTION CARD */}
           <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
             <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
               <Lock size={16} className="text-amber-500" />
@@ -573,7 +574,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* DYNAMIC CONTENT HOOK (THE RABBIT HOLE) */}
           {hookContent && (
             <div className="w-full max-w-sm text-left">
               <h3 className="text-zinc-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center">
@@ -647,16 +647,27 @@ export default function App() {
               {activeMatch.team_a_name}
             </span>
             <div className="flex space-x-2 items-center">
+              {/* --- UPDATED: The Auto-Jumping Box --- */}
               <input
                 type="number"
                 min="0"
                 placeholder="-"
                 value={teamAScore}
-                onChange={(e) => setTeamAScore(e.target.value)}
+                onChange={(e) => {
+                  setTeamAScore(e.target.value);
+                  // The magic jump logic!
+                  if (e.target.value !== "" && teamBInputRef.current) {
+                    teamBInputRef.current.focus();
+                  }
+                }}
                 className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
               />
+
               <span className="text-zinc-500 font-bold">-</span>
+
+              {/* --- UPDATED: The Target Box --- */}
               <input
+                ref={teamBInputRef} // The laser pointer points here
                 type="number"
                 min="0"
                 placeholder="-"
