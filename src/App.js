@@ -47,7 +47,7 @@ const TelegramLoginWidget = ({ onAuth }) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(null); // null means they are a Guest
+  const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
@@ -116,29 +116,61 @@ export default function App() {
     }
   };
 
-  const handleRealLogin = (telegramUser) => {
-    setUser({
-      id: telegramUser.id,
-      name: telegramUser.first_name,
-      isVIP: false,
-    });
+  // --- NEW: LONG TERM MEMORY LOGIN ---
+  const handleRealLogin = async (telegramUser) => {
+    const userIdString = telegramUser.id.toString(); // Convert to text for our DB
+
+    // 1. Check if user already exists in Supabase
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", userIdString)
+      .single();
+
+    if (data) {
+      // 2. They exist! Load their exact VIP status from the database
+      setUser({ id: data.id, name: data.name, isVIP: data.is_vip });
+    } else {
+      // 3. They are new! Save them to the database
+      const newUser = {
+        id: userIdString,
+        name: telegramUser.first_name,
+        is_vip: false,
+      };
+      await supabase.from("users").insert([newUser]);
+      setUser({ id: newUser.id, name: newUser.name, isVIP: newUser.is_vip });
+    }
   };
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       setUser(null);
-      setActiveTab("ዜና"); // Send them back to the news tab
+      setActiveTab("ዜና");
     }
   };
 
-  const handleTelebirrPayment = () => {
+  // --- NEW: LONG TERM MEMORY PAYMENT ---
+  const handleTelebirrPayment = async () => {
     setPaymentStatus("loading");
-    setTimeout(() => {
-      setPaymentStatus("success");
-      setTimeout(() => {
-        setUser((prev) => ({ ...prev, isVIP: true }));
+
+    // Simulate payment processing time
+    setTimeout(async () => {
+      // Tell the database this user is now a VIP!
+      const { error } = await supabase
+        .from("users")
+        .update({ is_vip: true })
+        .eq("id", user.id);
+
+      if (!error) {
+        setPaymentStatus("success");
+        setTimeout(() => {
+          setUser((prev) => ({ ...prev, isVIP: true }));
+          setPaymentStatus("idle");
+        }, 1500);
+      } else {
+        alert("Payment failed. Please try again.");
         setPaymentStatus("idle");
-      }, 1500);
+      }
     }, 2500);
   };
 
@@ -348,7 +380,6 @@ export default function App() {
   );
 
   const renderPredict = () => {
-    // 1. GUEST MODE: If they are not logged in, ask them to log in AND explain the VIP cost!
     if (!user) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -376,7 +407,6 @@ export default function App() {
       );
     }
 
-    // 2. LOGGED IN, BUT FREE TIER: Show Telebirr Paywall
     if (!user.isVIP) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -413,7 +443,6 @@ export default function App() {
       );
     }
 
-    // 3. LOGGED IN & VIP: Show the Game!
     const activeMatch = predictions[0];
     if (!activeMatch)
       return (
@@ -541,7 +570,6 @@ export default function App() {
           </h1>
         </div>
 
-        {/* Dynamic Header: Shows Login button if Guest, or Profile/Logout if logged in */}
         <div className="flex items-center space-x-3">
           {user ? (
             <div className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800">
@@ -558,7 +586,6 @@ export default function App() {
                   VIP
                 </span>
               )}
-              {/* The New Logout Button */}
               <button
                 onClick={handleLogout}
                 className="ml-2 text-zinc-500 hover:text-red-500 transition-colors p-1"
