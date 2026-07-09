@@ -11,6 +11,7 @@ import {
   Loader2,
   CheckCircle2,
   LogOut,
+  Lock,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -68,10 +69,11 @@ export default function App() {
   const [expandedPosts, setExpandedPosts] = useState({});
   const [paymentStatus, setPaymentStatus] = useState("idle");
 
-  // --- NEW: States for the Game Engine ---
-  const [teamAScore, setTeamAScore] = useState(0);
-  const [teamBScore, setTeamBScore] = useState(0);
+  // --- UPDATED: Game Engine States ---
+  const [teamAScore, setTeamAScore] = useState(""); // Now completely blank!
+  const [teamBScore, setTeamBScore] = useState(""); // Now completely blank!
   const [predictionStatus, setPredictionStatus] = useState("idle");
+  const [existingPrediction, setExistingPrediction] = useState(null); // Tracks if they already guessed
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -85,6 +87,13 @@ export default function App() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // --- NEW: Check if user already guessed the active match ---
+  useEffect(() => {
+    if (user && predictions.length > 0) {
+      checkExistingPrediction(predictions[0].id);
+    }
+  }, [user, predictions]);
 
   const fetchData = async () => {
     const { data: nData } = await supabase
@@ -113,6 +122,16 @@ export default function App() {
     if (pData) setProducts(pData);
     if (rData) setResults(rData);
     if (prData) setPredictions(prData);
+  };
+
+  const checkExistingPrediction = async (matchId) => {
+    const { data } = await supabase
+      .from("user_predictions")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("match_id", matchId)
+      .single();
+    if (data) setExistingPrediction(data);
   };
 
   const toggleReadMore = (id) =>
@@ -218,23 +237,32 @@ export default function App() {
     }, 2500);
   };
 
-  // --- NEW: Submit Prediction Function ---
   const handlePredictSubmit = async (matchId) => {
+    // Stop them if they left a box blank
+    if (teamAScore === "" || teamBScore === "") {
+      alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ (Please enter a score for both teams)");
+      return;
+    }
+
     setPredictionStatus("loading");
 
-    const { error } = await supabase.from("user_predictions").insert([
-      {
-        user_id: user.id,
-        match_id: matchId,
-        team_a_score: Number(teamAScore),
-        team_b_score: Number(teamBScore),
-      },
-    ]);
+    const newGuess = {
+      user_id: user.id,
+      match_id: matchId,
+      team_a_score: Number(teamAScore),
+      team_b_score: Number(teamBScore),
+    };
+
+    const { error } = await supabase
+      .from("user_predictions")
+      .insert([newGuess]);
 
     if (!error) {
       setPredictionStatus("success");
-      // Change back to idle after 3 seconds so they see the success message
-      setTimeout(() => setPredictionStatus("idle"), 3000);
+      setTimeout(() => {
+        setPredictionStatus("idle");
+        setExistingPrediction(newGuess); // Instantly update the screen to the locked state!
+      }, 1500);
     } else {
       alert("Something went wrong saving your guess. Try again!");
       setPredictionStatus("idle");
@@ -458,15 +486,6 @@ export default function App() {
             <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
               ግምት ለማስቀመጥ እና የገንዘብ ሽልማቶችን ለማሸነፍ በወር <b>50 ብር</b> የቪአይፒ (VIP) አባል
               መሆን ያስፈልጋል። ለመጀመር እባክዎ በቴሌግራም ይግቡ።
-              <br />
-              <br />
-              <span className="text-xs text-zinc-500">
-                (Become a VIP for 50 Birr/month to predict and win. Log in below
-                to start.)
-              </span>
-            </p>
-            <p className="text-xs text-zinc-500 font-bold mb-2 uppercase tracking-widest">
-              Secure Login
             </p>
             <TelegramLoginWidget onAuth={handleRealLogin} />
           </div>
@@ -518,9 +537,48 @@ export default function App() {
         </div>
       );
 
+    // --- NEW: Locked In Screen ---
+    if (existingPrediction) {
+      return (
+        <div className="pb-24 flex flex-col items-center pt-10">
+          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-zinc-800 shadow-2xl relative">
+            <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Lock size={20} className="text-amber-500" />
+            </div>
+            <h2 className="text-amber-500 font-black text-xl mb-1">
+              ግምትዎ ተቀምጧል!
+            </h2>
+            <p className="text-zinc-400 text-xs font-bold mb-6">
+              (Your guess is locked in)
+            </p>
+            <p className="text-zinc-500 text-[10px] uppercase font-bold mb-2 tracking-widest">
+              {activeMatch.league_name}
+            </p>
+            <div className="flex justify-between items-center bg-black p-4 rounded-xl border border-zinc-800">
+              <span className="text-white font-bold w-1/3">
+                {activeMatch.team_a_name}
+              </span>
+              <div className="flex space-x-3 items-center">
+                <span className="text-3xl font-black text-amber-500">
+                  {existingPrediction.team_a_score}
+                </span>
+                <span className="text-zinc-500">-</span>
+                <span className="text-3xl font-black text-amber-500">
+                  {existingPrediction.team_b_score}
+                </span>
+              </div>
+              <span className="text-white font-bold w-1/3">
+                {activeMatch.team_b_name}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="pb-24 flex flex-col items-center pt-10">
-        <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative">
+        <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 relative shadow-2xl">
           {isCEO && (
             <div className="absolute top-2 right-2 flex space-x-2">
               <button
@@ -537,45 +595,45 @@ export default function App() {
               </button>
             </div>
           )}
-          <p className="text-zinc-400 text-xs font-bold mb-2">
+          <p className="text-zinc-400 text-[10px] uppercase font-bold tracking-widest mb-2">
             {activeMatch.league_name}
           </p>
-          <h2 className="text-amber-500 font-black text-xl mb-6">
+          <h2 className="text-amber-500 font-black text-2xl mb-8">
             የሳምንቱ ጨዋታ ግምት
           </h2>
 
-          {/* --- NEW: Interactive Input Boxes --- */}
-          <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
-            <span className="text-white font-bold w-1/3">
+          <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800 shadow-inner">
+            <span className="text-white font-bold w-1/3 text-sm">
               {activeMatch.team_a_name}
             </span>
             <div className="flex space-x-2 items-center">
               <input
                 type="number"
                 min="0"
+                placeholder="-"
                 value={teamAScore}
                 onChange={(e) => setTeamAScore(e.target.value)}
-                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold outline-none focus:border-amber-500 transition-colors"
+                className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
               />
-              <span>-</span>
+              <span className="text-zinc-500 font-bold">-</span>
               <input
                 type="number"
                 min="0"
+                placeholder="-"
                 value={teamBScore}
                 onChange={(e) => setTeamBScore(e.target.value)}
-                className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-bold outline-none focus:border-amber-500 transition-colors"
+                className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none focus:border-amber-500 transition-colors placeholder:text-zinc-600"
               />
             </div>
-            <span className="text-white font-bold w-1/3">
+            <span className="text-white font-bold w-1/3 text-sm">
               {activeMatch.team_b_name}
             </span>
           </div>
 
-          {/* --- NEW: Smart Submit Button --- */}
           <button
             onClick={() => handlePredictSubmit(activeMatch.id)}
             disabled={predictionStatus !== "idle"}
-            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl flex justify-center items-center space-x-2 transition-colors disabled:opacity-75"
+            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors disabled:opacity-75"
           >
             {predictionStatus === "idle" && <span>አስገባ (Submit)</span>}
             {predictionStatus === "loading" && (
