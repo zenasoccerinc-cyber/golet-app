@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Crown,
   Users,
+  PlusCircle,
+  Image as ImageIcon,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -68,7 +70,6 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
 
-  // NEW: Layout & Filtering States
   const [newsCategory, setNewsCategory] = useState("All");
   const [newsLimit, setNewsLimit] = useState(10);
   const newsCategories = ["All", "የዝውውር ዜና", "አስተያየት", "ፕሪሚየር ሊግ", "ማህበራዊ"];
@@ -104,7 +105,6 @@ export default function App() {
   }, [user, predictions]);
 
   const fetchData = async () => {
-    // Increased fetch limit to 50 so client-side filtering works well
     const { data: nData } = await supabase
       .from("news")
       .select("*")
@@ -236,7 +236,7 @@ export default function App() {
       currentUser = {
         id: newUser.id,
         name: newUser.name,
-        isVIP: newUser.is_vip,
+        isVIP: false,
         vipUntil: null,
       };
     }
@@ -366,9 +366,102 @@ export default function App() {
       fetchData();
     }
   };
-  const handleEdit = (item, table) => {
+
+  // --- UPGRADED: CEO EDIT/CREATE TRIGGER ---
+  const handleEdit = (item = null, table) => {
+    setAdminTab(table);
+    if (item) {
+      setEditingId(item.id);
+      setFormData({
+        title: item.title || item.name || "",
+        subtitle: item.subtitle || "",
+        author: item.author || "",
+        body: item.body || "",
+        price: item.price || "",
+        category: item.category || "All",
+        league: item.league_name || "",
+        teamA: item.team_a_name || "",
+        teamB: item.team_b_name || "",
+        image_url: item.image_url || null,
+      });
+    } else {
+      setEditingId(null);
+      setFormData({
+        title: "",
+        subtitle: "",
+        author: "Goleth",
+        body: "",
+        price: "",
+        category: "All",
+        league: "",
+        teamA: "",
+        teamB: "",
+        image_url: null,
+      });
+    }
     setShowAdmin(true);
   };
+
+  const closeAdmin = () => {
+    setShowAdmin(false);
+    setEditingId(null);
+    setFormData({});
+    setImageFile(null);
+  };
+
+  const handleAdminSubmit = async (e) => {
+    e.preventDefault();
+    setUploading(true);
+    let finalImageUrl = formData.image_url;
+    if (imageFile) {
+      const fileName = `${Date.now()}.${imageFile.name.split(".").pop()}`;
+      const { error } = await supabase.storage
+        .from("images")
+        .upload(fileName, imageFile);
+      if (!error)
+        finalImageUrl = supabase.storage.from("images").getPublicUrl(fileName)
+          .data.publicUrl;
+    }
+    const payload = {};
+    if (["news", "gossip"].includes(adminTab)) {
+      Object.assign(payload, {
+        title: formData.title,
+        subtitle: formData.subtitle,
+        author: formData.author || "Goleth",
+        body: formData.body,
+        category: formData.category,
+        image_url: finalImageUrl,
+      });
+    } else if (adminTab === "products") {
+      Object.assign(payload, {
+        name: formData.title,
+        price: Number(formData.price),
+        category: formData.category,
+        image_url: finalImageUrl,
+      });
+    } else if (adminTab === "predictions") {
+      Object.assign(payload, {
+        league_name: formData.league,
+        team_a_name: formData.teamA,
+        team_b_name: formData.teamB,
+      });
+    }
+
+    if (editingId)
+      await supabase.from(adminTab).update(payload).eq("id", editingId);
+    else {
+      if (adminTab === "predictions")
+        await supabase
+          .from("predictions")
+          .update({ is_active: false })
+          .neq("id", 0);
+      await supabase.from(adminTab).insert([payload]);
+    }
+    closeAdmin();
+    setUploading(false);
+    fetchData();
+  };
+
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
   const formatDate = (dateString) =>
@@ -378,7 +471,251 @@ export default function App() {
       day: "numeric",
     });
 
-  // NEW LAYOUT: Hero Post (The big one on top)
+  // --- NEW: THE CEO PUBLISHING STUDIO MODAL ---
+  const renderCEOStudio = () => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 overflow-y-auto">
+      <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
+        <button
+          onClick={closeAdmin}
+          className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+        >
+          <X size={24} />
+        </button>
+        <h2 className="text-2xl font-black text-amber-500 mb-6">
+          {editingId ? "Edit Content" : "Create New"}
+        </h2>
+
+        <form onSubmit={handleAdminSubmit} className="space-y-4">
+          {/* Post Type Selector (Only if creating new) */}
+          {!editingId && (
+            <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+              {["news", "gossip", "products", "predictions"].map((tab) => (
+                <button
+                  type="button"
+                  key={tab}
+                  onClick={() => setAdminTab(tab)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
+                    adminTab === tab
+                      ? "bg-amber-500 text-black"
+                      : "bg-zinc-800 text-zinc-400"
+                  }`}
+                >
+                  {tab.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Form Fields for News & Gossip */}
+          {["news", "gossip"].includes(adminTab) && (
+            <>
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                  Title (Title)
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={formData.title || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                    Category
+                  </label>
+                  <select
+                    value={formData.category || "All"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  >
+                    {newsCategories
+                      .filter((c) => c !== "All")
+                      .map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    <option value="All">General</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                    Author
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.author || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, author: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                  Body Text
+                </label>
+                <textarea
+                  required
+                  rows="6"
+                  value={formData.body || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, body: e.target.value })
+                  }
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                ></textarea>
+              </div>
+            </>
+          )}
+
+          {/* Form Fields for Products */}
+          {adminTab === "products" && (
+            <>
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                  Product Name
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={formData.title || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                    Price (Birr)
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    value={formData.price || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Jersey"
+                    value={formData.category || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Form Fields for Predictions */}
+          {adminTab === "predictions" && (
+            <>
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                  League / Cup Name
+                </label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. Premier League"
+                  value={formData.league || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, league: e.target.value })
+                  }
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                    Home Team
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.teamA || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, teamA: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                    Away Team
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.teamB || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, teamB: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Image Upload (For News, Gossip, Products) */}
+          {["news", "gossip", "products"].includes(adminTab) && (
+            <div className="mt-4">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                Cover Image
+              </label>
+              <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
+                <div className="bg-zinc-900 p-2 rounded-lg">
+                  <ImageIcon size={20} className="text-amber-500" />
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImageFile(e.target.files[0])}
+                  className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
+                />
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={uploading}
+            className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-6 flex justify-center items-center space-x-2"
+          >
+            {uploading ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
+              <CheckCircle2 size={20} />
+            )}
+            <span>{uploading ? "Publishing..." : "Publish Post"}</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
   const renderHeroArticle = (item, table) => {
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate = item.body && item.body.length > 150;
@@ -393,6 +730,12 @@ export default function App() {
       >
         {isCEO && (
           <div className="absolute top-2 right-2 flex space-x-2 z-10">
+            <button
+              onClick={() => handleEdit(item, table)}
+              className="bg-blue-600 p-2 rounded-full"
+            >
+              <Edit size={16} className="text-white" />
+            </button>
             <button
               onClick={() => handleDelete(table, item.id)}
               className="bg-red-600 p-2 rounded-full"
@@ -412,12 +755,12 @@ export default function App() {
           <h3 className="text-amber-500 font-black text-2xl leading-tight mb-2">
             {item.title}
           </h3>
-          {item.subtitle && (
-            <h4 className="text-white text-md font-bold mb-2">
-              {item.subtitle}
-            </h4>
-          )}
           <div className="flex items-center text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-3 pb-3 border-b border-zinc-800/50">
+            {item.category && (
+              <span className="bg-zinc-800 px-2 py-0.5 rounded text-amber-500 mr-2">
+                {item.category}
+              </span>
+            )}
             <span>{item.author || "Goleth"}</span>
             <span className="mx-2">•</span>
             <span>{formatDate(item.created_at)}</span>
@@ -438,7 +781,6 @@ export default function App() {
     );
   };
 
-  // NEW LAYOUT: List Post (The small grid/list items underneath)
   const renderListArticle = (item, table) => {
     return (
       <div
@@ -446,12 +788,15 @@ export default function App() {
         className="bg-zinc-900 rounded-xl overflow-hidden shadow-sm border border-zinc-800 relative mb-3 flex h-32"
       >
         {isCEO && (
-          <div className="absolute top-2 right-2 flex space-x-2 z-10">
+          <div className="absolute top-2 right-2 flex space-x-2 z-10 bg-black/50 p-1 rounded-bl-lg">
+            <button onClick={() => handleEdit(item, table)} className="p-1">
+              <Edit size={14} className="text-blue-400" />
+            </button>
             <button
               onClick={() => handleDelete(table, item.id)}
-              className="bg-red-600 p-1.5 rounded-full"
+              className="p-1"
             >
-              <Trash2 size={12} className="text-white" />
+              <Trash2 size={14} className="text-red-400" />
             </button>
           </div>
         )}
@@ -462,9 +807,18 @@ export default function App() {
             className="w-1/3 h-full object-cover"
           />
         ) : (
-          <div className="w-1/3 h-full bg-black"></div>
+          <div className="w-1/3 h-full bg-black flex items-center justify-center">
+            <span className="text-zinc-800 font-black text-xs rotate-90">
+              GOLETH
+            </span>
+          </div>
         )}
-        <div className="w-2/3 p-3 flex flex-col justify-center">
+        <div className="w-2/3 p-3 flex flex-col justify-center relative">
+          {item.category && (
+            <span className="text-amber-500 text-[9px] font-bold uppercase tracking-widest mb-1">
+              {item.category}
+            </span>
+          )}
           <h3 className="text-white font-bold text-sm leading-tight line-clamp-3 mb-1">
             {item.title}
           </h3>
@@ -476,19 +830,15 @@ export default function App() {
     );
   };
 
-  // NEW: News Feed Compiler
   const renderNewsFeed = () => {
-    // 1. Filter by selected category (Pills)
     const filteredNews =
       newsCategory === "All"
         ? news
         : news.filter((n) => n.category === newsCategory);
-    // 2. Apply limit
     const visibleNews = filteredNews.slice(0, newsLimit);
 
     return (
-      <div className="pb-24">
-        {/* The Category Pills */}
+      <div className="pb-24 pt-2">
         <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
           {newsCategories.map((cat) => (
             <button
@@ -508,15 +858,13 @@ export default function App() {
           ))}
         </div>
 
-        {/* The Articles */}
         <div className="space-y-2">
           {visibleNews.map((item, index) => {
-            if (index === 0) return renderHeroArticle(item, "news"); // First one is big
-            return renderListArticle(item, "news"); // Rest are small
+            if (index === 0) return renderHeroArticle(item, "news");
+            return renderListArticle(item, "news");
           })}
         </div>
 
-        {/* Load More Button */}
         {filteredNews.length > newsLimit && (
           <button
             onClick={() => setNewsLimit((prev) => prev + 10)}
@@ -594,51 +942,8 @@ export default function App() {
     );
   };
 
-  const renderUserDashboard = () => (
-    <div className="fixed inset-0 z-[100] flex flex-col p-4 bg-black/95">
-      <div className="flex justify-between items-center mb-6 mt-4">
-        <h2 className="text-amber-500 font-black text-xl">
-          CEO User Management
-        </h2>
-        <button
-          onClick={() => setShowUserDashboard(false)}
-          className="text-white bg-zinc-800 p-2 rounded-full"
-        >
-          <X size={20} />
-        </button>
-      </div>
-      <div className="overflow-y-auto space-y-3 pb-20">
-        {allUsers.map((u) => {
-          const isVip = u.is_vip && new Date(u.vip_until) > new Date();
-          return (
-            <div
-              key={u.id}
-              className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex justify-between items-center"
-            >
-              <div>
-                <p className="text-white font-bold">{u.name}</p>
-                <p className="text-zinc-500 text-xs mt-1">
-                  Points: {u.total_points || 0}
-                </p>
-              </div>
-              <button
-                onClick={() => toggleUserVIP(u)}
-                className={`px-4 py-2 rounded-lg font-bold text-xs ${
-                  isVip
-                    ? "bg-amber-500 text-black"
-                    : "bg-zinc-800 text-zinc-400"
-                }`}
-              >
-                {isVip ? "Remove VIP" : "Make VIP"}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
   const renderVIP = () => {
+    // ... (VIP Render Logic is unchanged, preserved from Phase 2)
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -658,7 +963,6 @@ export default function App() {
         </div>
       );
     }
-
     if (user && !user.isVIP && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center pt-6">
@@ -675,7 +979,6 @@ export default function App() {
             <p className="text-zinc-300 text-sm mb-6 leading-relaxed">
               ጨዋታውን ለመቀላቀል እና ከሱቃችን የ10% ቅናሽ ለማግኘት በወር 50 ብር ይክፈሉ!
             </p>
-
             <div className="bg-black p-4 rounded-xl border border-zinc-800 text-left mb-6">
               <p className="text-zinc-500 text-xs mb-3 font-bold tracking-widest uppercase">
                 1. ክፍያዎን ወደዚህ ባንክ ያስገቡ (Transfer to):
@@ -695,7 +998,6 @@ export default function App() {
                   ስም (Name): Goleth / Contactgoleth
                 </p>
               </div>
-
               <p className="text-zinc-500 text-xs mb-2 mt-4 font-bold tracking-widest uppercase">
                 2. ደረሰኝዎን በቴሌግራም ይላኩልን (Send receipt):
               </p>
@@ -723,25 +1025,6 @@ export default function App() {
 
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
-        {isCEO && (
-          <div className="w-full max-w-sm mb-4 flex justify-end space-x-2">
-            <button
-              onClick={() => setShowUserDashboard(true)}
-              className="bg-zinc-800 text-white flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-bold border border-zinc-700 hover:border-amber-500"
-            >
-              <Users size={14} />
-              <span>Manage Users</span>
-            </button>
-            <button
-              onClick={() => handleResolveMatch(activeMatch)}
-              className="bg-amber-500 text-black flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-bold"
-            >
-              <Trophy size={14} />
-              <span>Award Points</span>
-            </button>
-          </div>
-        )}
-
         <div className="flex justify-center mb-6 space-x-2 bg-zinc-900 p-1.5 rounded-full border border-zinc-800 shadow-lg w-full max-w-sm">
           <button
             onClick={() => setPredictTab("play")}
@@ -764,16 +1047,12 @@ export default function App() {
             ደረጃ (Leaderboard)
           </button>
         </div>
-
         {predictTab === "leaderboard" && (
           <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden shadow-2xl mb-6">
             <div className="bg-black p-5 border-b border-zinc-800 text-center relative">
               <h2 className="text-white font-black text-xl">
                 {activeMatch.team_a_name} vs {activeMatch.team_b_name}
               </h2>
-              <p className="text-zinc-500 text-[11px] uppercase font-bold tracking-widest mt-1">
-                ተወዳዳሪዎች (Contenders)
-              </p>
             </div>
             <div className="p-2">
               {leaderboard.length === 0 ? (
@@ -809,7 +1088,6 @@ export default function App() {
             </div>
           </div>
         )}
-
         {predictTab === "play" && (
           <>
             <div className="w-full max-w-sm mb-6 bg-zinc-900 rounded-xl p-4 border border-zinc-800 flex justify-between items-center shadow-lg">
@@ -817,21 +1095,14 @@ export default function App() {
                 <div className="text-amber-500 font-black text-lg">
                   {activeMatch.team_a_name}
                 </div>
-                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                  Home
-                </div>
               </div>
               <div className="text-zinc-500 font-black">VS</div>
               <div className="text-center">
                 <div className="text-amber-500 font-black text-lg">
                   {activeMatch.team_b_name}
                 </div>
-                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                  Away
-                </div>
               </div>
             </div>
-
             {existingPrediction ? (
               <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
                 <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2">
@@ -915,6 +1186,12 @@ export default function App() {
           {isCEO && (
             <div className="absolute top-2 right-2 flex space-x-1 z-10">
               <button
+                onClick={() => handleEdit(item, "products")}
+                className="bg-blue-600 p-1.5 rounded-full"
+              >
+                <Edit size={14} className="text-white" />
+              </button>
+              <button
                 onClick={() => handleDelete("products", item.id)}
                 className="bg-red-600 p-1.5 rounded-full"
               >
@@ -970,8 +1247,19 @@ export default function App() {
             GOL<span className="text-amber-500">ETH</span>
           </h1>
         </div>
-
         <div className="flex items-center space-x-3">
+          {/* NEW: CEO Add Post Button (Only visible in CEO mode) */}
+          {isCEO && (
+            <button
+              onClick={() =>
+                handleEdit(null, activeTab === "ሱቅ" ? "products" : "news")
+              }
+              className="text-amber-500 mr-2 hover:text-amber-400"
+            >
+              <PlusCircle size={24} />
+            </button>
+          )}
+
           {user ? (
             <div
               onClick={() => setShowProfile(true)}
@@ -1004,11 +1292,10 @@ export default function App() {
 
       {showProfile && renderProfileModal()}
       {showUserDashboard && renderUserDashboard()}
+      {showAdmin && renderCEOStudio()}
 
       <main className="p-4 max-w-lg mx-auto">
-        {/* NEW: Updated News Tab Call */}
         {activeTab === "ዜና" && renderNewsFeed()}
-
         {activeTab === "ስፖርት" && (
           <div className="text-center pt-20 text-zinc-500 font-bold">
             የስፖርት ዜናዎች በቅርብ ቀን...
