@@ -13,7 +13,6 @@ import {
   LogOut,
   Lock,
   ChevronRight,
-  User,
   Calendar,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
@@ -51,6 +50,7 @@ const TelegramLoginWidget = ({ onAuth }) => {
 };
 
 export default function App() {
+  // --- User & App States ---
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("goleth_user");
     if (savedUser) {
@@ -283,7 +283,6 @@ export default function App() {
   };
 
   const handlePredictSubmit = async (matchId) => {
-    // --- UPDATED: Prevent CEO from crashing app by trying to play without logging in ---
     if (!user) {
       alert(
         "CEO Mode: You must actually log in with Telegram to submit a prediction!"
@@ -322,15 +321,24 @@ export default function App() {
     }
   };
 
+  // --- UPGRADED: CEO RESOLVE MATCH ---
   const handleResolveMatch = async (match) => {
     const scoreA = window.prompt(`Enter final score for ${match.team_a_name}:`);
     if (scoreA === null || scoreA === "") return;
+
     const scoreB = window.prompt(`Enter final score for ${match.team_b_name}:`);
     if (scoreB === null || scoreB === "") return;
 
+    // --- NEW: CEO DECIDES THE POINTS ---
+    const pointsToAward = window.prompt(
+      "How many points should the winners get?",
+      "10"
+    );
+    if (pointsToAward === null || pointsToAward === "") return;
+
     if (
       window.confirm(
-        `Are you sure? This will award 10 points to everyone who guessed ${scoreA} - ${scoreB}!`
+        `Are you sure? This will award ${pointsToAward} points to everyone who guessed exactly ${scoreA} - ${scoreB}!`
       )
     ) {
       setUploading(true);
@@ -340,11 +348,13 @@ export default function App() {
         .eq("match_id", match.id);
 
       if (guesses) {
+        // Strict exact-match filter
         const winners = guesses.filter(
           (g) =>
             g.team_a_score === Number(scoreA) &&
             g.team_b_score === Number(scoreB)
         );
+
         for (let winner of winners) {
           const { data: userRecord } = await supabase
             .from("users")
@@ -352,14 +362,17 @@ export default function App() {
             .eq("id", winner.user_id)
             .single();
           if (userRecord) {
-            const newPoints = (userRecord.total_points || 0) + 10;
+            const newPoints =
+              (userRecord.total_points || 0) + Number(pointsToAward);
             await supabase
               .from("users")
               .update({ total_points: newPoints })
               .eq("id", winner.user_id);
           }
         }
-        alert(`Success! Awarded 10 points to ${winners.length} winners.`);
+        alert(
+          `Success! Awarded ${pointsToAward} points to ${winners.length} winners.`
+        );
       }
       setUploading(false);
       fetchData();
@@ -638,7 +651,6 @@ export default function App() {
   );
 
   const renderPredict = () => {
-    // --- UPDATED: Allow CEO to bypass the login gate ---
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
