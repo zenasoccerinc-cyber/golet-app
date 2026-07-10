@@ -50,6 +50,7 @@ const TelegramLoginWidget = ({ onAuth }) => {
 };
 
 export default function App() {
+  // --- User & App States ---
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("goleth_user");
     if (savedUser) {
@@ -64,6 +65,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showProfile, setShowProfile] = useState(false); // VIP Profile Modal
   const [isCEO, setIsCEO] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -71,15 +73,19 @@ export default function App() {
   const [expandedPosts, setExpandedPosts] = useState({});
   const [paymentStatus, setPaymentStatus] = useState("idle");
 
+  // --- Prediction Game States ---
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
   const [existingPrediction, setExistingPrediction] = useState(null);
   const teamBInputRef = useRef(null);
 
+  // --- Leaderboard & Profile States ---
   const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
+  const [totalPoints, setTotalPoints] = useState(0);
 
+  // --- Database Data States ---
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
   const [products, setProducts] = useState([]);
@@ -89,6 +95,7 @@ export default function App() {
   const [formData, setFormData] = useState({});
   const [imageFile, setImageFile] = useState(null);
 
+  // --- Data Fetching ---
   useEffect(() => {
     fetchData();
   }, []);
@@ -96,6 +103,7 @@ export default function App() {
   useEffect(() => {
     if (user && predictions.length > 0) {
       checkExistingPrediction(predictions[0].id);
+      fetchUserPoints();
     }
   }, [user, predictions]);
 
@@ -122,6 +130,7 @@ export default function App() {
       .eq("is_active", true)
       .order("created_at", { ascending: false });
 
+    // Fetch Leaderboard for specific match
     let lData = [];
     if (prData && prData.length > 0) {
       const activeMatch = prData[0];
@@ -159,6 +168,15 @@ export default function App() {
     setLeaderboard(lData);
   };
 
+  const fetchUserPoints = async () => {
+    const { data } = await supabase
+      .from("users")
+      .select("total_points")
+      .eq("id", user.id)
+      .single();
+    if (data) setTotalPoints(data.total_points);
+  };
+
   const checkExistingPrediction = async (matchId) => {
     const { data } = await supabase
       .from("user_predictions")
@@ -169,6 +187,7 @@ export default function App() {
     if (data) setExistingPrediction(data);
   };
 
+  // --- Auth & Payments ---
   const handleLogoTap = () => {
     const newCount = tapCount + 1;
     setTapCount(newCount);
@@ -231,11 +250,10 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    if (window.confirm("Are you sure you want to log out?")) {
-      setUser(null);
-      localStorage.removeItem("goleth_user");
-      setActiveTab("ዜና");
-    }
+    setUser(null);
+    localStorage.removeItem("goleth_user");
+    setShowProfile(false);
+    setActiveTab("ዜና");
   };
 
   const handleTelebirrPayment = async () => {
@@ -270,6 +288,7 @@ export default function App() {
     }, 2500);
   };
 
+  // --- Game Submission ---
   const handlePredictSubmit = async (matchId) => {
     if (teamAScore === "" || teamBScore === "") {
       alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ (Please enter a score for both teams)");
@@ -302,6 +321,7 @@ export default function App() {
     }
   };
 
+  // --- Admin Functions ---
   const handleDelete = async (table, id) => {
     if (window.confirm("Are you sure?")) {
       await supabase.from(table).delete().eq("id", id);
@@ -398,7 +418,10 @@ export default function App() {
       month: "long",
       day: "numeric",
     });
+  const toggleReadMore = (id) =>
+    setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  // --- UI Render Functions ---
   const renderArticle = (item, table) => {
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate = item.body && item.body.length > 150;
@@ -406,6 +429,7 @@ export default function App() {
       shouldTruncate && !isExpanded
         ? item.body.substring(0, 150) + "..."
         : item.body;
+
     return (
       <div
         key={item.id}
@@ -463,6 +487,55 @@ export default function App() {
       </div>
     );
   };
+
+  const renderProfileModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
+        <button
+          onClick={() => setShowProfile(false)}
+          className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+        >
+          <X size={20} />
+        </button>
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black text-black mb-4 uppercase">
+            {user.name.charAt(0)}
+          </div>
+          <h2 className="text-xl font-black text-white">{user.name}</h2>
+          <span className="text-amber-500 font-bold text-xs uppercase tracking-widest mt-1">
+            VIP Member
+          </span>
+        </div>
+        <div className="space-y-3 mb-8">
+          <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
+            <span className="text-zinc-500 font-bold text-xs">
+              ቀሪ ቀናት (Days Left)
+            </span>
+            <span className="text-white font-black text-xs">
+              {Math.ceil(
+                (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
+              )}{" "}
+              Days
+            </span>
+          </div>
+          <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
+            <span className="text-zinc-500 font-bold text-xs">
+              ጠቅላላ ነጥብ (Total Points)
+            </span>
+            <span className="text-amber-500 font-black text-xs">
+              {totalPoints} pts
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center space-x-2 bg-red-900/20 hover:bg-red-900/40 text-red-500 font-bold py-3 rounded-xl transition-all"
+        >
+          <LogOut size={18} /> <span>ውጣ (Logout)</span>
+        </button>
+      </div>
+    </div>
+  );
 
   const renderResults = () => (
     <div className="space-y-4 pb-24">
@@ -642,7 +715,7 @@ export default function App() {
 
         {predictTab === "play" && (
           <>
-            {/* --- NEW: MATCH PREVIEW BANNER --- */}
+            {/* --- MATCH PREVIEW BANNER --- */}
             <div className="w-full max-w-sm mb-6 bg-zinc-900 rounded-xl p-4 border border-zinc-800 flex justify-between items-center shadow-lg">
               <div className="text-center">
                 <div className="text-amber-500 font-black text-lg">
@@ -801,7 +874,10 @@ export default function App() {
 
         <div className="flex items-center space-x-3">
           {user ? (
-            <div className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800">
+            <div
+              onClick={() => setShowProfile(true)}
+              className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800 cursor-pointer hover:border-amber-500 transition-all"
+            >
               <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center overflow-hidden">
                 <span className="text-black font-bold text-[10px] uppercase">
                   {user.name.charAt(0)}
@@ -815,13 +891,6 @@ export default function App() {
                   VIP
                 </span>
               )}
-              <button
-                onClick={handleLogout}
-                className="ml-2 text-zinc-500 hover:text-red-500 transition-colors p-1"
-                title="Logout"
-              >
-                <LogOut size={16} />
-              </button>
             </div>
           ) : (
             <button
@@ -835,6 +904,7 @@ export default function App() {
       </header>
 
       <main className="p-4 max-w-lg mx-auto">
+        {showProfile && renderProfileModal()}
         {activeTab === "ዜና" && (
           <div className="space-y-4 pb-24">
             {news.map((n) => renderArticle(n, "news"))}
