@@ -18,12 +18,15 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
+// Supabase Connection
 const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// --- Official Telegram Login Widget ---
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
+
   useEffect(() => {
     window.onTelegramAuth = (user) => onAuth(user);
     const script = document.createElement("script");
@@ -33,12 +36,15 @@ const TelegramLoginWidget = ({ onAuth }) => {
     script.setAttribute("data-onauth", "onTelegramAuth(user)");
     script.setAttribute("data-request-access", "write");
     script.async = true;
+
     if (containerRef.current) containerRef.current.appendChild(script);
+
     return () => {
       delete window.onTelegramAuth;
       if (containerRef.current) containerRef.current.innerHTML = "";
     };
   }, [onAuth]);
+
   return (
     <div ref={containerRef} className="flex justify-center mt-4 w-full"></div>
   );
@@ -47,18 +53,23 @@ const TelegramLoginWidget = ({ onAuth }) => {
 export default function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("goleth_user");
-    return savedUser ? JSON.parse(savedUser) : null;
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      if (parsedUser.vipUntil && new Date(parsedUser.vipUntil) < new Date()) {
+        parsedUser.isVIP = false;
+      }
+      return parsedUser;
+    }
+    return null;
   });
+
   const [activeTab, setActiveTab] = useState("ዜና");
-  const [showProfile, setShowProfile] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const [editingId, setEditingId] = useState(null);
-  const [adminTab, setAdminTab] = useState("news");
-  const [formData, setFormData] = useState({});
-  const [imageFile, setImageFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
   const [expandedPosts, setExpandedPosts] = useState({});
   const [paymentStatus, setPaymentStatus] = useState("idle");
 
@@ -67,6 +78,7 @@ export default function App() {
   const [predictionStatus, setPredictionStatus] = useState("idle");
   const [existingPrediction, setExistingPrediction] = useState(null);
   const teamBInputRef = useRef(null);
+
   const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
@@ -76,10 +88,14 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [results, setResults] = useState([]);
   const [predictions, setPredictions] = useState([]);
+  const [adminTab, setAdminTab] = useState("news");
+  const [formData, setFormData] = useState({});
+  const [imageFile, setImageFile] = useState(null);
 
   useEffect(() => {
     fetchData();
   }, []);
+
   useEffect(() => {
     if (user && predictions.length > 0) {
       checkExistingPrediction(predictions[0].id);
@@ -88,52 +104,63 @@ export default function App() {
   }, [user, predictions]);
 
   const fetchData = async () => {
-    const [n, g, p, r, pr] = await Promise.all([
-      supabase
-        .from("news")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("gossip")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("results")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase.from("predictions").select("*").eq("is_active", true),
-    ]);
-    setNews(n.data || []);
-    setGossip(g.data || []);
-    setProducts(p.data || []);
-    setResults(r.data || []);
-    setPredictions(pr.data || []);
-    if (pr.data?.length > 0) {
-      const { data: guesses } = await supabase
+    const { data: nData } = await supabase
+      .from("news")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data: gData } = await supabase
+      .from("gossip")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data: pData } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data: rData } = await supabase
+      .from("results")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data: prData } = await supabase
+      .from("predictions")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    let lData = [];
+    if (prData && prData.length > 0) {
+      const activeMatch = prData[0];
+      const { data: matchGuesses } = await supabase
         .from("user_predictions")
         .select("*")
-        .eq("match_id", pr.data[0].id);
-      if (guesses) {
-        const uIds = guesses.map((g) => g.user_id);
-        const { data: users } = await supabase
+        .eq("match_id", activeMatch.id);
+
+      if (matchGuesses && matchGuesses.length > 0) {
+        const userIds = matchGuesses.map((g) => g.user_id);
+        const { data: guessUsers } = await supabase
           .from("users")
           .select("id, name, total_points")
-          .in("id", uIds);
-        setLeaderboard(
-          guesses
-            .map((g) => ({
-              ...g,
-              name: users?.find((u) => u.id === g.user_id)?.name,
-              pts: users?.find((u) => u.id === g.user_id)?.total_points,
-            }))
-            .sort((a, b) => b.pts - a.pts)
-        );
+          .in("id", userIds);
+
+        if (guessUsers) {
+          lData = matchGuesses.map((guess) => {
+            const u = guessUsers.find((user) => user.id === guess.user_id);
+            return {
+              ...guess,
+              name: u ? u.name : "Unknown",
+              total_points: u ? u.total_points : 0,
+            };
+          });
+          lData.sort((a, b) => b.total_points - a.total_points);
+        }
       }
     }
+
+    if (nData) setNews(nData);
+    if (gData) setGossip(gData);
+    if (pData) setProducts(pData);
+    if (rData) setResults(rData);
+    if (prData) setPredictions(prData);
+    setLeaderboard(lData);
   };
 
   const fetchUserPoints = async () => {
@@ -144,12 +171,13 @@ export default function App() {
       .single();
     if (data) setTotalPoints(data.total_points);
   };
-  const checkExistingPrediction = async (id) => {
+
+  const checkExistingPrediction = async (matchId) => {
     const { data } = await supabase
       .from("user_predictions")
       .select("*")
       .eq("user_id", user.id)
-      .eq("match_id", id)
+      .eq("match_id", matchId)
       .single();
     if (data) setExistingPrediction(data);
   };
@@ -170,16 +198,24 @@ export default function App() {
 
   const handleRealLogin = async (telegramUser) => {
     const userIdString = telegramUser.id.toString();
-    const { data } = await supabase
+
+    const { data, error } = await supabase
       .from("users")
       .select("*")
       .eq("id", userIdString)
       .single();
+
     let currentUser;
     if (data) {
       let currentlyValidVIP = false;
       if (data.is_vip && data.vip_until) {
         currentlyValidVIP = new Date(data.vip_until) > new Date();
+        if (!currentlyValidVIP) {
+          await supabase
+            .from("users")
+            .update({ is_vip: false })
+            .eq("id", userIdString);
+        }
       }
       currentUser = {
         id: data.id,
@@ -198,10 +234,11 @@ export default function App() {
       currentUser = {
         id: newUser.id,
         name: newUser.name,
-        isVIP: false,
+        isVIP: newUser.is_vip,
         vipUntil: null,
       };
     }
+
     setUser(currentUser);
     localStorage.setItem("goleth_user", JSON.stringify(currentUser));
   };
@@ -215,47 +252,63 @@ export default function App() {
 
   const handleTelebirrPayment = async () => {
     setPaymentStatus("loading");
+
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + 30);
+    const expirationIsoString = expirationDate.toISOString();
+
     setTimeout(async () => {
       const { error } = await supabase
         .from("users")
-        .update({ is_vip: true, vip_until: expirationDate.toISOString() })
+        .update({ is_vip: true, vip_until: expirationIsoString })
         .eq("id", user.id);
+
       if (!error) {
         setPaymentStatus("success");
         setTimeout(() => {
           const updatedUser = {
             ...user,
             isVIP: true,
-            vipUntil: expirationDate.toISOString(),
+            vipUntil: expirationIsoString,
           };
           setUser(updatedUser);
           localStorage.setItem("goleth_user", JSON.stringify(updatedUser));
           setPaymentStatus("idle");
         }, 1500);
       } else {
-        alert("Payment failed.");
+        alert("Payment failed. Please try again.");
         setPaymentStatus("idle");
       }
     }, 2500);
   };
 
   const handlePredictSubmit = async (matchId) => {
-    if (teamAScore === "" || teamBScore === "") {
-      alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ");
+    // --- UPDATED: Prevent CEO from crashing app by trying to play without logging in ---
+    if (!user) {
+      alert(
+        "CEO Mode: You must actually log in with Telegram to submit a prediction!"
+      );
       return;
     }
+
+    if (teamAScore === "" || teamBScore === "") {
+      alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ (Please enter a score for both teams)");
+      return;
+    }
+
     setPredictionStatus("loading");
+
     const newGuess = {
       user_id: user.id,
       match_id: matchId,
       team_a_score: Number(teamAScore),
       team_b_score: Number(teamBScore),
     };
+
     const { error } = await supabase
       .from("user_predictions")
       .insert([newGuess]);
+
     if (!error) {
       setPredictionStatus("success");
       setTimeout(() => {
@@ -264,12 +317,11 @@ export default function App() {
         fetchData();
       }, 1500);
     } else {
-      alert("Error saving guess.");
+      alert("Something went wrong saving your guess. Try again!");
       setPredictionStatus("idle");
     }
   };
 
-  // --- NEW: THE AUTOMATED POINTS ENGINE ---
   const handleResolveMatch = async (match) => {
     const scoreA = window.prompt(`Enter final score for ${match.team_a_name}:`);
     if (scoreA === null || scoreA === "") return;
@@ -282,22 +334,17 @@ export default function App() {
       )
     ) {
       setUploading(true);
-
-      // 1. Fetch all guesses for this match
       const { data: guesses } = await supabase
         .from("user_predictions")
         .select("*")
         .eq("match_id", match.id);
 
       if (guesses) {
-        // 2. Find only the winners who guessed exactly right
         const winners = guesses.filter(
           (g) =>
             g.team_a_score === Number(scoreA) &&
             g.team_b_score === Number(scoreB)
         );
-
-        // 3. Loop through winners and award points
         for (let winner of winners) {
           const { data: userRecord } = await supabase
             .from("users")
@@ -315,7 +362,7 @@ export default function App() {
         alert(`Success! Awarded 10 points to ${winners.length} winners.`);
       }
       setUploading(false);
-      fetchData(); // Refresh to show new points on leaderboard
+      fetchData();
     }
   };
 
@@ -425,6 +472,7 @@ export default function App() {
       shouldTruncate && !isExpanded
         ? item.body.substring(0, 150) + "..."
         : item.body;
+
     return (
       <div
         key={item.id}
@@ -492,6 +540,7 @@ export default function App() {
           )
         )
       : 0;
+
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
         <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
@@ -589,7 +638,8 @@ export default function App() {
   );
 
   const renderPredict = () => {
-    if (!user) {
+    // --- UPDATED: Allow CEO to bypass the login gate ---
+    if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl">
@@ -606,7 +656,8 @@ export default function App() {
         </div>
       );
     }
-    if (!user.isVIP) {
+
+    if (user && !user.isVIP && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
           <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl relative overflow-hidden">
@@ -744,7 +795,6 @@ export default function App() {
 
             {existingPrediction ? (
               <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
-                {/* --- NEW: CEO TROPHY BUTTON --- */}
                 {isCEO && (
                   <div className="absolute top-2 right-2 flex space-x-1 z-10">
                     <button
@@ -770,7 +820,7 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2 mt-2">
+                <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2">
                   <Lock size={16} className="text-amber-500" />
                 </div>
                 <h2 className="text-amber-500 font-black text-lg mb-1">
@@ -791,7 +841,6 @@ export default function App() {
               </div>
             ) : (
               <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl relative">
-                {/* --- NEW: CEO TROPHY BUTTON --- */}
                 {isCEO && (
                   <div className="absolute top-2 right-2 flex space-x-1 z-10">
                     <button
