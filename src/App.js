@@ -488,54 +488,70 @@ export default function App() {
     );
   };
 
-  const renderProfileModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
-        <button
-          onClick={() => setShowProfile(false)}
-          className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-        >
-          <X size={20} />
-        </button>
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black text-black mb-4 uppercase">
-            {user.name.charAt(0)}
+  // --- NEW: Safe Math for Profile Modal ---
+  const renderProfileModal = () => {
+    // Safety check to prevent math crashes
+    const daysLeft = user.vipUntil
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
+          )
+        )
+      : 0;
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
+          <button
+            onClick={() => setShowProfile(false)}
+            className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+          >
+            <X size={20} />
+          </button>
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black text-black mb-4 uppercase">
+              {user.name.charAt(0)}
+            </div>
+            <h2 className="text-xl font-black text-white">{user.name}</h2>
+            {user.isVIP ? (
+              <span className="text-amber-500 font-bold text-xs uppercase tracking-widest mt-1">
+                VIP Member
+              </span>
+            ) : (
+              <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">
+                Free User
+              </span>
+            )}
           </div>
-          <h2 className="text-xl font-black text-white">{user.name}</h2>
-          <span className="text-amber-500 font-bold text-xs uppercase tracking-widest mt-1">
-            VIP Member
-          </span>
+          <div className="space-y-3 mb-8">
+            <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
+              <span className="text-zinc-500 font-bold text-xs">
+                ቀሪ ቀናት (Days Left)
+              </span>
+              <span className="text-white font-black text-xs">
+                {daysLeft} Days
+              </span>
+            </div>
+            <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
+              <span className="text-zinc-500 font-bold text-xs">
+                ጠቅላላ ነጥብ (Total Points)
+              </span>
+              <span className="text-amber-500 font-black text-xs">
+                {totalPoints} pts
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center space-x-2 bg-red-900/20 hover:bg-red-900/40 text-red-500 font-bold py-3 rounded-xl transition-all"
+          >
+            <LogOut size={18} /> <span>ውጣ (Logout)</span>
+          </button>
         </div>
-        <div className="space-y-3 mb-8">
-          <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
-            <span className="text-zinc-500 font-bold text-xs">
-              ቀሪ ቀናት (Days Left)
-            </span>
-            <span className="text-white font-black text-xs">
-              {Math.ceil(
-                (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
-              )}{" "}
-              Days
-            </span>
-          </div>
-          <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
-            <span className="text-zinc-500 font-bold text-xs">
-              ጠቅላላ ነጥብ (Total Points)
-            </span>
-            <span className="text-amber-500 font-black text-xs">
-              {totalPoints} pts
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center space-x-2 bg-red-900/20 hover:bg-red-900/40 text-red-500 font-bold py-3 rounded-xl transition-all"
-        >
-          <LogOut size={18} /> <span>ውጣ (Logout)</span>
-        </button>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderResults = () => (
     <div className="space-y-4 pb-24">
@@ -903,8 +919,10 @@ export default function App() {
         </div>
       </header>
 
+      {/* --- RENDER PROFILES ON TOP --- */}
+      {showProfile && renderProfileModal()}
+
       <main className="p-4 max-w-lg mx-auto">
-        {showProfile && renderProfileModal()}
         {activeTab === "ዜና" && (
           <div className="space-y-4 pb-24">
             {news.map((n) => renderArticle(n, "news"))}
