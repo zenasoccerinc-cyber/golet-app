@@ -367,7 +367,6 @@ export default function App() {
     }
   };
 
-  // --- UPGRADED: CEO EDIT/CREATE TRIGGER ---
   const handleEdit = (item = null, table) => {
     setAdminTab(table);
     if (item) {
@@ -462,6 +461,22 @@ export default function App() {
     fetchData();
   };
 
+  // --- NEW: Telegram Order Engine ---
+  const handleOrder = (item) => {
+    let finalPrice = item.price;
+    let vipText = "";
+
+    if (user && user.isVIP) {
+      finalPrice = item.price * 0.9;
+      vipText = " (VIP 10% Discount Applied!)";
+    }
+
+    const message = `Hello Goleth Admin! 👋\n\nI would like to order:\n🛍️ *${item.name}*\n💰 Price: ${finalPrice} Birr${vipText}\n\nPlease let me know how to proceed with the payment and delivery.`;
+    const encodedMessage = encodeURIComponent(message);
+
+    window.open(`https://t.me/GolethAdmin?text=${encodedMessage}`, "_blank");
+  };
+
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
   const formatDate = (dateString) =>
@@ -471,7 +486,6 @@ export default function App() {
       day: "numeric",
     });
 
-  // --- NEW: THE CEO PUBLISHING STUDIO MODAL ---
   const renderCEOStudio = () => (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 overflow-y-auto">
       <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
@@ -486,7 +500,6 @@ export default function App() {
         </h2>
 
         <form onSubmit={handleAdminSubmit} className="space-y-4">
-          {/* Post Type Selector (Only if creating new) */}
           {!editingId && (
             <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
               {["news", "gossip", "products", "predictions"].map((tab) => (
@@ -506,7 +519,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Form Fields for News & Gossip */}
           {["news", "gossip"].includes(adminTab) && (
             <>
               <div>
@@ -578,7 +590,6 @@ export default function App() {
             </>
           )}
 
-          {/* Form Fields for Products */}
           {adminTab === "products" && (
             <>
               <div>
@@ -628,7 +639,6 @@ export default function App() {
             </>
           )}
 
-          {/* Form Fields for Predictions */}
           {adminTab === "predictions" && (
             <>
               <div>
@@ -679,7 +689,6 @@ export default function App() {
             </>
           )}
 
-          {/* Image Upload (For News, Gossip, Products) */}
           {["news", "gossip", "products"].includes(adminTab) && (
             <div className="mt-4">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
@@ -942,8 +951,51 @@ export default function App() {
     );
   };
 
+  const renderUserDashboard = () => (
+    <div className="fixed inset-0 z-[100] flex flex-col p-4 bg-black/95">
+      <div className="flex justify-between items-center mb-6 mt-4">
+        <h2 className="text-amber-500 font-black text-xl">
+          CEO User Management
+        </h2>
+        <button
+          onClick={() => setShowUserDashboard(false)}
+          className="text-white bg-zinc-800 p-2 rounded-full"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      <div className="overflow-y-auto space-y-3 pb-20">
+        {allUsers.map((u) => {
+          const isVip = u.is_vip && new Date(u.vip_until) > new Date();
+          return (
+            <div
+              key={u.id}
+              className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex justify-between items-center"
+            >
+              <div>
+                <p className="text-white font-bold">{u.name}</p>
+                <p className="text-zinc-500 text-xs mt-1">
+                  Points: {u.total_points || 0}
+                </p>
+              </div>
+              <button
+                onClick={() => toggleUserVIP(u)}
+                className={`px-4 py-2 rounded-lg font-bold text-xs ${
+                  isVip
+                    ? "bg-amber-500 text-black"
+                    : "bg-zinc-800 text-zinc-400"
+                }`}
+              >
+                {isVip ? "Remove VIP" : "Make VIP"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const renderVIP = () => {
-    // ... (VIP Render Logic is unchanged, preserved from Phase 2)
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -1025,6 +1077,24 @@ export default function App() {
 
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
+        {isCEO && (
+          <div className="w-full max-w-sm mb-4 flex justify-end space-x-2">
+            <button
+              onClick={() => setShowUserDashboard(true)}
+              className="bg-zinc-800 text-white flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-bold border border-zinc-700 hover:border-amber-500"
+            >
+              <Users size={14} />
+              <span>Manage Users</span>
+            </button>
+            <button
+              onClick={() => handleResolveMatch(activeMatch)}
+              className="bg-amber-500 text-black flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-bold"
+            >
+              <Trophy size={14} />
+              <span>Award Points</span>
+            </button>
+          </div>
+        )}
         <div className="flex justify-center mb-6 space-x-2 bg-zinc-900 p-1.5 rounded-full border border-zinc-800 shadow-lg w-full max-w-sm">
           <button
             onClick={() => setPredictTab("play")}
@@ -1219,8 +1289,12 @@ export default function App() {
                 </span>
               )}
             </div>
-            <button className="mt-auto w-full bg-amber-500 text-black font-black py-2 rounded-lg text-sm">
-              እዘዝ (Order)
+            {/* UPDATED: Order Button triggers Telegram Engine */}
+            <button
+              onClick={() => handleOrder(item)}
+              className="mt-auto w-full bg-amber-500 text-black font-black py-2 rounded-lg text-sm"
+            >
+              እዘዝ (Order via Telegram)
             </button>
           </div>
         </div>
@@ -1248,7 +1322,6 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center space-x-3">
-          {/* NEW: CEO Add Post Button (Only visible in CEO mode) */}
           {isCEO && (
             <button
               onClick={() =>
