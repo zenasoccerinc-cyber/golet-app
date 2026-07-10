@@ -59,6 +59,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showProfile, setShowProfile] = useState(false);
+  const [isCEO, setIsCEO] = useState(false);
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
@@ -67,7 +68,6 @@ export default function App() {
   const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
-
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
   const [products, setProducts] = useState([]);
@@ -161,49 +161,200 @@ export default function App() {
     if (data) setExistingPrediction(data);
   };
 
+  const handlePredictSubmit = async (matchId) => {
+    if (teamAScore === "" || teamBScore === "") {
+      alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ");
+      return;
+    }
+    setPredictionStatus("loading");
+    const newGuess = {
+      user_id: user.id,
+      match_id: matchId,
+      team_a_score: Number(teamAScore),
+      team_b_score: Number(teamBScore),
+    };
+    const { error } = await supabase
+      .from("user_predictions")
+      .insert([newGuess]);
+    if (!error) {
+      setPredictionStatus("success");
+      setTimeout(() => {
+        setPredictionStatus("idle");
+        setExistingPrediction(newGuess);
+        fetchData();
+      }, 1500);
+    } else {
+      alert("Something went wrong saving your guess.");
+      setPredictionStatus("idle");
+    }
+  };
+
   const renderArticle = (item, table) => (
     <div
       key={item.id}
       className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mb-4 p-5"
     >
       <h3 className="text-amber-500 font-black text-xl mb-1">{item.title}</h3>
-      <p className="text-zinc-300 text-sm">{item.body}</p>
+      <p className="text-zinc-300 text-sm whitespace-pre-wrap">{item.body}</p>
     </div>
   );
 
   const renderProfileModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
         <button
           onClick={() => setShowProfile(false)}
-          className="absolute top-4 right-4 text-white"
+          className="absolute top-4 right-4 text-zinc-500"
         >
           <X />
         </button>
-        <div className="text-center">
-          <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black mb-4 mx-auto">
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black text-black mb-4">
             {user.name.charAt(0)}
           </div>
-          <h2 className="text-white font-black text-xl">{user.name}</h2>
+          <h2 className="text-xl font-black text-white">{user.name}</h2>
         </div>
-        <div className="space-y-3 mt-6">
-          <div className="flex justify-between p-3 bg-black rounded border border-zinc-800">
-            <span className="text-zinc-500 text-xs">ቀሪ ቀናት</span>
-            <span className="text-white font-bold">
-              {Math.ceil(
-                (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
-              )}{" "}
-              Days
-            </span>
-          </div>
+        <div className="space-y-3">
           <div className="flex justify-between p-3 bg-black rounded border border-zinc-800">
             <span className="text-zinc-500 text-xs">ጠቅላላ ነጥብ</span>
             <span className="text-amber-500 font-bold">{totalPoints} pts</span>
           </div>
+          <button
+            onClick={() => {
+              setUser(null);
+              localStorage.removeItem("goleth_user");
+              setShowProfile(false);
+              setActiveTab("ዜና");
+            }}
+            className="w-full bg-red-900/20 text-red-500 font-bold py-3 rounded-xl mt-4"
+          >
+            ውጣ (Logout)
+          </button>
         </div>
       </div>
     </div>
   );
+
+  const renderPredict = () => {
+    if (!user)
+      return (
+        <div className="p-10 text-center">
+          <TelegramLoginWidget
+            onAuth={(u) => {
+              setUser(u);
+              localStorage.setItem("goleth_user", JSON.stringify(u));
+            }}
+          />
+        </div>
+      );
+    const activeMatch = predictions[0];
+    if (!activeMatch)
+      return <div className="text-center pt-20">ምንም ጨዋታ የለም</div>;
+    return (
+      <div className="pb-24 pt-6 flex flex-col items-center">
+        <div className="flex justify-center mb-6 space-x-2 bg-zinc-900 p-1.5 rounded-full border border-zinc-800 w-full max-w-sm">
+          <button
+            onClick={() => setPredictTab("play")}
+            className={`flex-1 py-2 rounded-full font-bold text-sm ${
+              predictTab === "play"
+                ? "bg-amber-500 text-black"
+                : "text-zinc-500"
+            }`}
+          >
+            ጨዋታ
+          </button>
+          <button
+            onClick={() => setPredictTab("leaderboard")}
+            className={`flex-1 py-2 rounded-full font-bold text-sm ${
+              predictTab === "leaderboard"
+                ? "bg-amber-500 text-black"
+                : "text-zinc-500"
+            }`}
+          >
+            ደረጃ
+          </button>
+        </div>
+        {predictTab === "leaderboard" && (
+          <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden mb-6">
+            <div className="p-4 border-b border-zinc-800 text-center">
+              <h2 className="text-white font-bold">
+                {activeMatch.team_a_name} vs {activeMatch.team_b_name}
+              </h2>
+            </div>
+            {leaderboard.map((p, i) => (
+              <div
+                key={i}
+                className="flex justify-between p-3 border-b border-zinc-800"
+              >
+                <span className="text-white font-bold">
+                  #{i + 1} {p.name}
+                </span>
+                <span className="text-amber-500 font-bold">
+                  {p.team_a_score} - {p.team_b_score}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {predictTab === "play" && (
+          <>
+            <div className="w-full max-w-sm mb-6 bg-zinc-900 rounded-xl p-4 border border-zinc-800 flex justify-between items-center shadow-lg">
+              <div className="text-center">
+                <div className="text-amber-500 font-bold">
+                  {activeMatch.team_a_name}
+                </div>
+              </div>
+              <div className="text-zinc-500 font-bold">VS</div>
+              <div className="text-center">
+                <div className="text-amber-500 font-bold">
+                  {activeMatch.team_b_name}
+                </div>
+              </div>
+            </div>
+            {existingPrediction ? (
+              <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl">
+                <h2 className="text-amber-500 font-bold">ግምትዎ ተቀምጧል!</h2>
+                <div className="text-2xl font-black mt-2">
+                  {existingPrediction.team_a_score} -{" "}
+                  {existingPrediction.team_b_score}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl">
+                <div className="flex justify-between items-center mb-6">
+                  <input
+                    type="number"
+                    placeholder="-"
+                    value={teamAScore}
+                    onChange={(e) => {
+                      setTeamAScore(e.target.value);
+                      if (e.target.value !== "" && teamBInputRef.current)
+                        teamBInputRef.current.focus();
+                    }}
+                    className="w-12 h-12 bg-black text-center text-amber-500 font-bold rounded"
+                  />
+                  <input
+                    ref={teamBInputRef}
+                    type="number"
+                    placeholder="-"
+                    value={teamBScore}
+                    onChange={(e) => setTeamBScore(e.target.value)}
+                    className="w-12 h-12 bg-black text-center text-amber-500 font-bold rounded"
+                  />
+                </div>
+                <button
+                  onClick={() => handlePredictSubmit(activeMatch.id)}
+                  className="w-full bg-amber-500 text-black font-bold py-3 rounded-xl"
+                >
+                  አስገባ
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   const tabs = [
     { id: "ዜና", icon: Home },
@@ -231,22 +382,20 @@ export default function App() {
       <main className="p-4 max-w-lg mx-auto">
         {showProfile && renderProfileModal()}
         {activeTab === "ዜና" && (
-          <div className="space-y-4 pb-24">
+          <div className="space-y-4">
             {news.map((n) => renderArticle(n, "news"))}
           </div>
         )}
-        {activeTab === "ግምት" && (
-          <div className="text-center pt-20">
-            Predictions functionality restored.
-          </div>
-        )}
+        {activeTab === "ግምት" && renderPredict()}
       </main>
       <nav className="fixed bottom-0 w-full bg-zinc-950 border-t border-zinc-800 flex justify-around p-4">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className="text-xs font-bold text-zinc-500"
+            className={`text-xs font-bold ${
+              activeTab === tab.id ? "text-amber-500" : "text-zinc-500"
+            }`}
           >
             {tab.id}
           </button>
