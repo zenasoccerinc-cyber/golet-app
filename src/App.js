@@ -23,7 +23,6 @@ const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- Official Telegram Login Widget ---
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
   useEffect(() => {
@@ -61,7 +60,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
-  const [showProfile, setShowProfile] = useState(false); // NEW: Profile Modal State
+  const [showProfile, setShowProfile] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -77,7 +76,7 @@ export default function App() {
 
   const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
-  const [totalPoints, setTotalPoints] = useState(0); // NEW: Tracking user points
+  const [totalPoints, setTotalPoints] = useState(0);
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -234,7 +233,6 @@ export default function App() {
     setActiveTab("ዜና");
   };
 
-  // --- NEW: Profile Modal Component ---
   const renderProfileModal = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
@@ -284,363 +282,53 @@ export default function App() {
     </div>
   );
 
-  const renderPredict = () => {
-    // ... (rest of renderPredict logic remains the same)
-    if (!user) {
-      return (
-        <div className="pb-24 flex flex-col items-center justify-center pt-10">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl">
-            <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Target size={30} className="text-amber-500" />
-            </div>
-            <h2 className="text-2xl font-black text-white mb-2">የቪአይፒ ጨዋታ</h2>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-              ግምት ለማስቀመጥ እና የገንዘብ ሽልማቶችን ለማሸነፍ በወር <b>50 ብር</b> የቪአይፒ (VIP) አባል
-              መሆን ያስፈልጋል። ለመጀመር እባክዎ በቴሌግራም ይግቡ።
-            </p>
-            <TelegramLoginWidget onAuth={handleRealLogin} />
-          </div>
-        </div>
-      );
-    }
-    if (!user.isVIP) {
-      return (
-        <div className="pb-24 flex flex-col items-center justify-center pt-10">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
-            <h2 className="text-2xl font-black text-white mb-3 mt-4">
-              የቪአይፒ አባልነት ያስፈልጋል
-            </h2>
-            <p className="text-zinc-400 text-sm mb-8">
-              በወር 50 ብር በመክፈል የቪአይፒ አባል ይሁኑ!
-            </p>
-            <button
-              onClick={handleTelebirrPayment}
-              disabled={paymentStatus !== "idle"}
-              className="w-full bg-[#8bc53f] hover:bg-[#7ab036] text-white font-black py-4 rounded-xl flex justify-center space-x-2"
-            >
-              {paymentStatus === "idle" && (
-                <span>በቴሌብር ክፈሉ (Pay with Telebirr)</span>
-              )}
-              {paymentStatus === "loading" && (
-                <>
-                  <Loader2 className="animate-spin" size={20} />{" "}
-                  <span>Processing...</span>
-                </>
-              )}
-              {paymentStatus === "success" && (
-                <>
-                  <CheckCircle2 size={20} /> <span>Payment Successful!</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      );
-    }
-    const activeMatch = predictions[0];
-    if (!activeMatch)
-      return (
-        <div className="pb-24 pt-10 text-center text-zinc-500">
-          ምንም ጨዋታ የለም (No match)
-        </div>
-      );
+  const renderArticle = (item, table) => {
+    const isExpanded = expandedPosts[item.id];
+    const shouldTruncate = item.body && item.body.length > 150;
+    const displayBody =
+      shouldTruncate && !isExpanded
+        ? item.body.substring(0, 150) + "..."
+        : item.body;
     return (
-      <div className="pb-24 pt-6 flex flex-col items-center">
-        <div className="flex justify-center mb-6 space-x-2 bg-zinc-900 p-1.5 rounded-full border border-zinc-800 shadow-lg w-full max-w-sm">
-          <button
-            onClick={() => setPredictTab("play")}
-            className={`flex-1 py-3 rounded-full font-black text-sm transition-all ${
-              predictTab === "play"
-                ? "bg-amber-500 text-black shadow-md"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            ጨዋታ (Play)
-          </button>
-          <button
-            onClick={() => setPredictTab("leaderboard")}
-            className={`flex-1 py-3 rounded-full font-black text-sm transition-all ${
-              predictTab === "leaderboard"
-                ? "bg-amber-500 text-black shadow-md"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            ደረጃ (Leaderboard)
-          </button>
+      <div
+        key={item.id}
+        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative mb-4"
+      >
+        <div className="p-5">
+          <h3 className="text-amber-500 font-black text-xl mb-1">
+            {item.title}
+          </h3>
+          <p className="text-zinc-300 text-sm leading-relaxed">{displayBody}</p>
         </div>
-        {predictTab === "leaderboard" && (
-          <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden shadow-2xl mb-6">
-            <div className="bg-black p-5 border-b border-zinc-800 text-center relative">
-              <h2 className="text-white font-black text-xl">
-                {activeMatch.team_a_name} vs {activeMatch.team_b_name}
-              </h2>
-              <p className="text-zinc-500 text-[11px] uppercase font-bold tracking-widest mt-1">
-                ተወዳዳሪዎች (Contenders)
-              </p>
-            </div>
-            <div className="p-2">
-              {leaderboard.length === 0 ? (
-                <div className="text-center p-8 text-zinc-500 text-sm font-bold">
-                  ምንም ግምት የለም
-                </div>
-              ) : (
-                leaderboard.map((player, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 border-b border-zinc-800/50"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span
-                        className={`font-black w-5 text-center ${
-                          index < 3 ? "text-amber-500" : "text-zinc-600"
-                        }`}
-                      >
-                        #{index + 1}
-                      </span>
-                      <span className="text-white font-bold text-sm">
-                        {player.name}
-                      </span>
-                    </div>
-                    <div className="bg-black px-3 py-1 rounded border border-zinc-800">
-                      <span className="text-amber-500 font-black">
-                        {player.team_a_score} - {player.team_b_score}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-        {predictTab === "play" && (
-          <>
-            <div className="w-full max-w-sm mb-6 bg-zinc-900 rounded-xl p-4 border border-zinc-800 flex justify-between items-center shadow-lg">
-              <div className="text-center">
-                <div className="text-amber-500 font-black text-lg">
-                  {activeMatch.team_a_name}
-                </div>
-                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                  Home
-                </div>
-              </div>
-              <div className="text-zinc-500 font-black">VS</div>
-              <div className="text-center">
-                <div className="text-amber-500 font-black text-lg">
-                  {activeMatch.team_b_name}
-                </div>
-                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                  Away
-                </div>
-              </div>
-            </div>
-            {existingPrediction ? (
-              <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
-                <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Lock size={16} className="text-amber-500" />
-                </div>
-                <h2 className="text-amber-500 font-black text-lg mb-1">
-                  ግምትዎ ተቀምጧል!
-                </h2>
-                <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-zinc-800 mt-4">
-                  <span className="text-white font-bold text-sm">
-                    {activeMatch.team_a_name}
-                  </span>
-                  <span className="text-2xl font-black text-amber-500">
-                    {existingPrediction.team_a_score} -{" "}
-                    {existingPrediction.team_b_score}
-                  </span>
-                  <span className="text-white font-bold text-sm">
-                    {activeMatch.team_b_name}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl">
-                <h2 className="text-white font-black text-xl mb-6">ውጤት ይገምቱ</h2>
-                <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
-                  <span className="text-white font-bold w-1/3 text-sm">
-                    {activeMatch.team_a_name}
-                  </span>
-                  <div className="flex space-x-2 items-center">
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="-"
-                      value={teamAScore}
-                      onChange={(e) => {
-                        setTeamAScore(e.target.value);
-                        if (e.target.value !== "" && teamBInputRef.current)
-                          teamBInputRef.current.focus();
-                      }}
-                      className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none"
-                    />
-                    <span className="text-zinc-500 font-bold">-</span>
-                    <input
-                      ref={teamBInputRef}
-                      type="number"
-                      min="0"
-                      placeholder="-"
-                      value={teamBScore}
-                      onChange={(e) => setTeamBScore(e.target.value)}
-                      className="w-12 h-12 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg font-black text-xl outline-none"
-                    />
-                  </div>
-                  <span className="text-white font-bold w-1/3 text-sm">
-                    {activeMatch.team_b_name}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handlePredictSubmit(activeMatch.id)}
-                  disabled={predictionStatus !== "idle"}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl"
-                >
-                  አስገባ (Submit)
-                </button>
-              </div>
-            )}
-          </>
-        )}
       </div>
     );
   };
 
-  const renderShop = () => (
-    <div className="pb-24 grid grid-cols-2 gap-4">
-      {products.map((item) => (
-        <div
-          key={item.id}
-          className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex flex-col relative"
-        >
-          {isCEO && (
-            <div className="absolute top-2 right-2 flex space-x-1 z-10">
-              <button
-                onClick={() => handleEdit(item, "products")}
-                className="bg-blue-600 p-1.5 rounded-full"
-              >
-                <Edit size={14} className="text-white" />
-              </button>
-              <button
-                onClick={() => handleDelete("products", item.id)}
-                className="bg-red-600 p-1.5 rounded-full"
-              >
-                <Trash2 size={14} className="text-white" />
-              </button>
-            </div>
-          )}
-          {item.image_url ? (
-            <img src={item.image_url} className="w-full h-40 object-cover" />
-          ) : (
-            <div className="w-full h-40 bg-black" />
-          )}
-          <div className="p-4 flex flex-col flex-grow">
-            <span className="text-xs text-zinc-500 mb-1 font-bold">
-              {item.category}
-            </span>
-            <h3 className="text-white font-bold text-sm mb-2">{item.name}</h3>
-            <p className="text-amber-500 font-black text-lg mb-4">
-              {item.price} ብር
-            </p>
-            <button className="mt-auto w-full bg-amber-500 text-black font-black py-2 rounded-lg text-sm">
-              እዘዝ (Order)
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const tabs = [
-    { id: "ዜና", icon: Home },
-    { id: "ውጤቶች", icon: Trophy },
-    { id: "ሹክሹክታ", icon: Flame },
-    { id: "ግምት", icon: Target },
-    { id: "ሱቅ", icon: ShoppingBag },
-  ];
-
   return (
-    <div className="min-h-screen bg-black font-sans text-white">
+    <div className="min-h-screen bg-black text-white">
       <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center">
-        <div
-          className="flex items-center space-x-3 cursor-pointer select-none"
-          onClick={handleLogoTap}
-        >
-          <h1 className="text-white font-black text-2xl tracking-widest">
-            GOL<span className="text-amber-500">ETH</span>
-          </h1>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          {user ? (
-            <div
-              onClick={() => setShowProfile(true)}
-              className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800 cursor-pointer hover:border-amber-500 transition-all"
-            >
-              <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center overflow-hidden">
-                <span className="text-black font-bold text-[10px] uppercase">
-                  {user.name.charAt(0)}
-                </span>
-              </div>
-              <span className="text-xs font-bold text-zinc-300">
-                {user.name}
-              </span>
-              {user.isVIP && (
-                <span className="text-[10px] font-black bg-amber-500 text-black px-2 py-0.5 rounded uppercase">
-                  VIP
-                </span>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={() => setActiveTab("ግምት")}
-              className="text-xs font-bold bg-[#229ED9] hover:bg-[#1CA0DE] px-4 py-2 rounded-full text-white transition-colors"
-            >
-              Login
-            </button>
-          )}
-        </div>
+        <h1 className="text-white font-black text-2xl tracking-widest">
+          GOL<span className="text-amber-500">ETH</span>
+        </h1>
+        {user && (
+          <div
+            onClick={() => setShowProfile(true)}
+            className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800 cursor-pointer"
+          >
+            <span className="text-xs font-bold text-zinc-300">{user.name}</span>
+          </div>
+        )}
       </header>
-
       <main className="p-4 max-w-lg mx-auto">
         {showProfile && renderProfileModal()}
         {activeTab === "ዜና" && (
-          <div className="space-y-4 pb-24">
+          <div className="space-y-4">
             {news.map((n) => renderArticle(n, "news"))}
           </div>
         )}
-        {activeTab === "ውጤቶች" && renderResults()}
-        {activeTab === "ሹክሹክታ" && (
-          <div className="space-y-4 pb-24">
-            {gossip.map((g) => renderArticle(g, "gossip"))}
-          </div>
-        )}
-        {activeTab === "ግምት" && renderPredict()}
-        {activeTab === "ሱቅ" && renderShop()}
       </main>
-
-      <nav className="fixed bottom-0 w-full bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center p-2 ${
-                isActive ? "text-amber-500" : "text-zinc-600"
-              }`}
-            >
-              <Icon
-                size={isActive ? 26 : 24}
-                strokeWidth={isActive ? 2.5 : 2}
-                className="mb-1.5"
-              />
-              <span className="text-[11px] font-bold tracking-wide">
-                {tab.id}
-              </span>
-            </button>
-          );
-        })}
+      <nav className="fixed bottom-0 w-full bg-zinc-950 border-t border-zinc-800 flex justify-around p-4">
+        <button onClick={() => setActiveTab("ዜና")}>ዜና</button>
       </nav>
     </div>
   );
