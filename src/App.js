@@ -13,6 +13,7 @@ import {
   LogOut,
   Lock,
   ChevronRight,
+  User,
   Calendar,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
@@ -25,7 +26,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // --- Official Telegram Login Widget ---
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
-
   useEffect(() => {
     window.onTelegramAuth = (user) => onAuth(user);
     const script = document.createElement("script");
@@ -35,15 +35,12 @@ const TelegramLoginWidget = ({ onAuth }) => {
     script.setAttribute("data-onauth", "onTelegramAuth(user)");
     script.setAttribute("data-request-access", "write");
     script.async = true;
-
     if (containerRef.current) containerRef.current.appendChild(script);
-
     return () => {
       delete window.onTelegramAuth;
       if (containerRef.current) containerRef.current.innerHTML = "";
     };
   }, [onAuth]);
-
   return (
     <div ref={containerRef} className="flex justify-center mt-4 w-full"></div>
   );
@@ -64,6 +61,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showProfile, setShowProfile] = useState(false); // NEW: Profile Modal State
   const [isCEO, setIsCEO] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -79,6 +77,7 @@ export default function App() {
 
   const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
+  const [totalPoints, setTotalPoints] = useState(0); // NEW: Tracking user points
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -96,6 +95,7 @@ export default function App() {
   useEffect(() => {
     if (user && predictions.length > 0) {
       checkExistingPrediction(predictions[0].id);
+      fetchUserPoints();
     }
   }, [user, predictions]);
 
@@ -129,14 +129,12 @@ export default function App() {
         .from("user_predictions")
         .select("*")
         .eq("match_id", activeMatch.id);
-
       if (matchGuesses && matchGuesses.length > 0) {
         const userIds = matchGuesses.map((g) => g.user_id);
         const { data: guessUsers } = await supabase
           .from("users")
           .select("id, name, total_points")
           .in("id", userIds);
-
         if (guessUsers) {
           lData = matchGuesses.map((guess) => {
             const u = guessUsers.find((user) => user.id === guess.user_id);
@@ -150,13 +148,21 @@ export default function App() {
         }
       }
     }
-
     if (nData) setNews(nData);
     if (gData) setGossip(gData);
     if (pData) setProducts(pData);
     if (rData) setResults(rData);
     if (prData) setPredictions(prData);
     setLeaderboard(lData);
+  };
+
+  const fetchUserPoints = async () => {
+    const { data } = await supabase
+      .from("users")
+      .select("total_points")
+      .eq("id", user.id)
+      .single();
+    if (data) setTotalPoints(data.total_points);
   };
 
   const checkExistingPrediction = async (matchId) => {
@@ -185,24 +191,16 @@ export default function App() {
 
   const handleRealLogin = async (telegramUser) => {
     const userIdString = telegramUser.id.toString();
-
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("users")
       .select("*")
       .eq("id", userIdString)
       .single();
-
     let currentUser;
     if (data) {
       let currentlyValidVIP = false;
       if (data.is_vip && data.vip_until) {
         currentlyValidVIP = new Date(data.vip_until) > new Date();
-        if (!currentlyValidVIP) {
-          await supabase
-            .from("users")
-            .update({ is_vip: false })
-            .eq("id", userIdString);
-        }
       }
       currentUser = {
         id: data.id,
@@ -221,293 +219,73 @@ export default function App() {
       currentUser = {
         id: newUser.id,
         name: newUser.name,
-        isVIP: newUser.is_vip,
+        isVIP: false,
         vipUntil: null,
       };
     }
-
     setUser(currentUser);
     localStorage.setItem("goleth_user", JSON.stringify(currentUser));
   };
 
   const handleLogout = () => {
-    if (window.confirm("Are you sure you want to log out?")) {
-      setUser(null);
-      localStorage.removeItem("goleth_user");
-      setActiveTab("ዜና");
-    }
+    setUser(null);
+    localStorage.removeItem("goleth_user");
+    setShowProfile(false);
+    setActiveTab("ዜና");
   };
 
-  const handleTelebirrPayment = async () => {
-    setPaymentStatus("loading");
-
-    const expirationDate = new Date();
-    expirationDate.setDate(expirationDate.getDate() + 30);
-    const expirationIsoString = expirationDate.toISOString();
-
-    setTimeout(async () => {
-      const { error } = await supabase
-        .from("users")
-        .update({ is_vip: true, vip_until: expirationIsoString })
-        .eq("id", user.id);
-
-      if (!error) {
-        setPaymentStatus("success");
-        setTimeout(() => {
-          const updatedUser = {
-            ...user,
-            isVIP: true,
-            vipUntil: expirationIsoString,
-          };
-          setUser(updatedUser);
-          localStorage.setItem("goleth_user", JSON.stringify(updatedUser));
-          setPaymentStatus("idle");
-        }, 1500);
-      } else {
-        alert("Payment failed. Please try again.");
-        setPaymentStatus("idle");
-      }
-    }, 2500);
-  };
-
-  const handlePredictSubmit = async (matchId) => {
-    if (teamAScore === "" || teamBScore === "") {
-      alert("እባክዎ ለሁለቱም ቡድኖች ውጤት ያስገቡ (Please enter a score for both teams)");
-      return;
-    }
-
-    setPredictionStatus("loading");
-
-    const newGuess = {
-      user_id: user.id,
-      match_id: matchId,
-      team_a_score: Number(teamAScore),
-      team_b_score: Number(teamBScore),
-    };
-
-    const { error } = await supabase
-      .from("user_predictions")
-      .insert([newGuess]);
-
-    if (!error) {
-      setPredictionStatus("success");
-      setTimeout(() => {
-        setPredictionStatus("idle");
-        setExistingPrediction(newGuess);
-        fetchData();
-      }, 1500);
-    } else {
-      alert("Something went wrong saving your guess. Try again!");
-      setPredictionStatus("idle");
-    }
-  };
-
-  const handleDelete = async (table, id) => {
-    if (window.confirm("Are you sure?")) {
-      await supabase.from(table).delete().eq("id", id);
-      fetchData();
-    }
-  };
-
-  const handleEdit = (item, table) => {
-    setEditingId(item.id);
-    setAdminTab(table);
-    setFormData({
-      title: item.title || item.name || "",
-      subtitle: item.subtitle || "",
-      author: item.author || "",
-      body: item.body || "",
-      price: item.price || "",
-      category: item.category || "",
-      league: item.league_name || "",
-      teamA: item.team_a_name || "",
-      teamB: item.team_b_name || "",
-      score: item.score || "",
-      details: item.match_details || "",
-      image_url: item.image_url || null,
-    });
-    setShowAdmin(true);
-  };
-
-  const closeAdmin = () => {
-    setShowAdmin(false);
-    setEditingId(null);
-    setFormData({});
-    setImageFile(null);
-  };
-
-  const handleAdminSubmit = async (e) => {
-    e.preventDefault();
-    setUploading(true);
-    let finalImageUrl = formData.image_url;
-    if (imageFile) {
-      const fileName = `${Date.now()}.${imageFile.name.split(".").pop()}`;
-      const { error } = await supabase.storage
-        .from("images")
-        .upload(fileName, imageFile);
-      if (!error)
-        finalImageUrl = supabase.storage.from("images").getPublicUrl(fileName)
-          .data.publicUrl;
-    }
-    const payload = {};
-    if (["news", "gossip"].includes(adminTab)) {
-      Object.assign(payload, {
-        title: formData.title,
-        subtitle: formData.subtitle,
-        author: formData.author || "Goleth",
-        body: formData.body,
-        image_url: finalImageUrl,
-      });
-    } else if (adminTab === "products") {
-      Object.assign(payload, {
-        name: formData.title,
-        price: Number(formData.price),
-        category: formData.category,
-        image_url: finalImageUrl,
-      });
-    } else if (["results", "predictions"].includes(adminTab)) {
-      Object.assign(payload, {
-        league_name: formData.league,
-        team_a_name: formData.teamA,
-        team_b_name: formData.teamB,
-      });
-      if (adminTab === "results")
-        Object.assign(payload, {
-          score: formData.score,
-          match_details: formData.details,
-        });
-    }
-    if (editingId)
-      await supabase.from(adminTab).update(payload).eq("id", editingId);
-    else {
-      if (adminTab === "predictions")
-        await supabase
-          .from("predictions")
-          .update({ is_active: false })
-          .neq("id", 0);
-      await supabase.from(adminTab).insert([payload]);
-    }
-    closeAdmin();
-    setUploading(false);
-    fetchData();
-  };
-
-  const formatDate = (dateString) =>
-    new Date(dateString).toLocaleDateString("am-ET", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-  const renderArticle = (item, table) => {
-    const isExpanded = expandedPosts[item.id];
-    const shouldTruncate = item.body && item.body.length > 150;
-    const displayBody =
-      shouldTruncate && !isExpanded
-        ? item.body.substring(0, 150) + "..."
-        : item.body;
-    return (
-      <div
-        key={item.id}
-        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative mb-4"
-      >
-        {isCEO && (
-          <div className="absolute top-2 right-2 flex space-x-2 z-10">
-            <button
-              onClick={() => handleEdit(item, table)}
-              className="bg-blue-600 p-2 rounded-full"
-            >
-              <Edit size={16} className="text-white" />
-            </button>
-            <button
-              onClick={() => handleDelete(table, item.id)}
-              className="bg-red-600 p-2 rounded-full"
-            >
-              <Trash2 size={16} className="text-white" />
-            </button>
-          </div>
-        )}
-        {item.image_url && (
-          <img
-            src={item.image_url}
-            alt={item.title}
-            className="w-full h-56 object-cover"
-          />
-        )}
-        <div className="p-5">
-          <h3 className="text-amber-500 font-black text-xl mb-1">
-            {item.title}
-          </h3>
-          {item.subtitle && (
-            <h4 className="text-white text-md font-bold mb-3">
-              {item.subtitle}
-            </h4>
-          )}
-          <div className="flex items-center text-zinc-500 text-xs font-bold uppercase tracking-wider mb-4 border-b border-zinc-800 pb-3">
-            <span>{item.author || "Goleth"}</span>
-            <span className="mx-2">•</span>
-            <span>{formatDate(item.created_at)}</span>
-          </div>
-          <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-            {displayBody}
-          </p>
-          {shouldTruncate && (
-            <button
-              onClick={() => toggleReadMore(item.id)}
-              className="text-amber-500 text-xs font-bold mt-2"
-            >
-              {isExpanded ? "Show Less (አሳጥር)" : "Read More (ሙሉውን አንብብ)"}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderResults = () => (
-    <div className="space-y-4 pb-24">
-      {results.map((item) => (
-        <div
-          key={item.id}
-          className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center shadow-lg relative"
+  // --- NEW: Profile Modal Component ---
+  const renderProfileModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
+        <button
+          onClick={() => setShowProfile(false)}
+          className="absolute top-4 right-4 text-zinc-500 hover:text-white"
         >
-          {isCEO && (
-            <div className="absolute top-2 right-2 flex space-x-2">
-              <button
-                onClick={() => handleEdit(item, "results")}
-                className="text-blue-500"
-              >
-                <Edit size={16} />
-              </button>
-              <button
-                onClick={() => handleDelete("results", item.id)}
-                className="text-red-500"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
-          <p className="text-zinc-400 text-sm mb-4 font-bold">
-            {item.league_name}
-          </p>
-          <div className="flex justify-between items-center mb-6 px-4">
-            <div className="w-1/3 text-white font-bold">{item.team_a_name}</div>
-            <div className="text-3xl font-black text-amber-500 bg-black px-4 py-2 rounded-lg border border-zinc-800">
-              {item.score}
-            </div>
-            <div className="w-1/3 text-white font-bold">{item.team_b_name}</div>
+          <X size={20} />
+        </button>
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black text-black mb-4 uppercase">
+            {user.name.charAt(0)}
           </div>
-          {item.match_details && (
-            <div className="text-sm text-zinc-400 bg-black p-3 rounded-lg">
-              <p>{item.match_details}</p>
-            </div>
-          )}
+          <h2 className="text-xl font-black text-white">{user.name}</h2>
+          <span className="text-amber-500 font-bold text-xs uppercase tracking-widest mt-1">
+            VIP Member
+          </span>
         </div>
-      ))}
+        <div className="space-y-3 mb-8">
+          <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
+            <span className="text-zinc-500 font-bold text-xs">
+              ቀሪ ቀናት (Days Left)
+            </span>
+            <span className="text-white font-black text-xs">
+              {Math.ceil(
+                (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
+              )}{" "}
+              Days
+            </span>
+          </div>
+          <div className="flex justify-between p-3 bg-black rounded-lg border border-zinc-800">
+            <span className="text-zinc-500 font-bold text-xs">
+              ጠቅላላ ነጥብ (Total Points)
+            </span>
+            <span className="text-amber-500 font-black text-xs">
+              {totalPoints} pts
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center space-x-2 bg-red-900/20 hover:bg-red-900/40 text-red-500 font-bold py-3 rounded-xl transition-all"
+        >
+          <LogOut size={18} /> <span>ውጣ (Logout)</span>
+        </button>
+      </div>
     </div>
   );
 
   const renderPredict = () => {
+    // ... (rest of renderPredict logic remains the same)
     if (!user) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -525,7 +303,6 @@ export default function App() {
         </div>
       );
     }
-
     if (!user.isVIP) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -561,7 +338,6 @@ export default function App() {
         </div>
       );
     }
-
     const activeMatch = predictions[0];
     if (!activeMatch)
       return (
@@ -569,7 +345,6 @@ export default function App() {
           ምንም ጨዋታ የለም (No match)
         </div>
       );
-
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
         <div className="flex justify-center mb-6 space-x-2 bg-zinc-900 p-1.5 rounded-full border border-zinc-800 shadow-lg w-full max-w-sm">
@@ -594,7 +369,6 @@ export default function App() {
             ደረጃ (Leaderboard)
           </button>
         </div>
-
         {predictTab === "leaderboard" && (
           <div className="bg-zinc-900 w-full max-w-sm rounded-xl border border-zinc-800 overflow-hidden shadow-2xl mb-6">
             <div className="bg-black p-5 border-b border-zinc-800 text-center relative">
@@ -639,10 +413,8 @@ export default function App() {
             </div>
           </div>
         )}
-
         {predictTab === "play" && (
           <>
-            {/* --- NEW: MATCH PREVIEW BANNER --- */}
             <div className="w-full max-w-sm mb-6 bg-zinc-900 rounded-xl p-4 border border-zinc-800 flex justify-between items-center shadow-lg">
               <div className="text-center">
                 <div className="text-amber-500 font-black text-lg">
@@ -662,7 +434,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
             {existingPrediction ? (
               <div className="bg-zinc-900 rounded-xl p-5 text-center w-full max-w-sm border border-zinc-800 shadow-xl relative mb-6">
                 <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-2">
@@ -801,7 +572,10 @@ export default function App() {
 
         <div className="flex items-center space-x-3">
           {user ? (
-            <div className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800">
+            <div
+              onClick={() => setShowProfile(true)}
+              className="flex items-center space-x-3 bg-zinc-900 pl-3 pr-2 py-1.5 rounded-full border border-zinc-800 cursor-pointer hover:border-amber-500 transition-all"
+            >
               <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center overflow-hidden">
                 <span className="text-black font-bold text-[10px] uppercase">
                   {user.name.charAt(0)}
@@ -815,13 +589,6 @@ export default function App() {
                   VIP
                 </span>
               )}
-              <button
-                onClick={handleLogout}
-                className="ml-2 text-zinc-500 hover:text-red-500 transition-colors p-1"
-                title="Logout"
-              >
-                <LogOut size={16} />
-              </button>
             </div>
           ) : (
             <button
@@ -835,6 +602,7 @@ export default function App() {
       </header>
 
       <main className="p-4 max-w-lg mx-auto">
+        {showProfile && renderProfileModal()}
         {activeTab === "ዜና" && (
           <div className="space-y-4 pb-24">
             {news.map((n) => renderArticle(n, "news"))}
