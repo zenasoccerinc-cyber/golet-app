@@ -26,7 +26,7 @@ const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// IMPORTANT: Put your REAL Telegram Username here for orders! (Without the @ symbol)
+// IMPORTANT: Make sure you create a Telegram account with this username!
 const YOUR_TELEGRAM_USERNAME = "contactgoleth";
 
 const TelegramLoginWidget = ({ onAuth }) => {
@@ -74,15 +74,16 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
 
+  // UPDATED CATEGORIES
   const [newsCategory, setNewsCategory] = useState("ዋና");
   const [newsLimit, setNewsLimit] = useState(10);
-  const newsCategories = ["ዋና", "ሰበር ዜና", "አስተያየት", "ማህበራዊ", "ያግኙን"];
+  const newsCategories = ["ዋና", "አስተያየት", "ማህበራዊ", "ያግኙን"]; // Removed Breaking News from pills
 
-  const [sportCategory, setSportCategory] = useState("ዋና");
-  const sportCategories = ["ዋና", "የዝውውር ዜና", "ፕሪሚየር ሊግ", "የሀገር ውስጥ"];
+  const [sportCategory, setSportCategory] = useState("የዝውውር ዜና");
+  const sportCategories = ["የዝውውር ዜና"]; // Only Transfers
 
   const [shopCategory, setShopCategory] = useState("ሁሉም");
-  const shopCategories = ["ሁሉም", "ማልያ", "ጫማ", "ስጦታ", "ሌላ"];
+  const shopCategories = ["ሁሉም", "Men", "Women", "Kids", "Medicine", "Other"];
 
   const [selectedProduct, setSelectedProduct] = useState(null);
 
@@ -579,12 +580,10 @@ export default function App() {
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   >
                     <option value="ዋና">ዋና</option>
-                    <option value="ሰበር ዜና">ሰበር ዜና</option>
-                    <option value="የዝውውር ዜና">የዝውውር ዜና</option>
+                    <option value="ሰበር ዜና">ሰበር ዜና (Breaking)</option>
+                    <option value="የዝውውር ዜና">የዝውውር ዜና (Transfers)</option>
                     <option value="አስተያየት">አስተያየት</option>
                     <option value="ማህበራዊ">ማህበራዊ</option>
-                    <option value="ፕሪሚየር ሊግ">ፕሪሚየር ሊግ</option>
-                    <option value="የሀገር ውስጥ">የሀገር ውስጥ</option>
                   </select>
                 </div>
                 <div>
@@ -667,16 +666,17 @@ export default function App() {
                     Category
                   </label>
                   <select
-                    value={formData.category || "ሌላ"}
+                    value={formData.category || "Other"}
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value })
                     }
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   >
-                    <option value="ማልያ">ማልያ (Jersey)</option>
-                    <option value="ጫማ">ጫማ (Shoes)</option>
-                    <option value="ስጦታ">ስጦታ (Gifts)</option>
-                    <option value="ሌላ">ሌላ (Other)</option>
+                    <option value="Men">Men</option>
+                    <option value="Women">Women</option>
+                    <option value="Kids">Kids</option>
+                    <option value="Medicine">Medicine</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
               </div>
