@@ -23,7 +23,6 @@ const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- Official Telegram Login Widget ---
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
   useEffect(() => {
@@ -69,6 +68,11 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
 
+  // NEW: Layout & Filtering States
+  const [newsCategory, setNewsCategory] = useState("All");
+  const [newsLimit, setNewsLimit] = useState(10);
+  const newsCategories = ["All", "የዝውውር ዜና", "አስተያየት", "ፕሪሚየር ሊግ", "ማህበራዊ"];
+
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
@@ -100,16 +104,17 @@ export default function App() {
   }, [user, predictions]);
 
   const fetchData = async () => {
+    // Increased fetch limit to 50 so client-side filtering works well
     const { data: nData } = await supabase
       .from("news")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(50);
     const { data: gData } = await supabase
       .from("gossip")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(20);
     const { data: pData } = await supabase
       .from("products")
       .select("*")
@@ -366,7 +371,6 @@ export default function App() {
   };
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
-
   const formatDate = (dateString) =>
     new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -374,7 +378,8 @@ export default function App() {
       day: "numeric",
     });
 
-  const renderArticle = (item, table) => {
+  // NEW LAYOUT: Hero Post (The big one on top)
+  const renderHeroArticle = (item, table) => {
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate = item.body && item.body.length > 150;
     const displayBody =
@@ -384,7 +389,7 @@ export default function App() {
     return (
       <div
         key={item.id}
-        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative mb-6"
+        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative mb-4"
       >
         {isCEO && (
           <div className="absolute top-2 right-2 flex space-x-2 z-10">
@@ -404,11 +409,11 @@ export default function App() {
           />
         )}
         <div className="p-5">
-          <h3 className="text-amber-500 font-black text-xl leading-tight mb-1">
+          <h3 className="text-amber-500 font-black text-2xl leading-tight mb-2">
             {item.title}
           </h3>
           {item.subtitle && (
-            <h4 className="text-white text-md font-bold mb-1">
+            <h4 className="text-white text-md font-bold mb-2">
               {item.subtitle}
             </h4>
           )}
@@ -429,6 +434,97 @@ export default function App() {
             </button>
           )}
         </div>
+      </div>
+    );
+  };
+
+  // NEW LAYOUT: List Post (The small grid/list items underneath)
+  const renderListArticle = (item, table) => {
+    return (
+      <div
+        key={item.id}
+        className="bg-zinc-900 rounded-xl overflow-hidden shadow-sm border border-zinc-800 relative mb-3 flex h-32"
+      >
+        {isCEO && (
+          <div className="absolute top-2 right-2 flex space-x-2 z-10">
+            <button
+              onClick={() => handleDelete(table, item.id)}
+              className="bg-red-600 p-1.5 rounded-full"
+            >
+              <Trash2 size={12} className="text-white" />
+            </button>
+          </div>
+        )}
+        {item.image_url ? (
+          <img
+            src={item.image_url}
+            alt={item.title}
+            className="w-1/3 h-full object-cover"
+          />
+        ) : (
+          <div className="w-1/3 h-full bg-black"></div>
+        )}
+        <div className="w-2/3 p-3 flex flex-col justify-center">
+          <h3 className="text-white font-bold text-sm leading-tight line-clamp-3 mb-1">
+            {item.title}
+          </h3>
+          <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">
+            {formatDate(item.created_at)}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  // NEW: News Feed Compiler
+  const renderNewsFeed = () => {
+    // 1. Filter by selected category (Pills)
+    const filteredNews =
+      newsCategory === "All"
+        ? news
+        : news.filter((n) => n.category === newsCategory);
+    // 2. Apply limit
+    const visibleNews = filteredNews.slice(0, newsLimit);
+
+    return (
+      <div className="pb-24">
+        {/* The Category Pills */}
+        <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
+          {newsCategories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => {
+                setNewsCategory(cat);
+                setNewsLimit(10);
+              }}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                newsCategory === cat
+                  ? "bg-amber-500 text-black shadow-md"
+                  : "bg-zinc-900 text-zinc-400 border border-zinc-800"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* The Articles */}
+        <div className="space-y-2">
+          {visibleNews.map((item, index) => {
+            if (index === 0) return renderHeroArticle(item, "news"); // First one is big
+            return renderListArticle(item, "news"); // Rest are small
+          })}
+        </div>
+
+        {/* Load More Button */}
+        {filteredNews.length > newsLimit && (
+          <button
+            onClick={() => setNewsLimit((prev) => prev + 10)}
+            className="w-full py-4 bg-zinc-900 border border-zinc-800 rounded-xl text-amber-500 font-black text-sm mt-4 hover:bg-zinc-800 transition-colors"
+          >
+            ተጨማሪ ያንብቡ (Load More)
+          </button>
+        )}
       </div>
     );
   };
@@ -910,11 +1006,9 @@ export default function App() {
       {showUserDashboard && renderUserDashboard()}
 
       <main className="p-4 max-w-lg mx-auto">
-        {activeTab === "ዜና" && (
-          <div className="space-y-4 pb-24">
-            {news.map((n) => renderArticle(n, "news"))}
-          </div>
-        )}
+        {/* NEW: Updated News Tab Call */}
+        {activeTab === "ዜና" && renderNewsFeed()}
+
         {activeTab === "ስፖርት" && (
           <div className="text-center pt-20 text-zinc-500 font-bold">
             የስፖርት ዜናዎች በቅርብ ቀን...
@@ -922,7 +1016,7 @@ export default function App() {
         )}
         {activeTab === "ሹክሹክታ" && (
           <div className="space-y-4 pb-24">
-            {gossip.map((g) => renderArticle(g, "gossip"))}
+            {gossip.map((g) => renderHeroArticle(g, "gossip"))}
           </div>
         )}
         {activeTab === "ቪአይፒ" && renderVIP()}
