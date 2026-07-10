@@ -26,8 +26,9 @@ const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
 const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// IMPORTANT: Make sure you create a Telegram account with this username!
-const YOUR_TELEGRAM_USERNAME = "contactgoleth";
+// TELEGRAM BOT CREDENTIALS
+const BOT_TOKEN = "8719677143:AAFUxNqRg8PzU1XrsPritRHR0L6ziuD5Vqc";
+const CHAT_ID = "813725953";
 
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
@@ -74,18 +75,23 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
 
-  // UPDATED CATEGORIES
   const [newsCategory, setNewsCategory] = useState("ዋና");
   const [newsLimit, setNewsLimit] = useState(10);
-  const newsCategories = ["ዋና", "አስተያየት", "ማህበራዊ", "ያግኙን"]; // Removed Breaking News from pills
+  const newsCategories = ["ዋና", "አስተያየት", "ማህበራዊ", "ያግኙን"];
 
   const [sportCategory, setSportCategory] = useState("የዝውውር ዜና");
-  const sportCategories = ["የዝውውር ዜና"]; // Only Transfers
+  const sportCategories = ["የዝውውር ዜና"];
 
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const shopCategories = ["ሁሉም", "Men", "Women", "Kids", "Medicine", "Other"];
 
+  // ORDER FORM STATES
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [orderName, setOrderName] = useState("");
+  const [orderPhone, setOrderPhone] = useState("");
+  const [orderShipping, setOrderShipping] = useState("local");
+  const [orderReceipt, setOrderReceipt] = useState(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
@@ -477,20 +483,65 @@ export default function App() {
     }
   };
 
-  const executeOrder = () => {
-    let finalPrice = selectedProduct.price;
+  // --- NEW: TELEGRAM BOT WEBHOOK SUBMISSION ---
+  const handleBotOrderSubmit = async (e) => {
+    e.preventDefault();
+    if (!orderReceipt) {
+      alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ (Please upload receipt)");
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+
+    let basePrice = selectedProduct.price;
     let vipText = "";
     if (user && user.isVIP) {
-      finalPrice = selectedProduct.price * 0.9;
+      basePrice = selectedProduct.price * 0.9;
       vipText = " (VIP 10% Discount Applied!)";
     }
-    const message = `Hello Goleth! 👋\n\nI want to order:\n🛍️ *${selectedProduct.name}*\n💰 Price: ${finalPrice} Birr${vipText}\n\nHow do I pay?`;
-    const encodedMessage = encodeURIComponent(message);
-    window.open(
-      `https://t.me/${YOUR_TELEGRAM_USERNAME}?text=${encodedMessage}`,
-      "_blank"
-    );
-    setSelectedProduct(null);
+
+    const shippingCost = orderShipping === "local" ? 150 : 500;
+    const total = basePrice + shippingCost;
+    const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
+
+    const captionText =
+      `🚨 *New Order Received!*\n\n` +
+      `📦 *Product:* ${selectedProduct.name}\n` +
+      `👤 *Customer:* ${orderName}\n` +
+      `📞 *Phone:* ${orderPhone}\n` +
+      `🚚 *Shipping Method:* ${shippingName}\n` +
+      `💰 *Total Paid:* ${total} ETB${vipText}`;
+
+    const formPayload = new FormData();
+    formPayload.append("chat_id", CHAT_ID);
+    formPayload.append("photo", orderReceipt);
+    formPayload.append("caption", captionText);
+    formPayload.append("parse_mode", "Markdown");
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+        {
+          method: "POST",
+          body: formPayload,
+        }
+      );
+
+      if (response.ok) {
+        alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)");
+        setSelectedProduct(null);
+        setOrderName("");
+        setOrderPhone("");
+        setOrderShipping("local");
+        setOrderReceipt(null);
+      } else {
+        alert("ትዕዛዙ አልተላከም። እባክዎ እንደገና ይሞክሩ። (Failed to send order.)");
+      }
+    } catch (error) {
+      alert("ስህተት አጋጥሟል። በይነመረብዎን ያረጋግጡ። (Check internet connection.)");
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   const toggleReadMore = (id) =>
@@ -1223,28 +1274,117 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
+      {/* REPLACED: NEW TELEGRAM BOT ORDER MODAL */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative text-center">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/95 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
             <button
               onClick={() => setSelectedProduct(null)}
               className="absolute top-4 right-4 text-zinc-500 hover:text-white"
             >
               <X size={20} />
             </button>
-            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle size={30} className="text-blue-500" />
-            </div>
-            <h2 className="text-xl font-black text-white mb-2">ማረጋገጫ</h2>
-            <p className="text-zinc-400 text-sm mb-6">
-              እቃውን ለማዘዝ በቀጥታ ወደ ቴሌግራም እንወስድዎታለን።
-            </p>
-            <button
-              onClick={executeOrder}
-              className="w-full bg-[#229ED9] text-white font-black py-4 rounded-xl flex justify-center items-center space-x-2"
-            >
-              <span>ወደ ቴሌግራም ይሂዱ</span>
-            </button>
+            <h2 className="text-xl font-black text-white border-b border-zinc-800 pb-3 mb-4">
+              ማዘዣ ቅጽ (Order Form)
+            </h2>
+
+            <form onSubmit={handleBotOrderSubmit} className="space-y-4">
+              <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4">
+                <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest">
+                  Product
+                </p>
+                <p className="text-white font-bold">{selectedProduct.name}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                  ሙሉ ስም (Full Name)
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={orderName}
+                  onChange={(e) => setOrderName(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                  ስልክ ቁጥር (Phone Number)
+                </label>
+                <input
+                  required
+                  type="tel"
+                  value={orderPhone}
+                  onChange={(e) => setOrderPhone(e.target.value)}
+                  placeholder="09..."
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                  የማጓጓዣ አማራጭ (Shipping)
+                </label>
+                <select
+                  value={orderShipping}
+                  onChange={(e) => setOrderShipping(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                >
+                  <option value="local">በከተማ ውስጥ (+150 ETB)</option>
+                  <option value="traveler">በመንገደኛ መላክ (+500 ETB)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-between items-center py-2">
+                <span className="text-zinc-500 font-bold">Total Amount:</span>
+                <span className="text-amber-500 font-black text-xl">
+                  {(user && user.isVIP
+                    ? selectedProduct.price * 0.9
+                    : selectedProduct.price) +
+                    (orderShipping === "local" ? 150 : 500)}{" "}
+                  ETB
+                </span>
+              </div>
+
+              <div className="bg-green-900/20 border-l-4 border-green-500 p-4 rounded text-sm text-zinc-300">
+                <strong className="text-white block mb-2">
+                  የክፍያ መመሪያ (Payment):
+                </strong>
+                ወደሚከተሉት አካውንቶች ገንዘብ ያስገቡ:
+                <br />• <strong>CBE:</strong> 1000XXXXXXXXX
+                <br />• <strong>Telebirr:</strong> 09XXXXXXXX
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                  የክፍያ ደረሰኝ (Upload Receipt)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setOrderReceipt(e.target.files[0])}
+                  className="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500 bg-black border border-zinc-800 p-2 rounded-lg"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingOrder}
+                className="w-full bg-[#229ED9] hover:bg-[#1CA0DE] text-white font-black py-4 rounded-xl mt-4 flex justify-center items-center space-x-2 transition-colors"
+              >
+                {isSubmittingOrder ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <AlertCircle size={20} />
+                )}
+                <span>
+                  {isSubmittingOrder ? "በመላክ ላይ..." : "ትዕዛዝ ላክ (Submit)"}
+                </span>
+              </button>
+            </form>
           </div>
         </div>
       )}
