@@ -508,7 +508,6 @@ export default function App() {
       if (dbError) {
         console.error("Supabase Analytics Save Error:", dbError);
       } else {
-        // Refresh orders data silently in the background
         fetchData();
       }
     } catch (err) {
@@ -1346,13 +1345,22 @@ export default function App() {
                         Price
                       </span>
                       <div className="flex items-center space-x-2">
-                        <p className="text-amber-500 font-black text-2xl">
-                          {item.price} ብር
-                        </p>
-                        {user && user.isVIP && (
-                          <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded font-bold">
-                            -10%
-                          </span>
+                        {user && user.isVIP ? (
+                          <>
+                            <p className="text-amber-500 font-black text-2xl">
+                              {Math.round(item.price * 0.9)} ብር
+                            </p>
+                            <p className="text-zinc-500 font-bold text-sm line-through">
+                              {item.price}
+                            </p>
+                            <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                              VIP
+                            </span>
+                          </>
+                        ) : (
+                          <p className="text-amber-500 font-black text-2xl">
+                            {item.price} ብር
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1424,7 +1432,7 @@ export default function App() {
               onClick={() => handleNavClick("ቪአይፒ")}
               className="text-xs font-bold bg-[#229ED9] px-4 py-2 rounded-full text-white"
             >
-              ይግቡ
+              ይግቡ / ይመዝገቡ
             </button>
           )}
         </div>
@@ -1436,9 +1444,7 @@ export default function App() {
       {/* FULLY RESTORED & FIXED CHECKOUT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 backdrop-blur-sm px-4">
-          {/* Re-applied strict sizing and inner scrolling to fix mobile clipping */}
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
-            {/* IN-BOX HEADER: Guaranteed not to clip off the screen */}
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
               <h2 className="text-xl font-black text-white">
                 ማዘዣ ቅጽ (Order Form)
@@ -1537,7 +1543,7 @@ export default function App() {
                 <span className="text-zinc-500 font-bold">Total Amount:</span>
                 <span className="text-amber-500 font-black text-xl">
                   {(user && user.isVIP
-                    ? selectedProduct.price * 0.9
+                    ? Math.round(selectedProduct.price * 0.9)
                     : selectedProduct.price) +
                     (orderShipping === "local" ? 150 : 500)}{" "}
                   ETB
