@@ -466,6 +466,7 @@ export default function App() {
     }
   };
 
+  // UPDATED FUNCTION WITH HTML PARSE_MODE
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderReceipt) {
@@ -483,13 +484,13 @@ export default function App() {
     const total = basePrice + shippingCost;
     const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
 
-    const captionText = `🚨 *New Order Received!*\n\n📦 *Product:* ${selectedProduct.name}\n👤 *Customer:* ${orderName}\n📞 *Phone:* ${orderPhone}\n🚚 *Shipping Method:* ${shippingName}\n💰 *Total Paid:* ${total} ETB${vipText}`;
+    const captionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${selectedProduct.name}\n👤 <b>Customer:</b> ${orderName}\n📞 <b>Phone:</b> ${orderPhone}\n🚚 <b>Shipping Method:</b> ${shippingName}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
 
     const formPayload = new FormData();
     formPayload.append("chat_id", CHAT_ID);
     formPayload.append("photo", orderReceipt);
     formPayload.append("caption", captionText);
-    formPayload.append("parse_mode", "Markdown");
+    formPayload.append("parse_mode", "HTML");
 
     try {
       const response = await fetch(
@@ -505,7 +506,13 @@ export default function App() {
         setOrderShipping("local");
         setOrderReceipt(null);
       } else {
-        alert("ትዕዛዙ አልተላከም። እባክዎ እንደገና ይሞክሩ። (Failed to send order.)");
+        const errorData = await response.json();
+        console.error("Telegram API Error:", errorData);
+        alert(
+          `ትዕዛዙ አልተላከም። (Failed to send order.)\nReason: ${
+            errorData.description || "Unknown error"
+          }`
+        );
       }
     } catch (error) {
       alert("ስህተት አጋጥሟል። በይነመረብዎን ያረጋግጡ። (Check internet connection.)");
