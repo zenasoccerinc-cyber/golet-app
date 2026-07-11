@@ -95,11 +95,12 @@ export default function App() {
   const [orderReceipt, setOrderReceipt] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  // VIP ORDER STATE Extensions
+  // VIP ORDER STATE
   const [vipPhone, setVipPhone] = useState("");
   const [vipReceipt, setVipReceipt] = useState(null);
   const [isSubmittingVip, setIsSubmittingVip] = useState(false);
 
+  // PREDICTION STATES
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
@@ -324,7 +325,7 @@ export default function App() {
         fetchData();
       }, 1500);
     } else {
-      alert("Error");
+      alert("Error processing prediction.");
       setPredictionStatus("idle");
     }
   };
@@ -353,6 +354,7 @@ export default function App() {
         teamALogo: item.team_a_logo || "",
         teamBLogo: item.team_b_logo || "",
         image_url: item.image_url || null,
+        is_vip_only: item.is_vip_only || false,
       });
     } else {
       setEditingId(null);
@@ -369,6 +371,7 @@ export default function App() {
         teamALogo: "",
         teamBLogo: "",
         image_url: null,
+        is_vip_only: false,
       });
     }
     setShowAdmin(true);
@@ -401,7 +404,10 @@ export default function App() {
           .from("images")
           .upload(fileName, file);
         if (!error)
-          uploadedUrls.from("images").getPublicUrl(fileName).data.publicUrl;
+          uploadedUrls.push(
+            supabase.storage.from("images").getPublicUrl(fileName).data
+              .publicUrl
+          );
       }
       finalImageUrl = uploadedUrls.join(",");
     }
@@ -446,6 +452,7 @@ export default function App() {
         price: Number(formData.price),
         category: formData.category,
         image_url: finalImageUrl,
+        is_vip_only: formData.is_vip_only || false,
       });
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
@@ -553,7 +560,6 @@ export default function App() {
     }
   };
 
-  // HANDLES THE 50 BIRR VIP SCREENSHOT UPLOAD FORM
   const handleVipRegistrationSubmit = async (e) => {
     e.preventDefault();
     if (!vipReceipt) {
@@ -596,7 +602,7 @@ export default function App() {
       );
       if (response.ok) {
         alert(
-          "የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል! ክፍያዎን አረጋግጠን አካውንትዎን በቅርቡ እናነቃቃለን። (Receipt sent! We will review and activate your VIP shortly.)"
+          "የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል! (Receipt sent! We will activate your VIP shortly.)"
         );
         setVipPhone("");
         setVipReceipt(null);
@@ -918,6 +924,27 @@ export default function App() {
                     </select>
                   </div>
                 </div>
+                <div className="mt-2">
+                  <label className="flex items-center space-x-2 text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_vip_only || false}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          is_vip_only: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 rounded text-amber-500 bg-black border-zinc-800"
+                    />
+                    <span className="text-sm font-bold text-amber-500">
+                      VIP Only Product
+                    </span>
+                  </label>
+                  <p className="text-[9px] text-zinc-500 mt-1">
+                    If checked, only VIP users can purchase this item.
+                  </p>
+                </div>
               </>
             )}
 
@@ -967,6 +994,35 @@ export default function App() {
                     />
                   </div>
                 </div>
+                <div className="bg-black p-3 border border-zinc-800 rounded-lg">
+                  <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
+                    Team Logos (Upload)
+                  </label>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-[10px] text-zinc-500 block mb-1">
+                        Home Logo:
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setTeamAImageFile(e.target.files[0])}
+                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 block mb-1">
+                        Away Logo:
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setTeamBImageFile(e.target.files[0])}
+                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
               </>
             )}
 
@@ -982,7 +1038,7 @@ export default function App() {
                     multiple
                     accept="image/*"
                     onChange={(e) => setImageFiles(Array.from(e.target.files))}
-                    className="text-sm text-zinc-400 file:bg-amber-500/20 file:text-amber-500"
+                    className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
                   />
                 </div>
               </div>
@@ -1210,7 +1266,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* LIVE VIP RECEIPT UPLOAD SYSTEM */}
             <form
               onSubmit={handleVipRegistrationSubmit}
               className="space-y-4 text-left border-t border-zinc-800 pt-4"
@@ -1257,14 +1312,138 @@ export default function App() {
         </div>
       );
     }
+
+    // VIP ACCESS AREA - SHOW MATCH PREDICTIONS HERE
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
-        <div className="text-center text-amber-500 font-black mb-4">
-          👑 አንተ የቪአይፒ አባል ነህ! (You are a VIP!)
+        <div className="text-center text-amber-500 font-black mb-6 border border-amber-500/50 bg-amber-500/10 px-6 py-2 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center space-x-2">
+          <Crown size={20} />
+          <span>የቪአይፒ አባል (VIP Member)</span>
         </div>
-        <div className="text-center text-zinc-500 font-bold">
-          ምንም ጨዋታ የለም (No match)
-        </div>
+
+        {predictions.length > 0 ? (
+          <div className="w-full max-w-sm">
+            <h3 className="text-white font-black text-xl mb-4 text-center">
+              ዛሬ ግምት (Today's Match)
+            </h3>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+              {isCEO && (
+                <button
+                  onClick={() => handleDelete("predictions", predictions[0].id)}
+                  className="absolute top-3 right-3 p-2 bg-red-900/50 rounded-full text-red-500 z-10"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+              <div className="text-center text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-6">
+                {predictions[0].league_name}
+              </div>
+
+              <div className="flex justify-between items-center relative z-10">
+                <div className="flex flex-col items-center w-1/3">
+                  <div className="w-16 h-16 bg-black border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
+                    {predictions[0].team_a_logo ? (
+                      <img
+                        src={predictions[0].team_a_logo}
+                        className="max-w-full max-h-full object-contain"
+                        alt=""
+                      />
+                    ) : (
+                      <span className="text-[10px] text-zinc-500">Logo</span>
+                    )}
+                  </div>
+                  <span className="text-white font-bold text-center text-sm">
+                    {predictions[0].team_a_name}
+                  </span>
+                </div>
+                <div className="w-1/3 flex flex-col items-center">
+                  <div className="bg-zinc-800 text-zinc-400 font-black text-xs px-3 py-1 rounded-full mb-2">
+                    VS
+                  </div>
+                </div>
+                <div className="flex flex-col items-center w-1/3">
+                  <div className="w-16 h-16 bg-black border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
+                    {predictions[0].team_b_logo ? (
+                      <img
+                        src={predictions[0].team_b_logo}
+                        className="max-w-full max-h-full object-contain"
+                        alt=""
+                      />
+                    ) : (
+                      <span className="text-[10px] text-zinc-500">Logo</span>
+                    )}
+                  </div>
+                  <span className="text-white font-bold text-center text-sm">
+                    {predictions[0].team_b_name}
+                  </span>
+                </div>
+              </div>
+
+              {existingPrediction ? (
+                <div className="mt-8 bg-green-900/20 border border-green-500/30 rounded-xl p-4 text-center">
+                  <p className="text-green-500 text-xs font-bold uppercase mb-2 flex items-center justify-center gap-1">
+                    <CheckCircle2 size={14} /> ግምትዎ ተልኳል
+                  </p>
+                  <div className="flex justify-center items-center space-x-4">
+                    <span className="text-2xl font-black text-white">
+                      {existingPrediction.team_a_score}
+                    </span>
+                    <span className="text-zinc-500">-</span>
+                    <span className="text-2xl font-black text-white">
+                      {existingPrediction.team_b_score}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-8 border-t border-zinc-800 pt-6">
+                  <p className="text-center text-xs text-zinc-400 font-bold mb-4">
+                    ግምትዎን ያስገቡ (Enter Prediction)
+                  </p>
+                  <div className="flex justify-center items-center space-x-4 mb-6">
+                    <input
+                      type="number"
+                      min="0"
+                      value={teamAScore}
+                      onChange={(e) => setTeamAScore(e.target.value)}
+                      className="w-16 h-16 bg-black border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
+                    />
+                    <span className="text-zinc-600 font-black">-</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={teamBScore}
+                      onChange={(e) => setTeamBScore(e.target.value)}
+                      className="w-16 h-16 bg-black border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handlePredictSubmit(predictions[0].id)}
+                    disabled={
+                      predictionStatus === "loading" ||
+                      teamAScore === "" ||
+                      teamBScore === ""
+                    }
+                    className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2"
+                  >
+                    {predictionStatus === "loading" ? (
+                      <Loader2 className="animate-spin" size={20} />
+                    ) : (
+                      <Target size={20} />
+                    )}
+                    <span>አስገባ (Submit)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center text-zinc-500 font-bold mt-10">
+            <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-800">
+              <Trophy size={24} className="text-zinc-700" />
+            </div>
+            ምንም ጨዋታ የለም (No active match)
+          </div>
+        )}
       </div>
     );
   };
@@ -1297,48 +1476,106 @@ export default function App() {
               ? item.image_url.split(",")
               : [];
             const mainImg = productImages[0];
+            const isVipOnly = item.is_vip_only;
+            const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
+
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-xl max-w-md mx-auto w-full"
+                className={`bg-zinc-900 rounded-2xl overflow-hidden shadow-xl max-w-md mx-auto w-full border ${
+                  isVipOnly ? "border-amber-500/30" : "border-zinc-800"
+                }`}
               >
-                {mainImg && (
+                {isCEO && (
+                  <div className="absolute top-3 right-3 flex space-x-2 z-10 bg-black/50 p-1.5 rounded-lg">
+                    <button
+                      onClick={() => handleEdit(item, "products")}
+                      className="p-1"
+                    >
+                      <Edit size={16} className="text-blue-400" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete("products", item.id)}
+                      className="p-1"
+                    >
+                      <Trash2 size={16} className="text-red-400" />
+                    </button>
+                  </div>
+                )}
+                {mainImg ? (
                   <img
                     src={mainImg}
                     className="w-full aspect-square object-cover"
                     alt=""
                   />
+                ) : (
+                  <div className="w-full aspect-square bg-black"></div>
                 )}
                 <div className="p-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] text-amber-500 font-bold uppercase">
+                      {item.category}
+                    </span>
+                    {isVipOnly && (
+                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded font-black flex items-center gap-1">
+                        <Lock size={10} /> VIP ONLY
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-white font-black text-xl mb-2">
                     {item.name}
                   </h3>
-                  <div className="flex justify-between items-center mt-4">
-                    <div className="flex items-center space-x-2">
-                      {user && user.isVIP ? (
-                        <>
-                          <p className="text-amber-500 font-black text-2xl">
-                            {Math.round(item.price * 0.9)} ብር
+                  {item.body && (
+                    <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
+                      {item.body}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex flex-col">
+                      <span className="text-zinc-500 text-[10px] font-bold uppercase">
+                        Price
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        {user && user.isVIP ? (
+                          <>
+                            <p className="text-amber-500 font-black text-2xl">
+                              {Math.round(item.price * 0.9)} ብር
+                            </p>
+                            <p className="text-zinc-500 line-through text-sm">
+                              {item.price}
+                            </p>
+                          </>
+                        ) : (
+                          <p
+                            className={`font-black text-2xl ${
+                              isVipOnly ? "text-zinc-500" : "text-amber-500"
+                            }`}
+                          >
+                            {item.price} ብር
                           </p>
-                          <p className="text-zinc-500 line-through text-sm">
-                            {item.price}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-amber-500 font-black text-2xl">
-                          {item.price} ብር
-                        </p>
-                      )}
+                        )}
+                      </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedProduct(item);
-                        setActiveProductImageIndex(0);
-                      }}
-                      className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl"
-                    >
-                      እዘዝ
-                    </button>
+
+                    {canBuy ? (
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(item);
+                          setActiveProductImageIndex(0);
+                        }}
+                        className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl hover:bg-amber-400"
+                      >
+                        እዘዝ
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleNavClick("ቪአይፒ")}
+                        className="bg-zinc-800 text-amber-500 border border-amber-500/30 font-black px-4 py-3 rounded-xl hover:bg-zinc-700 flex items-center space-x-1"
+                      >
+                        <Lock size={16} /> <span>VIP ብቻ</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1395,7 +1632,6 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
-      {/* SHOPPING CHECKOUT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
