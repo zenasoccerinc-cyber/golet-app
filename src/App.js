@@ -29,8 +29,9 @@ const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // TELEGRAM BOT CREDENTIALS
-const ORDERS_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU"; // For your CEO notifications
-const APP_BOT_TOKEN = "8719677143:AAFUxNqRg8PzU1XrsPritRHR0L6ziuD5Vqc"; // For customer confirmations
+// WARNING: We will move these to a secure hidden file right after you test this!
+const ORDERS_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU";
+const APP_BOT_TOKEN = "8719677143:AAFUxNqRg8PzU1XrsPritRHR0L6ziuD5Vqc";
 const CHAT_ID = "813725953";
 
 const TelegramLoginWidget = ({ onAuth }) => {
@@ -86,6 +87,10 @@ export default function App() {
 
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const shopCategories = ["ሁሉም", "ወንዶች", "ሴቶች", "ልጆች", "መድሃኒት", "ሌላ"];
+
+  // CUSTOM SOURCING STATES (PHASE 1)
+  const [showSourcingModal, setShowSourcingModal] = useState(false);
+  const [sourcingLink, setSourcingLink] = useState("");
 
   // ORDER FORM STATES
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -646,6 +651,35 @@ export default function App() {
       alert("የመረብ ግንኙነት ችግር አጋጥሟል።");
     } finally {
       setIsSubmittingVip(false);
+    }
+  };
+
+  // SOURCING FORM SUBMIT HANDLER (PHASE 1)
+  const handleSourcingSubmit = async (e) => {
+    e.preventDefault();
+    const message = `🌍 *New Custom Sourcing Request*\nLink: ${sourcingLink}`;
+
+    try {
+      await fetch(
+        `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: "Markdown",
+          }),
+        }
+      );
+      setShowSourcingModal(false);
+      setSourcingLink("");
+      alert(
+        "ጥያቄዎ ተልኳል! በቅርቡ ዋጋውን እናሳውቅዎታለን። (Request sent! We will check the link and get back to you.)"
+      );
+    } catch (error) {
+      console.error("Error sending link:", error);
+      alert("There was an error sending your link. Please try again.");
     }
   };
 
@@ -1501,6 +1535,16 @@ export default function App() {
             </button>
           ))}
         </div>
+
+        {/* NEW CUSTOM SOURCING BUTTON */}
+        <button
+          onClick={() => setShowSourcingModal(true)}
+          className="w-full max-w-md mx-auto mb-6 flex items-center justify-center space-x-2 bg-amber-500/10 border border-amber-500/50 hover:bg-amber-500/20 text-amber-500 font-bold py-3 px-4 rounded-xl transition-colors"
+        >
+          <PlusCircle size={18} />
+          <span>የግል እቃ ይዘዙ (Custom US/Canada Order)</span>
+        </button>
+
         <div className="flex flex-col space-y-6">
           {filteredProducts.map((item) => {
             const productImages = item.image_url
@@ -1662,6 +1706,43 @@ export default function App() {
 
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
+
+      {/* SOURCING CHECKOUT MODAL (PHASE 1) */}
+      {showSourcingModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
+          <div className="bg-zinc-900 border border-amber-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_15px_rgba(245,158,11,0.2)] relative">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-black text-amber-500">የግል እቃ ይዘዙ</h2>
+              <button
+                onClick={() => setShowSourcingModal(false)}
+                className="text-zinc-500 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-zinc-400 mb-6 text-xs leading-relaxed">
+              ከ Amazon፣ BestBuy፣ ወይም ሌላ የዩኤስ ሱቅ እቃ መግዛት ይፈልጋሉ? ሊንኩን ከታች ያስገቡ።
+              እቃውን እና መጓጓዣውን አጠቃልለን ዋጋውን እናሳውቅዎታለን።
+            </p>
+            <form onSubmit={handleSourcingSubmit}>
+              <input
+                type="url"
+                required
+                placeholder="https://www.amazon.com/item..."
+                className="w-full p-3 rounded-xl bg-black border border-zinc-800 focus:border-amber-500 text-white mb-4 outline-none transition-colors"
+                value={sourcingLink}
+                onChange={(e) => setSourcingLink(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition-colors"
+              >
+                ሊንክ ላክ (Send Link)
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* SHOPPING CHECKOUT MODAL */}
       {selectedProduct && (
