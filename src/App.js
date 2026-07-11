@@ -1230,17 +1230,21 @@ export default function App() {
     );
   };
 
+  // UPDATED VIP SCREEN TO SEPARATE GENERAL LOGIN FROM VIP UPGRADE
   const renderVIP = () => {
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl">
             <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Crown size={30} className="text-amber-500" />
+              <Users size={30} className="text-[#229ED9]" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-2">Goleth VIP</h2>
+            <h2 className="text-2xl font-black text-white mb-2">
+              እንኳን በደህና መጡ!
+            </h2>
             <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-              በወር <b>50 ብር</b> ብቻ የቪአይፒ አባል ይሁኑ!
+              አዲስ መለያ ለመፍጠር ወይም ለመግባት ከታች ያለውን የቴሌግራም ቁልፍ ይጫኑ። (Click below to
+              log in or register instantly with Telegram.)
             </p>
             <TelegramLoginWidget onAuth={handleRealLogin} />
           </div>
@@ -1249,15 +1253,37 @@ export default function App() {
     }
     if (user && !user.isVIP && !isCEO) {
       return (
-        <div className="pb-24 pt-6">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 w-full max-w-sm shadow-2xl mx-auto">
-            <h2 className="text-xl font-black text-white">ክፍያ</h2>
+        <div className="pb-24 flex flex-col items-center justify-center pt-10">
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 w-full max-w-sm shadow-2xl mx-auto text-center">
+            <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Crown size={30} className="text-amber-500" />
+            </div>
+            <h2 className="text-2xl font-black text-white mb-2">Goleth VIP</h2>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              በወር <b>50 ብር</b> ብቻ የቪአይፒ አባል ይሁኑ እና የ10% ቅናሽ ያግኙ! (Upgrade to VIP
+              for 50 ETB/month!)
+            </p>
+            <div className="bg-black p-4 rounded-lg text-left border border-zinc-800 mb-4">
+              <p className="text-xs text-zinc-400 mb-2">
+                ክፍያዎን እዚህ ይፈጽሙ (Pay here):
+              </p>
+              <p className="text-sm font-bold text-white">CBE: 1000XXXXXXXXX</p>
+              <p className="text-sm font-bold text-white">
+                Telebirr: 09XXXXXXXX
+              </p>
+            </div>
+            <p className="text-xs text-zinc-500">
+              ከከፈሉ በኋላ ደረሰኝዎን በቴሌግራም ይላኩልን። (Send receipt to our Telegram bot).
+            </p>
           </div>
         </div>
       );
     }
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
+        <div className="text-center text-amber-500 font-black mb-4">
+          👑 አንተ የቪአይፒ አባል ነህ! (You are a VIP!)
+        </div>
         <div className="text-center text-zinc-500 font-bold">
           ምንም ጨዋታ የለም (No match)
         </div>
