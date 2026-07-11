@@ -23,16 +23,15 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase Connection
-const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
-const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
+// SECURE CONNECTION: Pulling from your .env vault
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// TELEGRAM BOT CREDENTIALS
-// WARNING: We will move these to a secure hidden file right after you test this!
-const ORDERS_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU";
-const APP_BOT_TOKEN = "8719677143:AAFUxNqRg8PzU1XrsPritRHR0L6ziuD5Vqc";
-const CHAT_ID = "813725953";
+// SECURE TELEGRAM CREDENTIALS: Pulling from your .env vault
+const ORDERS_BOT_TOKEN = process.env.REACT_APP_ORDERS_BOT_TOKEN;
+const APP_BOT_TOKEN = process.env.REACT_APP_APP_BOT_TOKEN;
+const CHAT_ID = process.env.REACT_APP_CHAT_ID;
 
 const TelegramLoginWidget = ({ onAuth }) => {
   const containerRef = useRef(null);
@@ -88,7 +87,7 @@ export default function App() {
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const shopCategories = ["ሁሉም", "ወንዶች", "ሴቶች", "ልጆች", "መድሃኒት", "ሌላ"];
 
-  // CUSTOM SOURCING STATES (PHASE 1)
+  // CUSTOM SOURCING STATES
   const [showSourcingModal, setShowSourcingModal] = useState(false);
   const [sourcingLink, setSourcingLink] = useState("");
 
@@ -654,7 +653,7 @@ export default function App() {
     }
   };
 
-  // SOURCING FORM SUBMIT HANDLER (PHASE 1)
+  // SOURCING FORM SUBMIT HANDLER
   const handleSourcingSubmit = async (e) => {
     e.preventDefault();
     const message = `🌍 *New Custom Sourcing Request*\nLink: ${sourcingLink}`;
@@ -1536,7 +1535,7 @@ export default function App() {
           ))}
         </div>
 
-        {/* NEW CUSTOM SOURCING BUTTON */}
+        {/* CUSTOM SOURCING BUTTON */}
         <button
           onClick={() => setShowSourcingModal(true)}
           className="w-full max-w-md mx-auto mb-6 flex items-center justify-center space-x-2 bg-amber-500/10 border border-amber-500/50 hover:bg-amber-500/20 text-amber-500 font-bold py-3 px-4 rounded-xl transition-colors"
@@ -1707,7 +1706,7 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
-      {/* SOURCING CHECKOUT MODAL (PHASE 1) */}
+      {/* SOURCING CHECKOUT MODAL */}
       {showSourcingModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
           <div className="bg-zinc-900 border border-amber-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_15px_rgba(245,158,11,0.2)] relative">
