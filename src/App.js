@@ -86,6 +86,7 @@ export default function App() {
 
   // ORDER FORM STATES
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
   const [orderName, setOrderName] = useState("");
   const [orderPhone, setOrderPhone] = useState("");
   const [orderShipping, setOrderShipping] = useState("local");
@@ -96,9 +97,7 @@ export default function App() {
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
   const [existingPrediction, setExistingPrediction] = useState(null);
-  const teamBInputRef = useRef(null);
 
-  const [predictTab, setPredictTab] = useState("play");
   const [leaderboard, setLeaderboard] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
 
@@ -108,11 +107,10 @@ export default function App() {
   const [predictions, setPredictions] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
-  // ADMIN FILE UPLOAD STATES
+  // ADMIN FILE UPLOAD STATES (UPDATED for multiple images)
   const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
-  const [imageFile, setImageFile] = useState(null);
-  const [innerImageFile, setInnerImageFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [teamAImageFile, setTeamAImageFile] = useState(null);
   const [teamBImageFile, setTeamBImageFile] = useState(null);
 
@@ -201,7 +199,6 @@ export default function App() {
     if (data) setExistingPrediction(data);
   };
 
-  // HOME NAVIGATOR HELPER
   const navigateHome = () => {
     setActiveTab("ዜና");
     setNewsCategory("ዋና");
@@ -343,7 +340,6 @@ export default function App() {
         teamALogo: item.team_a_logo || "",
         teamBLogo: item.team_b_logo || "",
         image_url: item.image_url || null,
-        inner_image_url: item.inner_image_url || null,
       });
     } else {
       setEditingId(null);
@@ -360,7 +356,6 @@ export default function App() {
         teamALogo: "",
         teamBLogo: "",
         image_url: null,
-        inner_image_url: null,
       });
     }
     setShowAdmin(true);
@@ -370,8 +365,7 @@ export default function App() {
     setShowAdmin(false);
     setEditingId(null);
     setFormData({});
-    setImageFile(null);
-    setInnerImageFile(null);
+    setImageFiles([]);
     setTeamAImageFile(null);
     setTeamBImageFile(null);
   };
@@ -380,35 +374,29 @@ export default function App() {
     e.preventDefault();
     setUploading(true);
 
-    let finalImageUrl = formData.image_url;
-    let finalInnerImageUrl = formData.inner_image_url;
+    let finalImageUrl = formData.image_url || null;
     let finalTeamALogo = formData.teamALogo;
     let finalTeamBLogo = formData.teamBLogo;
 
-    // Upload Main Image
-    if (imageFile) {
-      const fileName = `${Date.now()}.${imageFile.name.split(".").pop()}`;
-      const { error } = await supabase.storage
-        .from("images")
-        .upload(fileName, imageFile);
-      if (!error)
-        finalImageUrl = supabase.storage.from("images").getPublicUrl(fileName)
-          .data.publicUrl;
-    }
-    // Upload Inner Image
-    if (innerImageFile) {
-      const fileName = `${Date.now()}_inner.${innerImageFile.name
-        .split(".")
-        .pop()}`;
-      const { error } = await supabase.storage
-        .from("images")
-        .upload(fileName, innerImageFile);
-      if (!error)
-        finalInnerImageUrl = supabase.storage
+    // Upload Multiple Main Images
+    if (imageFiles && imageFiles.length > 0) {
+      const uploadedUrls = [];
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        const fileName = `${Date.now()}_${i}.${file.name.split(".").pop()}`;
+        const { error } = await supabase.storage
           .from("images")
-          .getPublicUrl(fileName).data.publicUrl;
+          .upload(fileName, file);
+        if (!error)
+          uploadedUrls.push(
+            supabase.storage.from("images").getPublicUrl(fileName).data
+              .publicUrl
+          );
+      }
+      // Combine multiple URLs with a comma
+      finalImageUrl = uploadedUrls.join(",");
     }
-    // Upload Team A Logo
+
     if (teamAImageFile) {
       const fileName = `${Date.now()}_teamA.${teamAImageFile.name
         .split(".")
@@ -420,7 +408,6 @@ export default function App() {
         finalTeamALogo = supabase.storage.from("images").getPublicUrl(fileName)
           .data.publicUrl;
     }
-    // Upload Team B Logo
     if (teamBImageFile) {
       const fileName = `${Date.now()}_teamB.${teamBImageFile.name
         .split(".")
@@ -442,7 +429,6 @@ export default function App() {
         body: formData.body,
         category: formData.category,
         image_url: finalImageUrl,
-        inner_image_url: finalInnerImageUrl,
       });
     } else if (adminTab === "products") {
       Object.assign(payload, {
@@ -477,9 +463,7 @@ export default function App() {
       setUploading(false);
       fetchData();
     } catch (err) {
-      alert(
-        "DB Error! Please ensure you added 'inner_image_url' column to the news table in Supabase."
-      );
+      alert("DB Error!");
       setUploading(false);
     }
   };
@@ -501,13 +485,7 @@ export default function App() {
     const total = basePrice + shippingCost;
     const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
 
-    const captionText =
-      `🚨 *New Order Received!*\n\n` +
-      `📦 *Product:* ${selectedProduct.name}\n` +
-      `👤 *Customer:* ${orderName}\n` +
-      `📞 *Phone:* ${orderPhone}\n` +
-      `🚚 *Shipping Method:* ${shippingName}\n` +
-      `💰 *Total Paid:* ${total} ETB${vipText}`;
+    const captionText = `🚨 *New Order Received!*\n\n📦 *Product:* ${selectedProduct.name}\n👤 *Customer:* ${orderName}\n📞 *Phone:* ${orderPhone}\n🚚 *Shipping Method:* ${shippingName}\n💰 *Total Paid:* ${total} ETB${vipText}`;
 
     const formPayload = new FormData();
     formPayload.append("chat_id", CHAT_ID);
@@ -523,6 +501,7 @@ export default function App() {
       if (response.ok) {
         alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)");
         setSelectedProduct(null);
+        setActiveProductImageIndex(0);
         setOrderName("");
         setOrderPhone("");
         setOrderShipping("local");
@@ -548,6 +527,50 @@ export default function App() {
   const getMaskedAuthor = (dbAuthor) => {
     if (!dbAuthor) return "Goleth";
     return dbAuthor.toLowerCase().includes("zenasoccer") ? "Goleth" : dbAuthor;
+  };
+
+  // SMART BODY RENDERER (Injects images inside text)
+  const renderSmartBody = (text, imagesArray, isExpanded, articleId) => {
+    if (!text) return null;
+
+    // If not expanded, strip image tags and show preview
+    if (!isExpanded) {
+      let truncated = text.substring(0, 150) + "...";
+      truncated = truncated.replace(/\[IMAGE\d+\]/g, ""); // Remove tags
+      return (
+        <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
+          {truncated}
+        </p>
+      );
+    }
+
+    // If expanded, parse the tags
+    const parts = text.split(/(\[IMAGE\d+\])/g);
+    return (
+      <div
+        className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap cursor-pointer"
+        onClick={() => toggleReadMore(articleId)}
+      >
+        {parts.map((part, i) => {
+          const match = part.match(/\[IMAGE(\d+)\]/);
+          if (match) {
+            const imgIndex = parseInt(match[1], 10);
+            if (imagesArray[imgIndex]) {
+              return (
+                <img
+                  key={i}
+                  src={imagesArray[imgIndex]}
+                  alt="Article Content"
+                  className="w-full my-4 rounded-lg object-cover"
+                />
+              );
+            }
+            return null;
+          }
+          return <span key={i}>{part}</span>;
+        })}
+      </div>
+    );
   };
 
   const renderCEOStudio = () => (
@@ -655,24 +678,9 @@ export default function App() {
                   onChange={(e) =>
                     setFormData({ ...formData, body: e.target.value })
                   }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
+                  placeholder="Type [IMAGE1], [IMAGE2] anywhere here to inject the additional images you upload below..."
                 ></textarea>
-              </div>
-
-              <div className="mt-2 p-3 bg-black border border-zinc-800 rounded-lg">
-                <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">
-                  Inner Article Image (Optional)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setInnerImageFile(e.target.files[0])}
-                  className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
-                />
-                <p className="text-[9px] text-zinc-500 mt-1">
-                  This image will appear inside the article when a user clicks
-                  'Read More'.
-                </p>
               </div>
             </>
           )}
@@ -795,25 +803,25 @@ export default function App() {
                 </label>
                 <div className="space-y-3">
                   <div>
-                    <span className="text-[10px] text-zinc-500 block">
+                    <span className="text-[10px] text-zinc-500 block mb-1">
                       Home Logo:
                     </span>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => setTeamAImageFile(e.target.files[0])}
-                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white"
+                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
                     />
                   </div>
                   <div>
-                    <span className="text-[10px] text-zinc-500 block">
+                    <span className="text-[10px] text-zinc-500 block mb-1">
                       Away Logo:
                     </span>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => setTeamBImageFile(e.target.files[0])}
-                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white"
+                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
                     />
                   </div>
                 </div>
@@ -824,7 +832,7 @@ export default function App() {
           {["news", "gossip", "products"].includes(adminTab) && (
             <div className="mt-4">
               <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
-                Main Cover Image
+                Select 1 or more Images
               </label>
               <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
                 <div className="bg-zinc-900 p-2 rounded-lg">
@@ -832,17 +840,24 @@ export default function App() {
                 </div>
                 <input
                   type="file"
+                  multiple
                   accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files[0])}
+                  onChange={(e) => setImageFiles(Array.from(e.target.files))}
                   className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
                 />
               </div>
+              <p className="text-[9px] text-zinc-500 mt-2 leading-relaxed">
+                * Select multiple files at once. The first is the Main Cover.
+                For articles, type <b>[IMAGE1]</b>, <b>[IMAGE2]</b> in the Body
+                Text to place the extra images inline! For products, extra
+                images will create a gallery.
+              </p>
             </div>
           )}
           <button
             type="submit"
             disabled={uploading}
-            className="w-full bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2"
+            className="w-full bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 mt-4"
           >
             {uploading ? (
               <Loader2 className="animate-spin" size={20} />
@@ -859,11 +874,11 @@ export default function App() {
   const renderArticle = (item, isHero, table) => {
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate = item.body && item.body.length > 150;
-    const displayBody =
-      shouldTruncate && !isExpanded
-        ? item.body.substring(0, 150) + "..."
-        : item.body;
     const isBreaking = item.category === "ሰበር ዜና";
+
+    // Parse Image Array
+    const imagesArray = item.image_url ? item.image_url.split(",") : [];
+    const mainImage = imagesArray[0];
 
     if (isHero) {
       return (
@@ -892,9 +907,9 @@ export default function App() {
               </button>
             </div>
           )}
-          {item.image_url && (
+          {mainImage && (
             <img
-              src={item.image_url}
+              src={mainImage}
               alt={item.title}
               className="w-full aspect-[1.91/1] object-cover"
             />
@@ -929,27 +944,8 @@ export default function App() {
               <span>{formatDate(item.created_at)}</span>
             </div>
 
-            {/* Clickable paragraph body to easily collapse */}
-            <p
-              className={`text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap mt-1 ${
-                isExpanded ? "cursor-pointer" : ""
-              }`}
-              onClick={() => {
-                if (isExpanded) toggleReadMore(item.id);
-              }}
-            >
-              {displayBody}
-            </p>
-
-            {/* Render Inner Image if expanded */}
-            {isExpanded && item.inner_image_url && (
-              <img
-                src={item.inner_image_url}
-                alt="Article Detail"
-                className="w-full my-4 rounded-lg object-cover cursor-pointer"
-                onClick={() => toggleReadMore(item.id)}
-              />
-            )}
+            {/* Smart Body Rendering for Inline Images */}
+            {renderSmartBody(item.body, imagesArray, isExpanded, item.id)}
 
             {shouldTruncate && (
               <button
@@ -958,7 +954,7 @@ export default function App() {
                   isBreaking ? "text-red-500" : "text-amber-500"
                 } text-xs font-bold mt-3`}
               >
-                {isExpanded ? "አሳጥር (Show Less)" : "ሙሉውን ያንብቡ"}
+                {isExpanded ? "አሳጥር (Collapse)" : "ሙሉውን ያንብቡ"}
               </button>
             )}
           </div>
@@ -986,8 +982,8 @@ export default function App() {
             </button>
           </div>
         )}
-        {item.image_url ? (
-          <img src={item.image_url} className="w-1/3 h-full object-cover" />
+        {mainImage ? (
+          <img src={mainImage} className="w-1/3 h-full object-cover" />
         ) : (
           <div className="w-1/3 h-full bg-black flex items-center justify-center">
             <span className="text-zinc-800 font-black text-xs rotate-90">
@@ -1011,10 +1007,10 @@ export default function App() {
             {item.title}
           </h3>
 
-          {/* New snippet text for Grid Posts */}
+          {/* Smart preview that ignores the [IMAGE] tags */}
           {item.body && (
             <p className="text-zinc-400 text-[10px] leading-tight line-clamp-2 mb-1.5">
-              {item.body}
+              {item.body.replace(/\[IMAGE\d+\]/g, "")}
             </p>
           )}
 
@@ -1190,74 +1186,85 @@ export default function App() {
         </div>
 
         <div className="flex flex-col space-y-6">
-          {filteredProducts.map((item) => (
-            <div
-              key={item.id}
-              className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-xl relative w-full max-w-md mx-auto"
-            >
-              {isCEO && (
-                <div className="absolute top-3 right-3 flex space-x-2 z-10 bg-black/50 p-1.5 rounded-lg">
-                  <button
-                    onClick={() => handleEdit(item, "products")}
-                    className="p-1"
-                  >
-                    <Edit size={16} className="text-blue-400" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete("products", item.id)}
-                    className="p-1"
-                  >
-                    <Trash2 size={16} className="text-red-400" />
-                  </button>
-                </div>
-              )}
-              {item.image_url ? (
-                <img
-                  src={item.image_url}
-                  className="w-full aspect-square object-cover"
-                />
-              ) : (
-                <div className="w-full aspect-square bg-black"></div>
-              )}
-              <div className="p-6">
-                <span className="text-[10px] text-amber-500 font-bold uppercase">
-                  {item.category}
-                </span>
-                <h3 className="text-white font-black text-xl mt-1 mb-2">
-                  {item.name}
-                </h3>
-                {item.body && (
-                  <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
-                    {item.body}
-                  </p>
-                )}
+          {filteredProducts.map((item) => {
+            const productImages = item.image_url
+              ? item.image_url.split(",")
+              : [];
+            const mainImg = productImages[0];
 
-                <div className="flex items-center justify-between mt-4">
-                  <div className="flex flex-col">
-                    <span className="text-zinc-500 text-[10px] font-bold uppercase">
-                      Price
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <p className="text-amber-500 font-black text-2xl">
-                        {item.price} ብር
-                      </p>
-                      {user && user.isVIP && (
-                        <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded font-bold">
-                          -10%
-                        </span>
-                      )}
-                    </div>
+            return (
+              <div
+                key={item.id}
+                className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-xl relative w-full max-w-md mx-auto"
+              >
+                {isCEO && (
+                  <div className="absolute top-3 right-3 flex space-x-2 z-10 bg-black/50 p-1.5 rounded-lg">
+                    <button
+                      onClick={() => handleEdit(item, "products")}
+                      className="p-1"
+                    >
+                      <Edit size={16} className="text-blue-400" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete("products", item.id)}
+                      className="p-1"
+                    >
+                      <Trash2 size={16} className="text-red-400" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setSelectedProduct(item)}
-                    className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl hover:bg-amber-400"
-                  >
-                    እዘዝ
-                  </button>
+                )}
+                {mainImg ? (
+                  <img
+                    src={mainImg}
+                    className="w-full aspect-square object-cover"
+                  />
+                ) : (
+                  <div className="w-full aspect-square bg-black"></div>
+                )}
+                <div className="p-6">
+                  <span className="text-[10px] text-amber-500 font-bold uppercase">
+                    {item.category}
+                  </span>
+                  <h3 className="text-white font-black text-xl mt-1 mb-2">
+                    {item.name}
+                  </h3>
+
+                  {item.body && (
+                    <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
+                      {item.body}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex flex-col">
+                      <span className="text-zinc-500 text-[10px] font-bold uppercase">
+                        Price
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-amber-500 font-black text-2xl">
+                          {item.price} ብር
+                        </p>
+                        {user && user.isVIP && (
+                          <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                            -10%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedProduct(item);
+                        setActiveProductImageIndex(0);
+                      }}
+                      className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl hover:bg-amber-400 shadow-lg"
+                    >
+                      እዘዝ
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -1270,6 +1277,11 @@ export default function App() {
     { id: "ቪአይፒ", icon: Crown },
     { id: "ሱቅ", icon: ShoppingBag },
   ];
+
+  const currentOrderImages =
+    selectedProduct && selectedProduct.image_url
+      ? selectedProduct.image_url.split(",")
+      : [];
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-black font-sans text-white">
@@ -1316,34 +1328,57 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
+      {/* UPDATED TELEGRAM BOT ORDER MODAL WITH GALLERY AND HIGH-VISIBILITY 'X' */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/95 overflow-y-auto backdrop-blur-sm">
           <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
+            {/* The Highly Visible Floating X Button */}
             <button
               onClick={() => setSelectedProduct(null)}
-              className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+              className="absolute -top-3 -right-3 bg-zinc-800 border border-zinc-700 p-2 rounded-full text-zinc-300 hover:text-white hover:bg-zinc-700 shadow-2xl z-50"
             >
               <X size={20} />
             </button>
+
             <h2 className="text-xl font-black text-white border-b border-zinc-800 pb-3 mb-4">
               ማዘዣ ቅጽ (Order Form)
             </h2>
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              {/* Product Info Display (Now includes image thumbnail) */}
-              <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4 flex items-center space-x-3">
-                {selectedProduct.image_url ? (
-                  <img
-                    src={selectedProduct.image_url}
-                    className="w-16 h-16 object-cover rounded-md border border-zinc-700"
-                    alt="Product"
-                  />
+              {/* Product Gallery Section */}
+              <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4">
+                {currentOrderImages.length > 0 ? (
+                  <>
+                    <img
+                      src={currentOrderImages[activeProductImageIndex]}
+                      className="w-full h-48 object-cover rounded-md border border-zinc-700 mb-2"
+                      alt="Product Main"
+                    />
+                    {currentOrderImages.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        {currentOrderImages.map((img, idx) => (
+                          <img
+                            key={idx}
+                            src={img}
+                            onClick={() => setActiveProductImageIndex(idx)}
+                            className={`w-12 h-12 rounded-md object-cover cursor-pointer transition-all ${
+                              idx === activeProductImageIndex
+                                ? "border-2 border-amber-500 opacity-100"
+                                : "opacity-50 hover:opacity-100"
+                            }`}
+                            alt="Thumb"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <div className="w-16 h-16 bg-zinc-800 rounded-md border border-zinc-700 flex items-center justify-center">
-                    <ShoppingBag size={20} className="text-zinc-500" />
+                  <div className="w-full h-32 bg-zinc-800 rounded-md border border-zinc-700 flex items-center justify-center">
+                    <ShoppingBag size={30} className="text-zinc-500" />
                   </div>
                 )}
-                <div>
+
+                <div className="mt-3">
                   <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest">
                     Product
                   </p>
@@ -1403,7 +1438,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Updated Payment Instructions */}
               <div className="bg-green-900/20 border-l-4 border-green-500 p-4 rounded text-sm text-zinc-300">
                 <strong className="text-white block mb-2">
                   የክፍያ መመሪያ (Payment):
