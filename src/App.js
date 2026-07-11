@@ -95,6 +95,11 @@ export default function App() {
   const [orderReceipt, setOrderReceipt] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
+  // VIP ORDER STATE Extensions
+  const [vipPhone, setVipPhone] = useState("");
+  const [vipReceipt, setVipReceipt] = useState(null);
+  const [isSubmittingVip, setIsSubmittingVip] = useState(false);
+
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
@@ -396,10 +401,7 @@ export default function App() {
           .from("images")
           .upload(fileName, file);
         if (!error)
-          uploadedUrls.push(
-            supabase.storage.from("images").getPublicUrl(fileName).data
-              .publicUrl
-          );
+          uploadedUrls.from("images").getPublicUrl(fileName).data.publicUrl;
       }
       finalImageUrl = uploadedUrls.join(",");
     }
@@ -500,6 +502,7 @@ export default function App() {
         total_price: total,
         shipping_method: shippingName,
         is_vip: user ? user.isVIP : false,
+        order_type: "product",
       };
 
       const { error: dbError } = await supabase
@@ -537,7 +540,6 @@ export default function App() {
         setOrderReceipt(null);
       } else {
         const errorData = await response.json();
-        console.error("Telegram API Error:", errorData);
         alert(
           `ትዕዛዙ አልተላከም። (Failed to send order.)\nReason: ${
             errorData.description || "Unknown error"
@@ -548,6 +550,64 @@ export default function App() {
       alert("ስህተት አጋጥሟል። በይነመረብዎን ያረጋግጡ። (Check internet connection.)");
     } finally {
       setIsSubmittingOrder(false);
+    }
+  };
+
+  // HANDLES THE 50 BIRR VIP SCREENSHOT UPLOAD FORM
+  const handleVipRegistrationSubmit = async (e) => {
+    e.preventDefault();
+    if (!vipReceipt) {
+      alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ (Please upload receipt)");
+      return;
+    }
+    setIsSubmittingVip(true);
+
+    try {
+      const vipPayload = {
+        customer_name: user.name,
+        phone: vipPhone,
+        product_name: "Goleth VIP 1-Month Membership",
+        total_price: 50,
+        shipping_method: "Digital Delivery",
+        is_vip: false,
+        order_type: "vip_signup",
+      };
+
+      const { error: dbError } = await supabase
+        .from("orders")
+        .insert([vipPayload]);
+      if (dbError) console.error("Database tracking error:", dbError);
+    } catch (err) {
+      console.error(err);
+    }
+
+    const captionText = `👑 <b>New VIP Subscription Request!</b>\n\n👤 <b>User Name:</b> ${user.name}\n📞 <b>Phone Number:</b> ${vipPhone}\n💰 <b>Amount Due:</b> 50 ETB\n\n<i>Verify payment on your bank app, then mark this user as VIP in CEO Studio!</i>`;
+
+    const formPayload = new FormData();
+    formPayload.append("chat_id", CHAT_ID);
+    formPayload.append("photo", vipReceipt);
+    formPayload.append("caption", captionText);
+    formPayload.append("parse_mode", "HTML");
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+        { method: "POST", body: formPayload }
+      );
+      if (response.ok) {
+        alert(
+          "የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል! ክፍያዎን አረጋግጠን አካውንትዎን በቅርቡ እናነቃቃለን። (Receipt sent! We will review and activate your VIP shortly.)"
+        );
+        setVipPhone("");
+        setVipReceipt(null);
+        fetchData();
+      } else {
+        alert("የክፍያ ደረሰኙ አልተላከም። እባክዎ እንደገና ይሞክሩ።");
+      }
+    } catch (error) {
+      alert("የመረብ ግንኙነት ችግር አጋጥሟል።");
+    } finally {
+      setIsSubmittingVip(false);
     }
   };
 
@@ -683,9 +743,16 @@ export default function App() {
                         className="bg-zinc-900 p-3 rounded-lg border border-zinc-800/50"
                       >
                         <div className="flex justify-between items-center mb-1">
-                          <span className="text-white font-bold text-sm">
-                            {o.customer_name}
-                          </span>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-white font-bold text-sm">
+                              {o.customer_name}
+                            </span>
+                            {o.order_type === "vip_signup" && (
+                              <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black">
+                                VIP APPLY
+                              </span>
+                            )}
+                          </div>
                           <span className="text-amber-500 font-black text-sm">
                             {o.total_price} ETB
                           </span>
@@ -782,7 +849,7 @@ export default function App() {
                       setFormData({ ...formData, body: e.target.value })
                     }
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
-                    placeholder="Type [IMAGE1], [IMAGE2] anywhere here to inject the additional images you upload below..."
+                    placeholder="Type [IMAGE1], [IMAGE2] anywhere here..."
                   ></textarea>
                 </div>
               </>
@@ -806,7 +873,7 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Description / Details
+                    Description
                   </label>
                   <textarea
                     rows="3"
@@ -900,61 +967,24 @@ export default function App() {
                     />
                   </div>
                 </div>
-                <div className="bg-black p-3 border border-zinc-800 rounded-lg">
-                  <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
-                    Team Logos (Upload)
-                  </label>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-[10px] text-zinc-500 block mb-1">
-                        Home Logo:
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setTeamAImageFile(e.target.files[0])}
-                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-zinc-500 block mb-1">
-                        Away Logo:
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setTeamBImageFile(e.target.files[0])}
-                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
               </>
             )}
 
             {["news", "gossip", "products"].includes(adminTab) && (
               <div className="mt-4">
                 <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
-                  Select 1 or more Images
+                  Select Images
                 </label>
                 <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
-                  <div className="bg-zinc-900 p-2 rounded-lg">
-                    <ImageIcon size={20} className="text-amber-500" />
-                  </div>
+                  <ImageIcon size={20} className="text-amber-500" />
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     onChange={(e) => setImageFiles(Array.from(e.target.files))}
-                    className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
+                    className="text-sm text-zinc-400 file:bg-amber-500/20 file:text-amber-500"
                   />
                 </div>
-                <p className="text-[9px] text-zinc-500 mt-2 leading-relaxed">
-                  * Select multiple files at once. The first is the Main Cover.
-                  For articles, type <b>[IMAGE1]</b>, <b>[IMAGE2]</b> in the
-                  Body Text to place the extra images inline! For products,
-                  extra images will create a gallery.
-                </p>
               </div>
             )}
 
@@ -962,14 +992,9 @@ export default function App() {
               <button
                 type="submit"
                 disabled={uploading}
-                className="w-full bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 mt-4"
+                className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4"
               >
-                {uploading ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  <CheckCircle2 size={20} />
-                )}
-                <span>{uploading ? "..." : "አስገባ (Publish)"}</span>
+                {uploading ? "Publishing..." : "አስገባ (Publish)"}
               </button>
             )}
           </form>
@@ -982,7 +1007,6 @@ export default function App() {
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate = item.body && item.body.length > 150;
     const isBreaking = item.category === "ሰበር ዜና";
-
     const imagesArray = item.image_url ? item.image_url.split(",") : [];
     const mainImage = imagesArray[0];
 
@@ -990,33 +1014,30 @@ export default function App() {
       return (
         <div
           key={item.id}
-          className={`bg-zinc-900 rounded-xl overflow-hidden shadow-lg relative mb-4 ${
-            isBreaking ? "border-2 border-red-600" : "border border-zinc-800"
+          className={`bg-zinc-900 rounded-xl overflow-hidden shadow-lg relative mb-4 border ${
+            isBreaking ? "border-red-600" : "border-zinc-800"
           }`}
         >
-          {isBreaking && (
-            <div className="absolute top-0 left-0 w-full h-1 bg-red-600 animate-pulse z-20"></div>
-          )}
           {isCEO && (
             <div className="absolute top-2 right-2 flex space-x-2 z-10">
               <button
                 onClick={() => handleEdit(item, table)}
                 className="bg-blue-600 p-2 rounded-full"
               >
-                <Edit size={16} className="text-white" />
+                <Edit size={16} />
               </button>
               <button
                 onClick={() => handleDelete(table, item.id)}
                 className="bg-red-600 p-2 rounded-full"
               >
-                <Trash2 size={16} className="text-white" />
+                <Trash2 size={16} />
               </button>
             </div>
           )}
           {mainImage && (
             <img
               src={mainImage}
-              alt={item.title}
+              alt=""
               className="w-full aspect-[1.91/1] object-cover"
             />
           )}
@@ -1028,38 +1049,16 @@ export default function App() {
             >
               {item.title}
             </h3>
-            {item.subtitle && (
-              <h4 className="text-white text-md font-bold mb-3">
-                {item.subtitle}
-              </h4>
-            )}
-
-            <div className="flex flex-wrap items-center text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-2 pb-2 border-b border-zinc-800/50">
-              {isBreaking && (
-                <span className="bg-red-600 px-2 py-0.5 rounded text-white mr-2 flex items-center gap-1">
-                  <Flame size={10} /> ሰበር ዜና
-                </span>
-              )}
-              {!isBreaking && item.category && item.category !== "ዋና" && (
-                <span className="bg-zinc-800 px-2 py-0.5 rounded text-amber-500 mr-2">
-                  {item.category}
-                </span>
-              )}
-              <span>{getMaskedAuthor(item.author)}</span>
-              <span className="mx-2">•</span>
-              <span>{formatDate(item.created_at)}</span>
+            <div className="text-zinc-500 text-[10px] uppercase mb-2">
+              {getMaskedAuthor(item.author)} • {formatDate(item.created_at)}
             </div>
-
             {renderSmartBody(item.body, imagesArray, isExpanded, item.id)}
-
             {shouldTruncate && (
               <button
                 onClick={() => toggleReadMore(item.id)}
-                className={`${
-                  isBreaking ? "text-red-500" : "text-amber-500"
-                } text-xs font-bold mt-3`}
+                className="text-amber-500 text-xs font-bold mt-3"
               >
-                {isExpanded ? "አሳጥር (Collapse)" : "ሙሉውን ያንብቡ"}
+                {isExpanded ? "አሳጥር" : "ሙሉውን ያንብቡ"}
               </button>
             )}
           </div>
@@ -1070,55 +1069,30 @@ export default function App() {
     return (
       <div
         key={item.id}
-        className={`bg-zinc-900 rounded-xl overflow-hidden shadow-sm relative mb-3 flex h-32 ${
-          isBreaking ? "border border-red-900/50" : "border border-zinc-800"
-        }`}
+        className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mb-3 flex h-32 relative"
       >
         {isCEO && (
-          <div className="absolute top-2 right-2 flex space-x-2 z-10 bg-black/50 p-1 rounded-bl-lg">
-            <button onClick={() => handleEdit(item, table)} className="p-1">
+          <div className="absolute top-2 right-2 flex space-x-2 z-10 bg-black/50 p-1 rounded">
+            <button onClick={() => handleEdit(item, table)}>
               <Edit size={14} className="text-blue-400" />
             </button>
-            <button
-              onClick={() => handleDelete(table, item.id)}
-              className="p-1"
-            >
+            <button onClick={() => handleDelete(table, item.id)}>
               <Trash2 size={14} className="text-red-400" />
             </button>
           </div>
         )}
         {mainImage ? (
-          <img src={mainImage} className="w-1/3 h-full object-cover" />
+          <img src={mainImage} className="w-1/3 h-full object-cover" alt="" />
         ) : (
-          <div className="w-1/3 h-full bg-black flex items-center justify-center">
-            <span className="text-zinc-800 font-black text-xs rotate-90">
-              GOLETH
-            </span>
+          <div className="w-1/3 bg-black flex items-center justify-center text-xs text-zinc-800">
+            GOLETH
           </div>
         )}
-        <div className="w-2/3 p-3 flex flex-col justify-center relative">
-          {isBreaking && (
-            <span className="text-red-500 text-[9px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1">
-              <Flame size={8} /> ሰበር ዜና
-            </span>
-          )}
-          {!isBreaking && item.category && item.category !== "ዋና" && (
-            <span className="text-amber-500 text-[9px] font-bold uppercase tracking-widest mb-1">
-              {item.category}
-            </span>
-          )}
-
-          <h3 className="text-white font-bold text-sm leading-tight line-clamp-2 mb-1">
+        <div className="w-2/3 p-3 flex flex-col justify-center">
+          <h3 className="text-white font-bold text-sm line-clamp-2">
             {item.title}
           </h3>
-
-          {item.body && (
-            <p className="text-zinc-400 text-[10px] leading-tight line-clamp-2 mb-1.5">
-              {item.body.replace(/\[IMAGE\d+\]/g, "")}
-            </p>
-          )}
-
-          <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">
+          <span className="text-zinc-500 text-[10px] mt-1">
             {formatDate(item.created_at)}
           </span>
         </div>
@@ -1137,7 +1111,6 @@ export default function App() {
         ? feedData
         : feedData.filter((n) => n.category === currentCategory);
     const visibleData = filteredData.slice(0, newsLimit);
-
     return (
       <div className="pb-24 pt-2">
         <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
@@ -1150,101 +1123,65 @@ export default function App() {
                   return;
                 }
                 setCategoryFunc(cat);
-                setNewsLimit(10);
               }}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold ${
                 currentCategory === cat
-                  ? "bg-amber-500 text-black shadow-md"
-                  : "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-amber-500 text-black"
+                  : "bg-zinc-800 text-white"
               }`}
             >
               {cat}
             </button>
           ))}
         </div>
-
         <div className="space-y-2">
-          {visibleData.length === 0 && (
-            <div className="text-center text-zinc-500 pt-10 text-sm font-bold">
-              ምንም ዜና የለም
-            </div>
-          )}
           {visibleData.map((item, index) =>
             renderArticle(item, index === 0, "news")
           )}
         </div>
-
-        {filteredData.length > newsLimit && (
-          <button
-            onClick={() => setNewsLimit((prev) => prev + 10)}
-            className="w-full py-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white font-black text-sm mt-4 hover:bg-zinc-800 transition-colors"
-          >
-            ተጨማሪ ያንብቡ
-          </button>
-        )}
       </div>
     );
   };
 
-  const renderProfileModal = () => {
-    const daysLeft = user.vipUntil
-      ? Math.max(
-          0,
-          Math.ceil(
-            (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
-          )
-        )
-      : 0;
-    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
-          <button
-            onClick={() => setShowProfile(false)}
-            className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-          >
-            <X size={20} />
-          </button>
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center text-3xl font-black text-black mb-4 uppercase">
-              {user.name.charAt(0)}
-            </div>
-            <h2 className="text-xl font-black text-white">{user.name}</h2>
-            {user.isVIP ? (
-              <span className="text-amber-500 font-bold text-xs uppercase tracking-widest mt-1">
-                VIP
-              </span>
-            ) : (
-              <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">
-                Free
-              </span>
-            )}
+  const renderProfileModal = () => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80">
+      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl p-6 relative border border-zinc-800">
+        <button
+          onClick={() => setShowProfile(false)}
+          className="absolute top-4 right-4 text-zinc-500"
+        >
+          <X size={20} />
+        </button>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-xl font-black text-black mx-auto mb-2 uppercase">
+            {user.name.charAt(0)}
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center space-x-2 bg-red-900/20 text-red-500 font-bold py-3 rounded-xl"
-          >
-            <LogOut size={18} /> <span>ውጣ</span>
-          </button>
+          <h2 className="text-white font-bold">{user.name}</h2>
+          <span className="text-xs text-amber-500 font-bold">
+            {user.isVIP ? "VIP Member" : "Free Account"}
+          </span>
         </div>
+        <button
+          onClick={handleLogout}
+          className="w-full bg-red-900/20 text-red-500 py-3 rounded-xl font-bold"
+        >
+          ውጣ
+        </button>
       </div>
-    );
-  };
+    </div>
+  );
 
-  // UPDATED VIP SCREEN TO SEPARATE GENERAL LOGIN FROM VIP UPGRADE
   const renderVIP = () => {
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl">
-            <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Users size={30} className="text-[#229ED9]" />
-            </div>
+            <Users size={30} className="text-[#229ED9] mx-auto mb-4" />
             <h2 className="text-2xl font-black text-white mb-2">
               እንኳን በደህና መጡ!
             </h2>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-              አዲስ መለያ ለመፍጠር ወይም ለመግባት ከታች ያለውን የቴሌግራም ቁልፍ ይጫኑ። (Click below to
-              log in or register instantly with Telegram.)
+            <p className="text-zinc-400 text-sm mb-6">
+              አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ።
             </p>
             <TelegramLoginWidget onAuth={handleRealLogin} />
           </div>
@@ -1254,27 +1191,68 @@ export default function App() {
     if (user && !user.isVIP && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 w-full max-w-sm shadow-2xl mx-auto text-center">
-            <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Crown size={30} className="text-amber-500" />
-            </div>
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 w-full max-w-sm shadow-2xl text-center">
+            <Crown size={30} className="text-amber-500 mx-auto mb-4" />
             <h2 className="text-2xl font-black text-white mb-2">Goleth VIP</h2>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-              በወር <b>50 ብር</b> ብቻ የቪአይፒ አባል ይሁኑ እና የ10% ቅናሽ ያግኙ! (Upgrade to VIP
-              for 50 ETB/month!)
+            <p className="text-zinc-400 text-sm mb-6">
+              በወር <b>50 ብር</b> ብቻ የቪአይፒ አባል ይሁኑ እና የ10% ቅናሽ ያግኙ!
             </p>
-            <div className="bg-black p-4 rounded-lg text-left border border-zinc-800 mb-4">
-              <p className="text-xs text-zinc-400 mb-2">
-                ክፍያዎን እዚህ ይፈጽሙ (Pay here):
+
+            <div className="bg-black p-4 rounded-lg text-left border border-zinc-800 mb-6">
+              <p className="text-xs text-zinc-400 mb-2 font-bold uppercase tracking-wider">
+                የክፍያ መመሪያ (Payment Info):
               </p>
-              <p className="text-sm font-bold text-white">CBE: 1000XXXXXXXXX</p>
-              <p className="text-sm font-bold text-white">
-                Telebirr: 09XXXXXXXX
+              <p className="text-sm font-black text-white">
+                • CBE: <span className="text-amber-500">1000XXXXXXXXX</span>
+              </p>
+              <p className="text-sm font-black text-white">
+                • Telebirr: <span className="text-amber-500">09XXXXXXXX</span>
               </p>
             </div>
-            <p className="text-xs text-zinc-500">
-              ከከፈሉ በኋላ ደረሰኝዎን በቴሌግራም ይላኩልን። (Send receipt to our Telegram bot).
-            </p>
+
+            {/* LIVE VIP RECEIPT UPLOAD SYSTEM */}
+            <form
+              onSubmit={handleVipRegistrationSubmit}
+              className="space-y-4 text-left border-t border-zinc-800 pt-4"
+            >
+              <div>
+                <label className="text-xs font-bold text-zinc-400 block mb-1">
+                  ስልክ ቁጥር (Phone Number)
+                </label>
+                <input
+                  required
+                  type="tel"
+                  value={vipPhone}
+                  onChange={(e) => setVipPhone(e.target.value)}
+                  placeholder="09..."
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-zinc-400 block mb-1">
+                  የክፍያ ደረሰኝ (Upload Payment Receipt)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setVipReceipt(e.target.files[0])}
+                  className="w-full text-xs text-zinc-400 bg-black border border-zinc-800 p-2 rounded-lg"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmittingVip}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl flex justify-center items-center space-x-2 transition-colors mt-2"
+              >
+                {isSubmittingVip ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  <CheckCircle2 size={18} />
+                )}
+                <span>{isSubmittingVip ? "በመላክ ላይ..." : "የክፍያ ማረጋገጫ ላክ"}</span>
+              </button>
+            </form>
           </div>
         </div>
       );
@@ -1296,7 +1274,6 @@ export default function App() {
       shopCategory === "ሁሉም"
         ? products
         : products.filter((p) => p.category === shopCategory);
-
     return (
       <div className="pb-24 pt-2">
         <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
@@ -1304,98 +1281,61 @@ export default function App() {
             <button
               key={cat}
               onClick={() => setShopCategory(cat)}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              className={`px-4 py-1.5 rounded-full text-xs font-bold ${
                 shopCategory === cat
-                  ? "bg-amber-500 text-black shadow-md"
-                  : "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-amber-500 text-black"
+                  : "bg-zinc-800 text-white"
               }`}
             >
               {cat}
             </button>
           ))}
         </div>
-
         <div className="flex flex-col space-y-6">
           {filteredProducts.map((item) => {
             const productImages = item.image_url
               ? item.image_url.split(",")
               : [];
             const mainImg = productImages[0];
-
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-xl relative w-full max-w-md mx-auto"
+                className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-xl max-w-md mx-auto w-full"
               >
-                {isCEO && (
-                  <div className="absolute top-3 right-3 flex space-x-2 z-10 bg-black/50 p-1.5 rounded-lg">
-                    <button
-                      onClick={() => handleEdit(item, "products")}
-                      className="p-1"
-                    >
-                      <Edit size={16} className="text-blue-400" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete("products", item.id)}
-                      className="p-1"
-                    >
-                      <Trash2 size={16} className="text-red-400" />
-                    </button>
-                  </div>
-                )}
-                {mainImg ? (
+                {mainImg && (
                   <img
                     src={mainImg}
                     className="w-full aspect-square object-cover"
+                    alt=""
                   />
-                ) : (
-                  <div className="w-full aspect-square bg-black"></div>
                 )}
                 <div className="p-6">
-                  <span className="text-[10px] text-amber-500 font-bold uppercase">
-                    {item.category}
-                  </span>
-                  <h3 className="text-white font-black text-xl mt-1 mb-2">
+                  <h3 className="text-white font-black text-xl mb-2">
                     {item.name}
                   </h3>
-
-                  {item.body && (
-                    <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
-                      {item.body}
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="flex flex-col">
-                      <span className="text-zinc-500 text-[10px] font-bold uppercase">
-                        Price
-                      </span>
-                      <div className="flex items-center space-x-2">
-                        {user && user.isVIP ? (
-                          <>
-                            <p className="text-amber-500 font-black text-2xl">
-                              {Math.round(item.price * 0.9)} ብር
-                            </p>
-                            <p className="text-zinc-500 font-bold text-sm line-through">
-                              {item.price}
-                            </p>
-                            <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded font-bold">
-                              VIP
-                            </span>
-                          </>
-                        ) : (
+                  <div className="flex justify-between items-center mt-4">
+                    <div className="flex items-center space-x-2">
+                      {user && user.isVIP ? (
+                        <>
                           <p className="text-amber-500 font-black text-2xl">
-                            {item.price} ብር
+                            {Math.round(item.price * 0.9)} ብር
                           </p>
-                        )}
-                      </div>
+                          <p className="text-zinc-500 line-through text-sm">
+                            {item.price}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-amber-500 font-black text-2xl">
+                          {item.price} ብር
+                        </p>
+                      )}
                     </div>
                     <button
                       onClick={() => {
                         setSelectedProduct(item);
                         setActiveProductImageIndex(0);
                       }}
-                      className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl hover:bg-amber-400 shadow-lg"
+                      className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl"
                     >
                       እዘዝ
                     </button>
@@ -1424,34 +1364,22 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-black font-sans text-white">
-      <style>{` body, html { background-color: black; margin: 0; overscroll-behavior-y: none; } `}</style>
-
       <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center">
         <div
-          className="flex items-center space-x-3 cursor-pointer select-none"
+          className="flex items-center space-x-3 cursor-pointer"
           onClick={handleLogoTap}
         >
           <h1 className="text-white font-black text-2xl tracking-widest">
             GOL<span className="text-amber-500">ETH</span>
           </h1>
         </div>
-        <div className="flex items-center space-x-3">
-          {isCEO && (
-            <button
-              onClick={() =>
-                handleEdit(null, activeTab === "ሱቅ" ? "products" : "news")
-              }
-              className="text-amber-500 mr-2"
-            >
-              <PlusCircle size={24} />
-            </button>
-          )}
+        <div>
           {user ? (
             <div
               onClick={() => setShowProfile(true)}
-              className="flex items-center space-x-2 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 cursor-pointer"
+              className="bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold"
             >
-              <span className="text-xs font-bold text-white">{user.name}</span>
+              {user.name}
             </div>
           ) : (
             <button
@@ -1467,65 +1395,31 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
-      {/* FULLY RESTORED & FIXED CHECKOUT MODAL */}
+      {/* SHOPPING CHECKOUT MODAL */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
+          <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
               <h2 className="text-xl font-black text-white">
                 ማዘዣ ቅጽ (Order Form)
               </h2>
               <button
                 onClick={() => setSelectedProduct(null)}
-                className="bg-zinc-800 border border-zinc-700 p-2 rounded-full text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+                className="bg-zinc-800 p-2 rounded-full"
               >
                 <X size={20} />
               </button>
             </div>
-
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4">
-                {currentOrderImages.length > 0 ? (
-                  <>
-                    <img
-                      src={currentOrderImages[activeProductImageIndex]}
-                      className="w-full h-48 object-cover rounded-md border border-zinc-700 mb-2"
-                      alt="Product Main"
-                    />
-                    {currentOrderImages.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                        {currentOrderImages.map((img, idx) => (
-                          <img
-                            key={idx}
-                            src={img}
-                            onClick={() => setActiveProductImageIndex(idx)}
-                            className={`w-12 h-12 rounded-md object-cover cursor-pointer transition-all ${
-                              idx === activeProductImageIndex
-                                ? "border-2 border-amber-500 opacity-100"
-                                : "opacity-50 hover:opacity-100"
-                            }`}
-                            alt="Thumb"
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-32 bg-zinc-800 rounded-md border border-zinc-700 flex items-center justify-center">
-                    <ShoppingBag size={30} className="text-zinc-500" />
-                  </div>
-                )}
-
-                <div className="mt-3">
-                  <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest">
-                    Product
-                  </p>
-                  <p className="text-white font-bold">{selectedProduct.name}</p>
-                </div>
-              </div>
-
+              {currentOrderImages.length > 0 && (
+                <img
+                  src={currentOrderImages[activeProductImageIndex]}
+                  className="w-full h-48 object-cover rounded-md border border-zinc-700"
+                  alt=""
+                />
+              )}
               <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                <label className="text-xs font-bold text-zinc-500 block mb-1">
                   ሙሉ ስም (Full Name)
                 </label>
                 <input
@@ -1533,12 +1427,11 @@ export default function App() {
                   type="text"
                   value={orderName}
                   onChange={(e) => setOrderName(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white outline-none"
                 />
               </div>
-
               <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                <label className="text-xs font-bold text-zinc-500 block mb-1">
                   ስልክ ቁጥር (Phone Number)
                 </label>
                 <input
@@ -1546,73 +1439,40 @@ export default function App() {
                   type="tel"
                   value={orderPhone}
                   onChange={(e) => setOrderPhone(e.target.value)}
-                  placeholder="09..."
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white outline-none"
                 />
               </div>
-
               <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                <label className="text-xs font-bold text-zinc-500 block mb-1">
                   የማጓጓዣ አማራጭ (Shipping)
                 </label>
                 <select
                   value={orderShipping}
                   onChange={(e) => setOrderShipping(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white outline-none"
                 >
                   <option value="local">በከተማ ውስጥ (+150 ETB)</option>
                   <option value="traveler">በመንገደኛ መላክ (+500 ETB)</option>
                 </select>
               </div>
-
-              <div className="flex justify-between items-center py-2">
-                <span className="text-zinc-500 font-bold">Total Amount:</span>
-                <span className="text-amber-500 font-black text-xl">
-                  {(user && user.isVIP
-                    ? Math.round(selectedProduct.price * 0.9)
-                    : selectedProduct.price) +
-                    (orderShipping === "local" ? 150 : 500)}{" "}
-                  ETB
-                </span>
-              </div>
-
-              <div className="bg-green-900/20 border-l-4 border-green-500 p-4 rounded text-sm text-zinc-300">
-                <strong className="text-white block mb-2">
-                  የክፍያ መመሪያ (Payment):
-                </strong>
-                እባክዎ ክፍያዎን ከታች ባሉት አካውንቶች ፈጽመው ሲጨርሱ፣{" "}
-                <b>ተመልሰው የክፍያ ደረሰኝዎን (Screenshot) እዚህ ጋር ይስቀሉ።</b>
-                <br />
-                <br />• <strong>CBE:</strong> 1000XXXXXXXXX
-                <br />• <strong>Telebirr:</strong> 09XXXXXXXX
-              </div>
-
               <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
+                <label className="text-xs font-bold text-zinc-500 block mb-1">
                   የክፍያ ደረሰኝ (Upload Receipt)
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setOrderReceipt(e.target.files[0])}
-                  className="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500 bg-black border border-zinc-800 p-2 rounded-lg"
+                  className="w-full text-xs bg-black border border-zinc-800 p-2 rounded-lg"
                   required
                 />
               </div>
-
               <button
                 type="submit"
                 disabled={isSubmittingOrder}
-                className="w-full bg-[#229ED9] hover:bg-[#1CA0DE] text-white font-black py-4 rounded-xl mt-4 flex justify-center items-center space-x-2 transition-colors"
+                className="w-full bg-[#229ED9] text-white font-black py-4 rounded-xl mt-2"
               >
-                {isSubmittingOrder ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  <AlertCircle size={20} />
-                )}
-                <span>
-                  {isSubmittingOrder ? "በመላክ ላይ..." : "ትዕዛዝ ላክ (Submit)"}
-                </span>
+                {isSubmittingOrder ? "በመላክ ላይ..." : "ትዕዛዝ ላክ (Submit)"}
               </button>
             </form>
           </div>
@@ -1638,7 +1498,7 @@ export default function App() {
         {activeTab === "ሱቅ" && renderShop()}
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
+      <nav className="fixed bottom-0 w-full bg-zinc-950/95 border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1646,18 +1506,12 @@ export default function App() {
             <button
               key={tab.id}
               onClick={() => handleNavClick(tab.id)}
-              className={`flex flex-col items-center p-2 transition-colors ${
-                isActive ? "text-amber-500" : "text-white/90 hover:text-white"
+              className={`flex flex-col items-center p-2 ${
+                isActive ? "text-amber-500" : "text-white/90"
               }`}
             >
-              <Icon
-                size={isActive ? 26 : 24}
-                strokeWidth={isActive ? 2.5 : 2}
-                className="mb-1.5"
-              />
-              <span className="text-[11px] font-bold tracking-wide">
-                {tab.id}
-              </span>
+              <Icon size={isActive ? 26 : 24} className="mb-1.5" />
+              <span className="text-[11px] font-bold">{tab.id}</span>
             </button>
           );
         })}
