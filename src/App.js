@@ -489,6 +489,7 @@ export default function App() {
     }
   };
 
+  // UPDATED: PRODUCT ORDER SUBMIT WITH EXPLICIT ALERTS
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderReceipt) {
@@ -540,24 +541,31 @@ export default function App() {
         { method: "POST", body: formPayload }
       );
       if (response.ok) {
-        // 2. Automated Confirmation to Customer (Only if they are logged in)
+        // 2. Automated Confirmation to Customer
         if (user && user.id) {
           try {
             const customerMsg = `✅ <b>ትዕዛዝዎ ደርሶናል! (Order Received!)</b>\n\n📦 <b>እቃ (Product):</b> ${selectedProduct.name}\n💰 <b>የተከፈለ (Total Paid):</b> ${total} ETB\n\nየክፍያ ማረጋገጫዎን እያየን ነው፣ በቅርቡ እናሳውቅዎታለን። (We are verifying your payment and will process your order shortly.)\n\n- Goleth Team`;
-            const customerPayload = new FormData();
-            customerPayload.append("chat_id", user.id);
-            customerPayload.append("text", customerMsg);
-            customerPayload.append("parse_mode", "HTML");
+            const customerPayload = {
+              chat_id: user.id,
+              text: customerMsg,
+              parse_mode: "HTML",
+            };
             await fetch(
               `https://api.telegram.org/bot${APP_BOT_TOKEN}/sendMessage`,
-              { method: "POST", body: customerPayload }
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(customerPayload),
+              }
             );
           } catch (e) {
             console.error("Failed to send customer confirmation", e);
           }
         }
 
-        alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)");
+        alert(
+          "ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)\n\nማሳሰቢያ፡ ማረጋገጫ መልእክት ካልደረስዎ፣ እባክዎ ቴሌግራም ላይ @goleth_app_bot ፈልገው 'START' ይበሉ። (If you didn't get a receipt, press START on @goleth_app_bot)."
+        );
         setSelectedProduct(null);
         setActiveProductImageIndex(0);
         setOrderName("");
@@ -623,14 +631,19 @@ export default function App() {
         // 2. Automated Confirmation to Customer
         if (user && user.id) {
           try {
-            const customerMsg = `👑 <b>የቪአይፒ ጥያቄዎ ደርሶናል! (VIP Request Received!)</b>\n\nየ 50 ብር ክፍያዎን እንዳረጋገጥን አካውንትዎን ወደ VIP እናሳድጋለን። እናመሰግናለን! (Once we verify your 50 ETB payment, your account will be upgraded to VIP. Thank you!)\n\n- Goleth Team`;
-            const customerPayload = new FormData();
-            customerPayload.append("chat_id", user.id);
-            customerPayload.append("text", customerMsg);
-            customerPayload.append("parse_mode", "HTML");
+            const customerMsg = `👑 <b>የቪአይፒ ጥያቄዎ ደርሶናል! (VIP Request Received!)</b>\n\nየ 50 ብር ክፍያዎን እንዳረጋገጥን አካውንትዎን ወደ VIP እናሳድጋለን። እናመሰግናለን! (Once we verify your payment, your account will be upgraded.)\n\n- Goleth Team`;
+            const customerPayload = {
+              chat_id: user.id,
+              text: customerMsg,
+              parse_mode: "HTML",
+            };
             await fetch(
               `https://api.telegram.org/bot${APP_BOT_TOKEN}/sendMessage`,
-              { method: "POST", body: customerPayload }
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(customerPayload),
+              }
             );
           } catch (e) {
             console.error("Failed to send customer confirmation", e);
@@ -638,7 +651,7 @@ export default function App() {
         }
 
         alert(
-          "የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል! (Receipt sent! We will activate your VIP shortly.)"
+          "የክፍያ ማረጋገጫዎ ተልኳል! ማሳሰቢያ፡ ማረጋገጫ መልእክት ካልደረስዎ፣ እባክዎ ቴሌግራም ላይ @goleth_app_bot ፈልገው 'START' ይበሉ።"
         );
         setVipPhone("");
         setVipReceipt(null);
@@ -653,12 +666,22 @@ export default function App() {
     }
   };
 
-  // SOURCING FORM SUBMIT HANDLER
+  // UPDATED: SOURCING FORM SUBMIT (NOW DMs CUSTOMER AND INCLUDES THEIR NAME)
   const handleSourcingSubmit = async (e) => {
     e.preventDefault();
-    const message = `🌍 *New Custom Sourcing Request*\nLink: ${sourcingLink}`;
+
+    // Require them to be logged in so we know who is sending the link!
+    if (!user) {
+      alert("እባክዎ የቴሌግራም ቁልፉን ተጠቅመው ይግቡ (Please log in via Telegram first).");
+      setShowSourcingModal(false);
+      handleNavClick("ቪአይፒ"); // Redirect to login
+      return;
+    }
+
+    const adminMessage = `🌍 <b>New Custom Sourcing Request</b>\n\n👤 <b>Customer:</b> ${user.name}\n🔗 <b>Link:</b> ${sourcingLink}`;
 
     try {
+      // 1. Send to Admin
       await fetch(
         `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`,
         {
@@ -666,15 +689,35 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: CHAT_ID,
-            text: message,
-            parse_mode: "Markdown",
+            text: adminMessage,
+            parse_mode: "HTML",
           }),
         }
       );
+
+      // 2. Send to Customer
+      try {
+        const customerMsg = `✅ <b>የግል እቃ ጥያቄዎ ደርሶናል! (Sourcing Request Received!)</b>\n\n🔗 <b>Link:</b> ${sourcingLink}\n\nዋጋውን እና መጓጓዣውን አጣርተን በቅርቡ እናሳውቅዎታለን። (We will calculate the price + shipping and get back to you shortly.)\n\n- Goleth Team`;
+        await fetch(
+          `https://api.telegram.org/bot${APP_BOT_TOKEN}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: user.id,
+              text: customerMsg,
+              parse_mode: "HTML",
+            }),
+          }
+        );
+      } catch (err) {
+        console.error("Could not send customer DM", err);
+      }
+
       setShowSourcingModal(false);
       setSourcingLink("");
       alert(
-        "ጥያቄዎ ተልኳል! በቅርቡ ዋጋውን እናሳውቅዎታለን። (Request sent! We will check the link and get back to you.)"
+        "ጥያቄዎ ተልኳል! (Request sent!)\n\nማሳሰቢያ፡ መልእክት ካልደረስዎ፣ እባክዎ ቴሌግራም ላይ @goleth_app_bot ፈልገው 'START' ይበሉ። (If you didn't get a DM, please press START on @goleth_app_bot)."
       );
     } catch (error) {
       console.error("Error sending link:", error);
