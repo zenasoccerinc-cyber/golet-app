@@ -18,6 +18,8 @@ import {
   PlusCircle,
   Image as ImageIcon,
   AlertCircle,
+  TrendingUp,
+  Package,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -106,6 +108,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [predictions, setPredictions] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [orders, setOrders] = useState([]);
 
   // ADMIN FILE UPLOAD STATES
   const [adminTab, setAdminTab] = useState("news");
@@ -145,6 +148,10 @@ export default function App() {
       .select("*")
       .eq("is_active", true)
       .order("created_at", { ascending: false });
+    const { data: oData } = await supabase
+      .from("orders")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     let lData = [];
     if (prData && prData.length > 0) {
@@ -177,6 +184,7 @@ export default function App() {
     if (gData) setGossip(gData);
     if (pData) setProducts(pData);
     if (prData) setPredictions(prData);
+    if (oData) setOrders(oData);
     setLeaderboard(lData);
   };
 
@@ -372,6 +380,7 @@ export default function App() {
 
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
+    if (adminTab === "analytics") return;
     setUploading(true);
 
     let finalImageUrl = formData.image_url || null;
@@ -483,7 +492,6 @@ export default function App() {
     const total = basePrice + shippingCost;
     const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
 
-    // STEP 1: HYBRID APPROACH - SAVE TO SUPABASE FIRST
     try {
       const orderPayload = {
         customer_name: orderName,
@@ -499,13 +507,14 @@ export default function App() {
         .insert([orderPayload]);
       if (dbError) {
         console.error("Supabase Analytics Save Error:", dbError);
-        // We log the error but DO NOT block the telegram message below, to ensure you never miss a sale!
+      } else {
+        // Refresh orders data silently in the background
+        fetchData();
       }
     } catch (err) {
       console.error("Database connection issue:", err);
     }
 
-    // STEP 2: SEND NOTIFICATION & RECEIPT TO TELEGRAM
     const captionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${selectedProduct.name}\n👤 <b>Customer:</b> ${orderName}\n📞 <b>Phone:</b> ${orderPhone}\n🚚 <b>Shipping Method:</b> ${shippingName}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
 
     const formPayload = new FormData();
@@ -548,7 +557,7 @@ export default function App() {
   const formatDate = (dateString) =>
     new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
     });
   const getMaskedAuthor = (dbAuthor) => {
@@ -595,303 +604,380 @@ export default function App() {
     );
   };
 
-  const renderCEOStudio = () => (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 overflow-y-auto">
-      <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
-        <button
-          onClick={closeAdmin}
-          className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-        >
-          <X size={24} />
-        </button>
-        <h2 className="text-2xl font-black text-amber-500 mb-6">
-          {editingId ? "Edit" : "Create"}
-        </h2>
-        <form onSubmit={handleAdminSubmit} className="space-y-4">
-          {!editingId && (
-            <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
-              {["news", "gossip", "products", "predictions"].map((tab) => (
-                <button
-                  type="button"
-                  key={tab}
-                  onClick={() => setAdminTab(tab)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
-                    adminTab === tab
-                      ? "bg-amber-500 text-black"
-                      : "bg-zinc-800 text-zinc-400"
-                  }`}
-                >
-                  {tab.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          )}
+  const renderCEOStudio = () => {
+    const totalRevenue = orders.reduce(
+      (sum, order) => sum + Number(order.total_price || 0),
+      0
+    );
 
-          {["news", "gossip"].includes(adminTab) && (
-            <>
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                  Title
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={formData.title || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                  Subtitle
-                </label>
-                <input
-                  type="text"
-                  value={formData.subtitle || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, subtitle: e.target.value })
-                  }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Category
-                  </label>
-                  <select
-                    value={formData.category || "ዋና"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  >
-                    <option value="ዋና">ዋና</option>
-                    <option value="ሰበር ዜና">ሰበር ዜና (Breaking)</option>
-                    <option value="የዝውውር ዜና">የዝውውር ዜና (Transfers)</option>
-                    <option value="አስተያየት">አስተያየት</option>
-                    <option value="ማህበራዊ">ማህበራዊ</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Author
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.author || "Goleth"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, author: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                  Body Text
-                </label>
-                <textarea
-                  required
-                  rows="6"
-                  value={formData.body || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, body: e.target.value })
-                  }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
-                  placeholder="Type [IMAGE1], [IMAGE2] anywhere here to inject the additional images you upload below..."
-                ></textarea>
-              </div>
-            </>
-          )}
-
-          {adminTab === "products" && (
-            <>
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                  Product Name
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={formData.title || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                  Description / Details
-                </label>
-                <textarea
-                  rows="3"
-                  value={formData.body || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, body: e.target.value })
-                  }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                ></textarea>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Price
-                  </label>
-                  <input
-                    required
-                    type="number"
-                    value={formData.price || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, price: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Category
-                  </label>
-                  <select
-                    value={formData.category || "ሌላ"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  >
-                    <option value="ወንዶች">ወንዶች (Men)</option>
-                    <option value="ሴቶች">ሴቶች (Women)</option>
-                    <option value="ልጆች">ልጆች (Kids)</option>
-                    <option value="መድሃኒት">መድሃኒት (Medicine)</option>
-                    <option value="ሌላ">ሌላ (Other)</option>
-                  </select>
-                </div>
-              </div>
-            </>
-          )}
-
-          {adminTab === "predictions" && (
-            <>
-              <div>
-                <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                  League
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={formData.league || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, league: e.target.value })
-                  }
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Home Team
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.teamA || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, teamA: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Away Team
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.teamB || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, teamB: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-              </div>
-              <div className="bg-black p-3 border border-zinc-800 rounded-lg">
-                <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
-                  Team Logos (Upload)
-                </label>
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-[10px] text-zinc-500 block mb-1">
-                      Home Logo:
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setTeamAImageFile(e.target.files[0])}
-                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-zinc-500 block mb-1">
-                      Away Logo:
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setTeamBImageFile(e.target.files[0])}
-                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {["news", "gossip", "products"].includes(adminTab) && (
-            <div className="mt-4">
-              <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
-                Select 1 or more Images
-              </label>
-              <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
-                <div className="bg-zinc-900 p-2 rounded-lg">
-                  <ImageIcon size={20} className="text-amber-500" />
-                </div>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={(e) => setImageFiles(Array.from(e.target.files))}
-                  className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
-                />
-              </div>
-              <p className="text-[9px] text-zinc-500 mt-2 leading-relaxed">
-                * Select multiple files at once. The first is the Main Cover.
-                For articles, type <b>[IMAGE1]</b>, <b>[IMAGE2]</b> in the Body
-                Text to place the extra images inline! For products, extra
-                images will create a gallery.
-              </p>
-            </div>
-          )}
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 overflow-y-auto">
+        <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
           <button
-            type="submit"
-            disabled={uploading}
-            className="w-full bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 mt-4"
+            onClick={closeAdmin}
+            className="absolute top-4 right-4 text-zinc-500 hover:text-white"
           >
-            {uploading ? (
-              <Loader2 className="animate-spin" size={20} />
-            ) : (
-              <CheckCircle2 size={20} />
-            )}
-            <span>{uploading ? "..." : "አስገባ (Publish)"}</span>
+            <X size={24} />
           </button>
-        </form>
+          <h2 className="text-2xl font-black text-amber-500 mb-6">
+            {editingId ? "Edit" : "CEO Studio"}
+          </h2>
+          <form onSubmit={handleAdminSubmit} className="space-y-4">
+            {!editingId && (
+              <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+                {["news", "gossip", "products", "predictions", "analytics"].map(
+                  (tab) => (
+                    <button
+                      type="button"
+                      key={tab}
+                      onClick={() => setAdminTab(tab)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
+                        adminTab === tab
+                          ? "bg-amber-500 text-black"
+                          : "bg-zinc-800 text-zinc-400"
+                      }`}
+                    >
+                      {tab.toUpperCase()}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+
+            {adminTab === "analytics" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-black border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
+                    <TrendingUp size={24} className="text-green-500 mb-2" />
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
+                      Total Sales
+                    </span>
+                    <span className="text-2xl font-black text-white">
+                      {totalRevenue}{" "}
+                      <span className="text-sm text-zinc-500">ETB</span>
+                    </span>
+                  </div>
+                  <div className="bg-black border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
+                    <Package size={24} className="text-blue-500 mb-2" />
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
+                      Orders
+                    </span>
+                    <span className="text-2xl font-black text-white">
+                      {orders.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <h3 className="text-sm font-bold text-zinc-400 mb-2 uppercase tracking-widest">
+                    Recent Transactions
+                  </h3>
+                  <div className="bg-black border border-zinc-800 rounded-xl max-h-60 overflow-y-auto p-2 space-y-2">
+                    {orders.length === 0 && (
+                      <p className="text-zinc-600 text-xs text-center py-4">
+                        No orders yet.
+                      </p>
+                    )}
+                    {orders.map((o) => (
+                      <div
+                        key={o.id}
+                        className="bg-zinc-900 p-3 rounded-lg border border-zinc-800/50"
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-white font-bold text-sm">
+                            {o.customer_name}
+                          </span>
+                          <span className="text-amber-500 font-black text-sm">
+                            {o.total_price} ETB
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-400 text-xs">
+                            {o.product_name}
+                          </span>
+                          <span className="text-zinc-500 text-[10px]">
+                            {formatDate(o.created_at)}
+                          </span>
+                        </div>
+                        <div className="text-blue-400 text-xs mt-1">
+                          {o.phone}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {["news", "gossip"].includes(adminTab) && (
+              <>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Title
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.title || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, title: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Subtitle
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.subtitle || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, subtitle: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={formData.category || "ዋና"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, category: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    >
+                      <option value="ዋና">ዋና</option>
+                      <option value="ሰበር ዜና">ሰበር ዜና (Breaking)</option>
+                      <option value="የዝውውር ዜና">የዝውውር ዜና (Transfers)</option>
+                      <option value="አስተያየት">አስተያየት</option>
+                      <option value="ማህበራዊ">ማህበራዊ</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Author
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.author || "Goleth"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, author: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Body Text
+                  </label>
+                  <textarea
+                    required
+                    rows="6"
+                    value={formData.body || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, body: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
+                    placeholder="Type [IMAGE1], [IMAGE2] anywhere here to inject the additional images you upload below..."
+                  ></textarea>
+                </div>
+              </>
+            )}
+
+            {adminTab === "products" && (
+              <>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Product Name
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.title || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, title: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Description / Details
+                  </label>
+                  <textarea
+                    rows="3"
+                    value={formData.body || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, body: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  ></textarea>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Price
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      value={formData.price || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, price: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={formData.category || "ሌላ"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, category: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    >
+                      <option value="ወንዶች">ወንዶች (Men)</option>
+                      <option value="ሴቶች">ሴቶች (Women)</option>
+                      <option value="ልጆች">ልጆች (Kids)</option>
+                      <option value="መድሃኒት">መድሃኒት (Medicine)</option>
+                      <option value="ሌላ">ሌላ (Other)</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {adminTab === "predictions" && (
+              <>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    League
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.league || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, league: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Home Team
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      value={formData.teamA || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, teamA: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Away Team
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      value={formData.teamB || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, teamB: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    />
+                  </div>
+                </div>
+                <div className="bg-black p-3 border border-zinc-800 rounded-lg">
+                  <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
+                    Team Logos (Upload)
+                  </label>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-[10px] text-zinc-500 block mb-1">
+                        Home Logo:
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setTeamAImageFile(e.target.files[0])}
+                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 block mb-1">
+                        Away Logo:
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setTeamBImageFile(e.target.files[0])}
+                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {["news", "gossip", "products"].includes(adminTab) && (
+              <div className="mt-4">
+                <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
+                  Select 1 or more Images
+                </label>
+                <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
+                  <div className="bg-zinc-900 p-2 rounded-lg">
+                    <ImageIcon size={20} className="text-amber-500" />
+                  </div>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => setImageFiles(Array.from(e.target.files))}
+                    className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
+                  />
+                </div>
+                <p className="text-[9px] text-zinc-500 mt-2 leading-relaxed">
+                  * Select multiple files at once. The first is the Main Cover.
+                  For articles, type <b>[IMAGE1]</b>, <b>[IMAGE2]</b> in the
+                  Body Text to place the extra images inline! For products,
+                  extra images will create a gallery.
+                </p>
+              </div>
+            )}
+
+            {adminTab !== "analytics" && (
+              <button
+                type="submit"
+                disabled={uploading}
+                className="w-full bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 mt-4"
+              >
+                {uploading ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <CheckCircle2 size={20} />
+                )}
+                <span>{uploading ? "..." : "አስገባ (Publish)"}</span>
+              </button>
+            )}
+          </form>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderArticle = (item, isHero, table) => {
     const isExpanded = expandedPosts[item.id];
