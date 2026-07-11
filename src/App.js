@@ -27,7 +27,6 @@ const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // TELEGRAM BOT CREDENTIALS
-// Updated to use goleth_orders_bot for sending checkout receipts securely
 const BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU";
 const CHAT_ID = "813725953";
 
@@ -37,7 +36,6 @@ const TelegramLoginWidget = ({ onAuth }) => {
     window.onTelegramAuth = (user) => onAuth(user);
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-widget.js?22";
-    // This stays as goleth_app_bot for user authentication
     script.setAttribute("data-telegram-login", "goleth_app_bot");
     script.setAttribute("data-size", "large");
     script.setAttribute("data-onauth", "onTelegramAuth(user)");
@@ -485,6 +483,29 @@ export default function App() {
     const total = basePrice + shippingCost;
     const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
 
+    // STEP 1: HYBRID APPROACH - SAVE TO SUPABASE FIRST
+    try {
+      const orderPayload = {
+        customer_name: orderName,
+        phone: orderPhone,
+        product_name: selectedProduct.name,
+        total_price: total,
+        shipping_method: shippingName,
+        is_vip: user ? user.isVIP : false,
+      };
+
+      const { error: dbError } = await supabase
+        .from("orders")
+        .insert([orderPayload]);
+      if (dbError) {
+        console.error("Supabase Analytics Save Error:", dbError);
+        // We log the error but DO NOT block the telegram message below, to ensure you never miss a sale!
+      }
+    } catch (err) {
+      console.error("Database connection issue:", err);
+    }
+
+    // STEP 2: SEND NOTIFICATION & RECEIPT TO TELEGRAM
     const captionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${selectedProduct.name}\n👤 <b>Customer:</b> ${orderName}\n📞 <b>Phone:</b> ${orderPhone}\n🚚 <b>Shipping Method:</b> ${shippingName}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
 
     const formPayload = new FormData();
