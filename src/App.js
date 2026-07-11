@@ -27,7 +27,8 @@ const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // TELEGRAM BOT CREDENTIALS
-const BOT_TOKEN = "8719677143:AAFUxNqRg8PzU1XrsPritRHR0L6ziuD5Vqc";
+// Updated to use goleth_orders_bot for sending checkout receipts securely
+const BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU";
 const CHAT_ID = "813725953";
 
 const TelegramLoginWidget = ({ onAuth }) => {
@@ -36,6 +37,7 @@ const TelegramLoginWidget = ({ onAuth }) => {
     window.onTelegramAuth = (user) => onAuth(user);
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-widget.js?22";
+    // This stays as goleth_app_bot for user authentication
     script.setAttribute("data-telegram-login", "goleth_app_bot");
     script.setAttribute("data-size", "large");
     script.setAttribute("data-onauth", "onTelegramAuth(user)");
@@ -466,7 +468,6 @@ export default function App() {
     }
   };
 
-  // UPDATED FUNCTION WITH HTML PARSE_MODE
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderReceipt) {
