@@ -20,7 +20,6 @@ import {
   AlertCircle,
   TrendingUp,
   Package,
-  Globe,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,7 +29,8 @@ const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // TELEGRAM BOT CREDENTIALS
-const BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU";
+const ORDERS_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU"; // For your CEO notifications
+const APP_BOT_TOKEN = "8719677143:AAFUxNqRg8PzU1XrsPritRHR0L6ziuD5Vqc"; // For customer confirmations
 const CHAT_ID = "813725953";
 
 const TelegramLoginWidget = ({ onAuth }) => {
@@ -100,14 +100,6 @@ export default function App() {
   const [vipPhone, setVipPhone] = useState("");
   const [vipReceipt, setVipReceipt] = useState(null);
   const [isSubmittingVip, setIsSubmittingVip] = useState(false);
-
-  // CUSTOM SOURCING STATES
-  const [showCustomRequest, setShowCustomRequest] = useState(false);
-  const [customLink, setCustomLink] = useState("");
-  const [customDetails, setCustomDetails] = useState("");
-  const [customName, setCustomName] = useState("");
-  const [customPhone, setCustomPhone] = useState("");
-  const [isSubmittingCustom, setIsSubmittingCustom] = useState(false);
 
   // PREDICTION STATES
   const [teamAScore, setTeamAScore] = useState("");
@@ -524,29 +516,43 @@ export default function App() {
       const { error: dbError } = await supabase
         .from("orders")
         .insert([orderPayload]);
-      if (dbError) {
-        console.error("Supabase Analytics Save Error:", dbError);
-      } else {
-        fetchData();
-      }
+      if (dbError) console.error("Supabase Analytics Save Error:", dbError);
+      else fetchData();
     } catch (err) {
       console.error("Database connection issue:", err);
     }
 
-    const captionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${selectedProduct.name}\n👤 <b>Customer:</b> ${orderName}\n📞 <b>Phone:</b> ${orderPhone}\n🚚 <b>Shipping Method:</b> ${shippingName}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
-
+    // 1. Send to Admin (CEO)
+    const adminCaptionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${selectedProduct.name}\n👤 <b>Customer:</b> ${orderName}\n📞 <b>Phone:</b> ${orderPhone}\n🚚 <b>Shipping Method:</b> ${shippingName}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
     const formPayload = new FormData();
     formPayload.append("chat_id", CHAT_ID);
     formPayload.append("photo", orderReceipt);
-    formPayload.append("caption", captionText);
+    formPayload.append("caption", adminCaptionText);
     formPayload.append("parse_mode", "HTML");
 
     try {
       const response = await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+        `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendPhoto`,
         { method: "POST", body: formPayload }
       );
       if (response.ok) {
+        // 2. Automated Confirmation to Customer (Only if they are logged in)
+        if (user && user.id) {
+          try {
+            const customerMsg = `✅ <b>ትዕዛዝዎ ደርሶናል! (Order Received!)</b>\n\n📦 <b>እቃ (Product):</b> ${selectedProduct.name}\n💰 <b>የተከፈለ (Total Paid):</b> ${total} ETB\n\nየክፍያ ማረጋገጫዎን እያየን ነው፣ በቅርቡ እናሳውቅዎታለን። (We are verifying your payment and will process your order shortly.)\n\n- Goleth Team`;
+            const customerPayload = new FormData();
+            customerPayload.append("chat_id", user.id);
+            customerPayload.append("text", customerMsg);
+            customerPayload.append("parse_mode", "HTML");
+            await fetch(
+              `https://api.telegram.org/bot${APP_BOT_TOKEN}/sendMessage`,
+              { method: "POST", body: customerPayload }
+            );
+          } catch (e) {
+            console.error("Failed to send customer confirmation", e);
+          }
+        }
+
         alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)");
         setSelectedProduct(null);
         setActiveProductImageIndex(0);
@@ -596,20 +602,37 @@ export default function App() {
       console.error(err);
     }
 
-    const captionText = `👑 <b>New VIP Subscription Request!</b>\n\n👤 <b>User Name:</b> ${user.name}\n📞 <b>Phone Number:</b> ${vipPhone}\n💰 <b>Amount Due:</b> 50 ETB\n\n<i>Verify payment on your bank app, then mark this user as VIP in CEO Studio!</i>`;
-
+    // 1. Send to Admin (CEO)
+    const adminCaptionText = `👑 <b>New VIP Subscription Request!</b>\n\n👤 <b>User Name:</b> ${user.name}\n📞 <b>Phone Number:</b> ${vipPhone}\n💰 <b>Amount Due:</b> 50 ETB\n\n<i>Verify payment on your bank app, then mark this user as VIP in CEO Studio!</i>`;
     const formPayload = new FormData();
     formPayload.append("chat_id", CHAT_ID);
     formPayload.append("photo", vipReceipt);
-    formPayload.append("caption", captionText);
+    formPayload.append("caption", adminCaptionText);
     formPayload.append("parse_mode", "HTML");
 
     try {
       const response = await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+        `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendPhoto`,
         { method: "POST", body: formPayload }
       );
       if (response.ok) {
+        // 2. Automated Confirmation to Customer
+        if (user && user.id) {
+          try {
+            const customerMsg = `👑 <b>የቪአይፒ ጥያቄዎ ደርሶናል! (VIP Request Received!)</b>\n\nየ 50 ብር ክፍያዎን እንዳረጋገጥን አካውንትዎን ወደ VIP እናሳድጋለን። እናመሰግናለን! (Once we verify your 50 ETB payment, your account will be upgraded to VIP. Thank you!)\n\n- Goleth Team`;
+            const customerPayload = new FormData();
+            customerPayload.append("chat_id", user.id);
+            customerPayload.append("text", customerMsg);
+            customerPayload.append("parse_mode", "HTML");
+            await fetch(
+              `https://api.telegram.org/bot${APP_BOT_TOKEN}/sendMessage`,
+              { method: "POST", body: customerPayload }
+            );
+          } catch (e) {
+            console.error("Failed to send customer confirmation", e);
+          }
+        }
+
         alert(
           "የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል! (Receipt sent! We will activate your VIP shortly.)"
         );
@@ -623,60 +646,6 @@ export default function App() {
       alert("የመረብ ግንኙነት ችግር አጋጥሟል።");
     } finally {
       setIsSubmittingVip(false);
-    }
-  };
-
-  const handleCustomRequestSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmittingCustom(true);
-    const finalName = customName || (user ? user.name : "Guest");
-
-    try {
-      const orderPayload = {
-        customer_name: finalName,
-        phone: customPhone,
-        product_name: `CUSTOM IMPORT: ${customLink}`,
-        total_price: 0,
-        shipping_method: "US/Canada Import",
-        is_vip: user ? user.isVIP : false,
-        order_type: "custom_request",
-      };
-      const { error: dbError } = await supabase
-        .from("orders")
-        .insert([orderPayload]);
-      if (dbError) console.error("Database tracking error:", dbError);
-    } catch (err) {
-      console.error(err);
-    }
-
-    const textMessage = `✈️ <b>New US/Canada Import Request!</b>\n\n👤 <b>Customer:</b> ${finalName}\n📞 <b>Phone:</b> ${customPhone}\n🔗 <b>Link:</b> ${customLink}\n📝 <b>Details:</b> ${customDetails}\n\n<i>Review the link, calculate costs, and contact the customer with a quote!</i>`;
-
-    const formPayload = new FormData();
-    formPayload.append("chat_id", CHAT_ID);
-    formPayload.append("text", textMessage);
-    formPayload.append("parse_mode", "HTML");
-
-    try {
-      const response = await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-        { method: "POST", body: formPayload }
-      );
-      if (response.ok) {
-        alert(
-          "ጥያቄዎ ተልኳል! ዋጋውን አሰልተን በቅርቡ እናሳውቅዎታለን። (Request sent! We will contact you with a quote soon.)"
-        );
-        setShowCustomRequest(false);
-        setCustomLink("");
-        setCustomDetails("");
-        setCustomPhone("");
-        fetchData();
-      } else {
-        alert("ጥያቄው አልተላከም። እባክዎ እንደገና ይሞክሩ።");
-      }
-    } catch (error) {
-      alert("የመረብ ግንኙነት ችግር አጋጥሟል።");
-    } finally {
-      setIsSubmittingCustom(false);
     }
   };
 
@@ -819,11 +788,6 @@ export default function App() {
                             {o.order_type === "vip_signup" && (
                               <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black">
                                 VIP APPLY
-                              </span>
-                            )}
-                            {o.order_type === "custom_request" && (
-                              <span className="text-[9px] bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded font-black">
-                                IMPORT
                               </span>
                             )}
                           </div>
@@ -1522,27 +1486,6 @@ export default function App() {
         : products.filter((p) => p.category === shopCategory);
     return (
       <div className="pb-24 pt-2">
-        {/* CUSTOM US/CANADA SOURCING BANNER */}
-        <div
-          onClick={() => setShowCustomRequest(true)}
-          className="bg-gradient-to-r from-blue-900 to-zinc-900 border border-blue-500/30 rounded-2xl p-5 mb-6 shadow-lg relative overflow-hidden cursor-pointer hover:border-blue-500/60 transition-colors"
-        >
-          <div className="flex items-center justify-between relative z-10">
-            <div>
-              <h3 className="text-white font-black text-lg mb-1 flex items-center gap-2">
-                <Globe size={18} className="text-blue-400" /> 🇺🇸 / 🇨🇦 አስመጣ
-                (Import)
-              </h3>
-              <p className="text-blue-200 text-xs leading-relaxed">
-                የአማዞን (Amazon) ወይም ሌላ የውጪ ሊንክ ይላኩልን፤ ዋጋ አሰልተን እናመጣለን!
-              </p>
-            </div>
-            <div className="bg-blue-500 text-black p-3 rounded-full ml-4 shadow-[0_0_15px_rgba(59,130,246,0.4)] shrink-0">
-              <Package size={24} />
-            </div>
-          </div>
-        </div>
-
         <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
           {shopCategories.map((cat) => (
             <button
@@ -1798,100 +1741,6 @@ export default function App() {
                 className="w-full bg-[#229ED9] text-white font-black py-4 rounded-xl mt-2"
               >
                 {isSubmittingOrder ? "በመላክ ላይ..." : "ትዕዛዝ ላክ (Submit)"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CUSTOM IMPORT SOURCING MODAL */}
-      {showCustomRequest && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
-          <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-blue-900/50 p-6 relative shadow-[0_0_30px_rgba(59,130,246,0.1)]">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
-              <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <Globe size={20} className="text-blue-500" /> አስመጣ (Import)
-              </h2>
-              <button
-                onClick={() => setShowCustomRequest(false)}
-                className="bg-zinc-800 p-2 rounded-full text-zinc-400 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded text-xs text-blue-200 mb-4 leading-relaxed">
-              ከአሜሪካ ወይም ካናዳ ማስመጣት የሚፈልጉትን እቃ ሊንክ ያስገቡ። እኛ ዋጋውን፣ የጉምሩክ ቀረጥ እና
-              ትራንስፖርት አሰልተን በስልክዎ እናሳውቅዎታለን!
-            </div>
-
-            <form onSubmit={handleCustomRequestSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-zinc-400 block mb-1">
-                  የእቃው ሊንክ (Product Link)
-                </label>
-                <input
-                  required
-                  type="url"
-                  placeholder="https://amazon.com/..."
-                  value={customLink}
-                  onChange={(e) => setCustomLink(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-zinc-400 block mb-1">
-                  ተጨማሪ መረጃ (Details - Size, Color, etc.)
-                </label>
-                <textarea
-                  rows="2"
-                  placeholder="Ex: Black color, Size Medium..."
-                  value={customDetails}
-                  onChange={(e) => setCustomDetails(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none text-sm"
-                ></textarea>
-              </div>
-              {!user && (
-                <div>
-                  <label className="text-xs font-bold text-zinc-400 block mb-1">
-                    ሙሉ ስም (Full Name)
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none text-sm"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="text-xs font-bold text-zinc-400 block mb-1">
-                  ስልክ ቁጥር (Phone Number)
-                </label>
-                <input
-                  required
-                  type="tel"
-                  placeholder="09..."
-                  value={customPhone}
-                  onChange={(e) => setCustomPhone(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none text-sm"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmittingCustom}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl mt-2 flex justify-center items-center gap-2 transition-colors"
-              >
-                {isSubmittingCustom ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <Package size={18} />
-                )}
-                <span>
-                  {isSubmittingCustom ? "በመላክ ላይ..." : "ዋጋ አስላ (Request Quote)"}
-                </span>
               </button>
             </form>
           </div>
