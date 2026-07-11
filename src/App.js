@@ -68,7 +68,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showUserDashboard, setShowUserDashboard] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -83,7 +82,7 @@ export default function App() {
   const sportCategories = ["የዝውውር ዜና"];
 
   const [shopCategory, setShopCategory] = useState("ሁሉም");
-  const shopCategories = ["ሁሉም", "Men", "Women", "Kids", "Medicine", "Other"];
+  const shopCategories = ["ሁሉም", "ወንዶች", "ሴቶች", "ልጆች", "መድሃኒት", "ሌላ"];
 
   // ORDER FORM STATES
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -109,13 +108,18 @@ export default function App() {
   const [predictions, setPredictions] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
+  // ADMIN FILE UPLOAD STATES
   const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
   const [imageFile, setImageFile] = useState(null);
+  const [innerImageFile, setInnerImageFile] = useState(null);
+  const [teamAImageFile, setTeamAImageFile] = useState(null);
+  const [teamBImageFile, setTeamBImageFile] = useState(null);
 
   useEffect(() => {
     fetchData();
   }, []);
+
   useEffect(() => {
     if (user && predictions.length > 0) {
       checkExistingPrediction(predictions[0].id);
@@ -186,6 +190,7 @@ export default function App() {
       .single();
     if (data) setTotalPoints(data.total_points);
   };
+
   const checkExistingPrediction = async (matchId) => {
     const { data } = await supabase
       .from("user_predictions")
@@ -196,8 +201,15 @@ export default function App() {
     if (data) setExistingPrediction(data);
   };
 
-  const handleLogoTap = () => {
+  // HOME NAVIGATOR HELPER
+  const navigateHome = () => {
     setActiveTab("ዜና");
+    setNewsCategory("ዋና");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleLogoTap = () => {
+    navigateHome();
     const newCount = tapCount + 1;
     setTapCount(newCount);
     setTimeout(() => setTapCount(0), 3000);
@@ -209,6 +221,14 @@ export default function App() {
         alert("CEO Mode");
       }
       setTapCount(0);
+    }
+  };
+
+  const handleNavClick = (tabId) => {
+    setActiveTab(tabId);
+    if (tabId === "ዜና") {
+      setNewsCategory("ዋና");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -267,31 +287,7 @@ export default function App() {
     setUser(null);
     localStorage.removeItem("goleth_user");
     setShowProfile(false);
-    setActiveTab("ዜና");
-  };
-
-  const toggleUserVIP = async (targetUser) => {
-    const isCurrentlyVip =
-      targetUser.is_vip && new Date(targetUser.vip_until) > new Date();
-    if (isCurrentlyVip) {
-      if (window.confirm(`Remove VIP?`)) {
-        await supabase
-          .from("users")
-          .update({ is_vip: false, vip_until: null })
-          .eq("id", targetUser.id);
-        fetchCEOUsers();
-      }
-    } else {
-      if (window.confirm(`Give 30 Days VIP?`)) {
-        const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + 30);
-        await supabase
-          .from("users")
-          .update({ is_vip: true, vip_until: expirationDate.toISOString() })
-          .eq("id", targetUser.id);
-        fetchCEOUsers();
-      }
-    }
+    navigateHome();
   };
 
   const handlePredictSubmit = async (matchId) => {
@@ -323,53 +319,6 @@ export default function App() {
     }
   };
 
-  const handleResolveMatch = async (match) => {
-    const scoreA = window.prompt(`Final score for ${match.team_a_name}:`);
-    if (scoreA === null || scoreA === "") return;
-    const scoreB = window.prompt(`Final score for ${match.team_b_name}:`);
-    if (scoreB === null || scoreB === "") return;
-    const pointsToAward = window.prompt("Points to award?", "10");
-    if (pointsToAward === null || pointsToAward === "") return;
-
-    if (
-      window.confirm(
-        `Award ${pointsToAward} points to exactly ${scoreA}-${scoreB}?`
-      )
-    ) {
-      setUploading(true);
-      const { data: guesses } = await supabase
-        .from("user_predictions")
-        .select("*")
-        .eq("match_id", match.id);
-      if (guesses) {
-        const winners = guesses.filter(
-          (g) =>
-            g.team_a_score === Number(scoreA) &&
-            g.team_b_score === Number(scoreB)
-        );
-        for (let winner of winners) {
-          const { data: userRecord } = await supabase
-            .from("users")
-            .select("total_points")
-            .eq("id", winner.user_id)
-            .single();
-          if (userRecord) {
-            await supabase
-              .from("users")
-              .update({
-                total_points:
-                  (userRecord.total_points || 0) + Number(pointsToAward),
-              })
-              .eq("id", winner.user_id);
-          }
-        }
-        alert(`Awarded ${pointsToAward} points to ${winners.length} winners.`);
-      }
-      setUploading(false);
-      fetchData();
-    }
-  };
-
   const handleDelete = async (table, id) => {
     if (window.confirm("Are you sure?")) {
       await supabase.from(table).delete().eq("id", id);
@@ -394,6 +343,7 @@ export default function App() {
         teamALogo: item.team_a_logo || "",
         teamBLogo: item.team_b_logo || "",
         image_url: item.image_url || null,
+        inner_image_url: item.inner_image_url || null,
       });
     } else {
       setEditingId(null);
@@ -410,6 +360,7 @@ export default function App() {
         teamALogo: "",
         teamBLogo: "",
         image_url: null,
+        inner_image_url: null,
       });
     }
     setShowAdmin(true);
@@ -420,12 +371,21 @@ export default function App() {
     setEditingId(null);
     setFormData({});
     setImageFile(null);
+    setInnerImageFile(null);
+    setTeamAImageFile(null);
+    setTeamBImageFile(null);
   };
 
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
+
     let finalImageUrl = formData.image_url;
+    let finalInnerImageUrl = formData.inner_image_url;
+    let finalTeamALogo = formData.teamALogo;
+    let finalTeamBLogo = formData.teamBLogo;
+
+    // Upload Main Image
     if (imageFile) {
       const fileName = `${Date.now()}.${imageFile.name.split(".").pop()}`;
       const { error } = await supabase.storage
@@ -435,6 +395,44 @@ export default function App() {
         finalImageUrl = supabase.storage.from("images").getPublicUrl(fileName)
           .data.publicUrl;
     }
+    // Upload Inner Image
+    if (innerImageFile) {
+      const fileName = `${Date.now()}_inner.${innerImageFile.name
+        .split(".")
+        .pop()}`;
+      const { error } = await supabase.storage
+        .from("images")
+        .upload(fileName, innerImageFile);
+      if (!error)
+        finalInnerImageUrl = supabase.storage
+          .from("images")
+          .getPublicUrl(fileName).data.publicUrl;
+    }
+    // Upload Team A Logo
+    if (teamAImageFile) {
+      const fileName = `${Date.now()}_teamA.${teamAImageFile.name
+        .split(".")
+        .pop()}`;
+      const { error } = await supabase.storage
+        .from("images")
+        .upload(fileName, teamAImageFile);
+      if (!error)
+        finalTeamALogo = supabase.storage.from("images").getPublicUrl(fileName)
+          .data.publicUrl;
+    }
+    // Upload Team B Logo
+    if (teamBImageFile) {
+      const fileName = `${Date.now()}_teamB.${teamBImageFile.name
+        .split(".")
+        .pop()}`;
+      const { error } = await supabase.storage
+        .from("images")
+        .upload(fileName, teamBImageFile);
+      if (!error)
+        finalTeamBLogo = supabase.storage.from("images").getPublicUrl(fileName)
+          .data.publicUrl;
+    }
+
     const payload = {};
     if (["news", "gossip"].includes(adminTab)) {
       Object.assign(payload, {
@@ -444,6 +442,7 @@ export default function App() {
         body: formData.body,
         category: formData.category,
         image_url: finalImageUrl,
+        inner_image_url: finalInnerImageUrl,
       });
     } else if (adminTab === "products") {
       Object.assign(payload, {
@@ -458,8 +457,8 @@ export default function App() {
         league_name: formData.league,
         team_a_name: formData.teamA,
         team_b_name: formData.teamB,
-        team_a_logo: formData.teamALogo,
-        team_b_logo: formData.teamBLogo,
+        team_a_logo: finalTeamALogo,
+        team_b_logo: finalTeamBLogo,
       });
     }
 
@@ -478,28 +477,26 @@ export default function App() {
       setUploading(false);
       fetchData();
     } catch (err) {
-      alert("DB Error! Ensure columns exist.");
+      alert(
+        "DB Error! Please ensure you added 'inner_image_url' column to the news table in Supabase."
+      );
       setUploading(false);
     }
   };
 
-  // --- NEW: TELEGRAM BOT WEBHOOK SUBMISSION ---
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderReceipt) {
       alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ (Please upload receipt)");
       return;
     }
-
     setIsSubmittingOrder(true);
-
     let basePrice = selectedProduct.price;
     let vipText = "";
     if (user && user.isVIP) {
       basePrice = selectedProduct.price * 0.9;
       vipText = " (VIP 10% Discount Applied!)";
     }
-
     const shippingCost = orderShipping === "local" ? 150 : 500;
     const total = basePrice + shippingCost;
     const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
@@ -521,12 +518,8 @@ export default function App() {
     try {
       const response = await fetch(
         `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
-        {
-          method: "POST",
-          body: formPayload,
-        }
+        { method: "POST", body: formPayload }
       );
-
       if (response.ok) {
         alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)");
         setSelectedProduct(null);
@@ -665,6 +658,22 @@ export default function App() {
                   className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                 ></textarea>
               </div>
+
+              <div className="mt-2 p-3 bg-black border border-zinc-800 rounded-lg">
+                <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">
+                  Inner Article Image (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setInnerImageFile(e.target.files[0])}
+                  className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
+                />
+                <p className="text-[9px] text-zinc-500 mt-1">
+                  This image will appear inside the article when a user clicks
+                  'Read More'.
+                </p>
+              </div>
             </>
           )}
 
@@ -717,17 +726,17 @@ export default function App() {
                     Category
                   </label>
                   <select
-                    value={formData.category || "Other"}
+                    value={formData.category || "ሌላ"}
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value })
                     }
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   >
-                    <option value="Men">Men</option>
-                    <option value="Women">Women</option>
-                    <option value="Kids">Kids</option>
-                    <option value="Medicine">Medicine</option>
-                    <option value="Other">Other</option>
+                    <option value="ወንዶች">ወንዶች (Men)</option>
+                    <option value="ሴቶች">ሴቶች (Women)</option>
+                    <option value="ልጆች">ልጆች (Kids)</option>
+                    <option value="መድሃኒት">መድሃኒት (Medicine)</option>
+                    <option value="ሌላ">ሌላ (Other)</option>
                   </select>
                 </div>
               </div>
@@ -750,7 +759,7 @@ export default function App() {
                   className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-2">
                 <div>
                   <label className="text-[10px] text-zinc-500 uppercase block mb-1">
                     Home Team
@@ -779,31 +788,34 @@ export default function App() {
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] text-amber-500 uppercase block mb-1">
-                    Home Logo URL
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.teamALogo || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, teamALogo: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-amber-500 uppercase block mb-1">
-                    Away Logo URL
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.teamBLogo || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, teamBLogo: e.target.value })
-                    }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                  />
+              </div>
+              <div className="bg-black p-3 border border-zinc-800 rounded-lg">
+                <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
+                  Team Logos (Upload)
+                </label>
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-[10px] text-zinc-500 block">
+                      Home Logo:
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setTeamAImageFile(e.target.files[0])}
+                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-500 block">
+                      Away Logo:
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setTeamBImageFile(e.target.files[0])}
+                      className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white"
+                    />
+                  </div>
                 </div>
               </div>
             </>
@@ -811,6 +823,9 @@ export default function App() {
 
           {["news", "gossip", "products"].includes(adminTab) && (
             <div className="mt-4">
+              <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
+                Main Cover Image
+              </label>
               <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
                 <div className="bg-zinc-900 p-2 rounded-lg">
                   <ImageIcon size={20} className="text-amber-500" />
@@ -914,9 +929,28 @@ export default function App() {
               <span>{formatDate(item.created_at)}</span>
             </div>
 
-            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap mt-1">
+            {/* Clickable paragraph body to easily collapse */}
+            <p
+              className={`text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap mt-1 ${
+                isExpanded ? "cursor-pointer" : ""
+              }`}
+              onClick={() => {
+                if (isExpanded) toggleReadMore(item.id);
+              }}
+            >
               {displayBody}
             </p>
+
+            {/* Render Inner Image if expanded */}
+            {isExpanded && item.inner_image_url && (
+              <img
+                src={item.inner_image_url}
+                alt="Article Detail"
+                className="w-full my-4 rounded-lg object-cover cursor-pointer"
+                onClick={() => toggleReadMore(item.id)}
+              />
+            )}
+
             {shouldTruncate && (
               <button
                 onClick={() => toggleReadMore(item.id)}
@@ -924,7 +958,7 @@ export default function App() {
                   isBreaking ? "text-red-500" : "text-amber-500"
                 } text-xs font-bold mt-3`}
               >
-                {isExpanded ? "አሳጥር" : "ሙሉውን ያንብቡ"}
+                {isExpanded ? "አሳጥር (Show Less)" : "ሙሉውን ያንብቡ"}
               </button>
             )}
           </div>
@@ -972,9 +1006,18 @@ export default function App() {
               {item.category}
             </span>
           )}
-          <h3 className="text-white font-bold text-sm leading-tight line-clamp-3 mb-1">
+
+          <h3 className="text-white font-bold text-sm leading-tight line-clamp-2 mb-1">
             {item.title}
           </h3>
+
+          {/* New snippet text for Grid Posts */}
+          {item.body && (
+            <p className="text-zinc-400 text-[10px] leading-tight line-clamp-2 mb-1.5">
+              {item.body}
+            </p>
+          )}
+
           <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">
             {formatDate(item.created_at)}
           </span>
@@ -1183,7 +1226,6 @@ export default function App() {
                 <h3 className="text-white font-black text-xl mt-1 mb-2">
                   {item.name}
                 </h3>
-
                 {item.body && (
                   <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
                     {item.body}
@@ -1256,13 +1298,13 @@ export default function App() {
           {user ? (
             <div
               onClick={() => setShowProfile(true)}
-              className="flex items-center space-x-2 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800"
+              className="flex items-center space-x-2 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 cursor-pointer"
             >
               <span className="text-xs font-bold text-white">{user.name}</span>
             </div>
           ) : (
             <button
-              onClick={() => setActiveTab("ቪአይፒ")}
+              onClick={() => handleNavClick("ቪአይፒ")}
               className="text-xs font-bold bg-[#229ED9] px-4 py-2 rounded-full text-white"
             >
               ይግቡ
@@ -1274,7 +1316,6 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
-      {/* REPLACED: NEW TELEGRAM BOT ORDER MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/95 overflow-y-auto backdrop-blur-sm">
           <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
@@ -1289,11 +1330,25 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4">
-                <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest">
-                  Product
-                </p>
-                <p className="text-white font-bold">{selectedProduct.name}</p>
+              {/* Product Info Display (Now includes image thumbnail) */}
+              <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4 flex items-center space-x-3">
+                {selectedProduct.image_url ? (
+                  <img
+                    src={selectedProduct.image_url}
+                    className="w-16 h-16 object-cover rounded-md border border-zinc-700"
+                    alt="Product"
+                  />
+                ) : (
+                  <div className="w-16 h-16 bg-zinc-800 rounded-md border border-zinc-700 flex items-center justify-center">
+                    <ShoppingBag size={20} className="text-zinc-500" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest">
+                    Product
+                  </p>
+                  <p className="text-white font-bold">{selectedProduct.name}</p>
+                </div>
               </div>
 
               <div>
@@ -1348,11 +1403,14 @@ export default function App() {
                 </span>
               </div>
 
+              {/* Updated Payment Instructions */}
               <div className="bg-green-900/20 border-l-4 border-green-500 p-4 rounded text-sm text-zinc-300">
                 <strong className="text-white block mb-2">
                   የክፍያ መመሪያ (Payment):
                 </strong>
-                ወደሚከተሉት አካውንቶች ገንዘብ ያስገቡ:
+                እባክዎ ክፍያዎን ከታች ባሉት አካውንቶች ፈጽመው ሲጨርሱ፣{" "}
+                <b>ተመልሰው የክፍያ ደረሰኝዎን (Screenshot) እዚህ ጋር ይስቀሉ።</b>
+                <br />
                 <br />• <strong>CBE:</strong> 1000XXXXXXXXX
                 <br />• <strong>Telebirr:</strong> 09XXXXXXXX
               </div>
@@ -1415,7 +1473,7 @@ export default function App() {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleNavClick(tab.id)}
               className={`flex flex-col items-center p-2 transition-colors ${
                 isActive ? "text-amber-500" : "text-white/90 hover:text-white"
               }`}
