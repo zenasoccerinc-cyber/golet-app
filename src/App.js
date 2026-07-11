@@ -107,7 +107,7 @@ export default function App() {
   const [predictions, setPredictions] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
-  // ADMIN FILE UPLOAD STATES (UPDATED for multiple images)
+  // ADMIN FILE UPLOAD STATES
   const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
   const [imageFiles, setImageFiles] = useState([]);
@@ -378,7 +378,6 @@ export default function App() {
     let finalTeamALogo = formData.teamALogo;
     let finalTeamBLogo = formData.teamBLogo;
 
-    // Upload Multiple Main Images
     if (imageFiles && imageFiles.length > 0) {
       const uploadedUrls = [];
       for (let i = 0; i < imageFiles.length; i++) {
@@ -393,7 +392,6 @@ export default function App() {
               .publicUrl
           );
       }
-      // Combine multiple URLs with a comma
       finalImageUrl = uploadedUrls.join(",");
     }
 
@@ -529,22 +527,17 @@ export default function App() {
     return dbAuthor.toLowerCase().includes("zenasoccer") ? "Goleth" : dbAuthor;
   };
 
-  // SMART BODY RENDERER (Injects images inside text)
   const renderSmartBody = (text, imagesArray, isExpanded, articleId) => {
     if (!text) return null;
-
-    // If not expanded, strip image tags and show preview
     if (!isExpanded) {
       let truncated = text.substring(0, 150) + "...";
-      truncated = truncated.replace(/\[IMAGE\d+\]/g, ""); // Remove tags
+      truncated = truncated.replace(/\[IMAGE\d+\]/g, "");
       return (
         <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
           {truncated}
         </p>
       );
     }
-
-    // If expanded, parse the tags
     const parts = text.split(/(\[IMAGE\d+\])/g);
     return (
       <div
@@ -876,7 +869,6 @@ export default function App() {
     const shouldTruncate = item.body && item.body.length > 150;
     const isBreaking = item.category === "ሰበር ዜና";
 
-    // Parse Image Array
     const imagesArray = item.image_url ? item.image_url.split(",") : [];
     const mainImage = imagesArray[0];
 
@@ -944,7 +936,6 @@ export default function App() {
               <span>{formatDate(item.created_at)}</span>
             </div>
 
-            {/* Smart Body Rendering for Inline Images */}
             {renderSmartBody(item.body, imagesArray, isExpanded, item.id)}
 
             {shouldTruncate && (
@@ -1007,7 +998,6 @@ export default function App() {
             {item.title}
           </h3>
 
-          {/* Smart preview that ignores the [IMAGE] tags */}
           {item.body && (
             <p className="text-zinc-400 text-[10px] leading-tight line-clamp-2 mb-1.5">
               {item.body.replace(/\[IMAGE\d+\]/g, "")}
@@ -1328,24 +1318,25 @@ export default function App() {
       {showProfile && renderProfileModal()}
       {showAdmin && renderCEOStudio()}
 
-      {/* UPDATED TELEGRAM BOT ORDER MODAL WITH GALLERY AND HIGH-VISIBILITY 'X' */}
+      {/* FULLY RESTORED & FIXED CHECKOUT MODAL */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/95 overflow-y-auto backdrop-blur-sm">
-          <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
-            {/* The Highly Visible Floating X Button */}
-            <button
-              onClick={() => setSelectedProduct(null)}
-              className="absolute -top-3 -right-3 bg-zinc-800 border border-zinc-700 p-2 rounded-full text-zinc-300 hover:text-white hover:bg-zinc-700 shadow-2xl z-50"
-            >
-              <X size={20} />
-            </button>
-
-            <h2 className="text-xl font-black text-white border-b border-zinc-800 pb-3 mb-4">
-              ማዘዣ ቅጽ (Order Form)
-            </h2>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 backdrop-blur-sm px-4">
+          {/* Re-applied strict sizing and inner scrolling to fix mobile clipping */}
+          <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 shadow-2xl relative">
+            {/* IN-BOX HEADER: Guaranteed not to clip off the screen */}
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
+              <h2 className="text-xl font-black text-white">
+                ማዘዣ ቅጽ (Order Form)
+              </h2>
+              <button
+                onClick={() => setSelectedProduct(null)}
+                className="bg-zinc-800 border border-zinc-700 p-2 rounded-full text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              {/* Product Gallery Section */}
               <div className="bg-black p-3 rounded-lg border border-zinc-800 mb-4">
                 {currentOrderImages.length > 0 ? (
                   <>
