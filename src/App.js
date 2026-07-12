@@ -234,7 +234,7 @@ export default function App() {
       if (password === "admin123") {
         setIsCEO(true);
         fetchCEOUsers();
-        alert("CEO Mode");
+        alert("CEO Mode Activated");
       }
       setTapCount(0);
     }
@@ -303,6 +303,7 @@ export default function App() {
     setUser(null);
     localStorage.removeItem("goleth_user");
     setShowProfile(false);
+    setIsCEO(false); // Also clear CEO status on logout
     navigateHome();
   };
 
@@ -343,7 +344,7 @@ export default function App() {
   };
 
   const handleEdit = (item = null, table) => {
-    setAdminTab(table);
+    setAdminTab(table || "news");
     if (item) {
       setEditingId(item.id);
       setFormData({
@@ -1953,7 +1954,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="p-4 max-w-lg mx-auto pb-32">
+      <main className="p-4 max-w-lg mx-auto pb-32 relative">
         {activeTab === "ዜና" &&
           renderNewsFeed(news, newsCategory, setNewsCategory, newsCategories)}
         {activeTab === "ስፖርት" &&
@@ -1970,6 +1971,22 @@ export default function App() {
         )}
         {activeTab === "ቪአይፒ" && renderVIP()}
         {activeTab === "ሱቅ" && renderShop()}
+
+        {/* CEO FLOATING ACTION BUTTON */}
+        {isCEO && !showAdmin && (
+          <button
+            onClick={() => {
+              let defaultTab = "news";
+              if (activeTab === "ሱቅ") defaultTab = "products";
+              if (activeTab === "ሹክሹክታ") defaultTab = "gossip";
+              if (activeTab === "ቪአይፒ") defaultTab = "predictions";
+              handleEdit(null, defaultTab);
+            }}
+            className="fixed bottom-24 right-4 bg-amber-500 text-black p-4 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)] z-30 hover:bg-amber-400 transition-transform active:scale-95 flex items-center justify-center"
+          >
+            <PlusCircle size={28} />
+          </button>
+        )}
       </main>
 
       <nav className="fixed bottom-0 w-full bg-zinc-950/95 border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
