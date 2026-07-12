@@ -489,7 +489,6 @@ export default function App() {
     }
   };
 
-  // UPDATED: PRODUCT ORDER SUBMIT WITH EXPLICIT ALERTS
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderReceipt) {
@@ -666,22 +665,18 @@ export default function App() {
     }
   };
 
-  // UPDATED: SOURCING FORM SUBMIT (NOW DMs CUSTOMER AND INCLUDES THEIR NAME)
   const handleSourcingSubmit = async (e) => {
     e.preventDefault();
-
-    // Require them to be logged in so we know who is sending the link!
     if (!user) {
       alert("እባክዎ የቴሌግራም ቁልፉን ተጠቅመው ይግቡ (Please log in via Telegram first).");
       setShowSourcingModal(false);
-      handleNavClick("ቪአይፒ"); // Redirect to login
+      handleNavClick("ቪአይፒ");
       return;
     }
 
     const adminMessage = `🌍 <b>New Custom Sourcing Request</b>\n\n👤 <b>Customer:</b> ${user.name}\n🔗 <b>Link:</b> ${sourcingLink}`;
 
     try {
-      // 1. Send to Admin
       await fetch(
         `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`,
         {
@@ -695,7 +690,6 @@ export default function App() {
         }
       );
 
-      // 2. Send to Customer
       try {
         const customerMsg = `✅ <b>የግል እቃ ጥያቄዎ ደርሶናል! (Sourcing Request Received!)</b>\n\n🔗 <b>Link:</b> ${sourcingLink}\n\nዋጋውን እና መጓጓዣውን አጣርተን በቅርቡ እናሳውቅዎታለን። (We will calculate the price + shipping and get back to you shortly.)\n\n- Goleth Team`;
         await fetch(
@@ -1335,7 +1329,9 @@ export default function App() {
     </div>
   );
 
+  // UPDATED PHASE 3: VIP PAGE REDESIGN
   const renderVIP = () => {
+    // 1. Not Logged In
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -1352,18 +1348,104 @@ export default function App() {
         </div>
       );
     }
+
+    // 2. Logged In, but NOT VIP (The Sales Pitch)
     if (user && !user.isVIP && !isCEO) {
       return (
-        <div className="pb-24 flex flex-col items-center justify-center pt-10">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 w-full max-w-sm shadow-2xl text-center">
-            <Crown size={30} className="text-amber-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-black text-white mb-2">Goleth VIP</h2>
-            <p className="text-zinc-400 text-sm mb-6">
-              በወር <b>50 ብር</b> ብቻ የቪአይፒ አባል ይሁኑ እና የ10% ቅናሽ ያግኙ!
+        <div className="pb-24 flex flex-col items-center pt-6 px-2">
+          <div className="text-center mb-8">
+            <Crown
+              size={40}
+              className="text-amber-500 mx-auto mb-2 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+            />
+            <h2 className="text-3xl font-black text-white tracking-wider mb-1">
+              GOLETH VIP
+            </h2>
+            <p className="text-zinc-400 text-xs px-4">
+              Unlock exclusive matches and deep shop discounts for just{" "}
+              <b>50 ETB/month</b>.
             </p>
+          </div>
 
-            <div className="bg-black p-4 rounded-lg text-left border border-zinc-800 mb-6">
-              <p className="text-xs text-zinc-400 mb-2 font-bold uppercase tracking-wider">
+          {/* SNEAK PEEK: Match Preview */}
+          {predictions.length > 0 && (
+            <div className="w-full max-w-sm mb-6">
+              <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-2 pl-2">
+                Sneak Peek: Today's Match
+              </h3>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden flex items-center justify-between">
+                {/* Blur Overlay */}
+                <div className="absolute inset-0 backdrop-blur-[3px] bg-black/40 z-10 flex items-center justify-center">
+                  <div className="bg-amber-500 text-black px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow-xl">
+                    <Lock size={12} /> VIP ONLY PREDICTION
+                  </div>
+                </div>
+
+                <span className="text-white font-bold opacity-30">
+                  {predictions[0].team_a_name}
+                </span>
+                <span className="text-zinc-600 font-black text-xs opacity-50">
+                  VS
+                </span>
+                <span className="text-white font-bold opacity-30">
+                  {predictions[0].team_b_name}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* SNEAK PEEK: VIP Shop Items */}
+          {products.filter((p) => p.is_vip_only).length > 0 && (
+            <div className="w-full max-w-sm mb-8">
+              <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-2 pl-2">
+                Sneak Peek: VIP Shop
+              </h3>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {products
+                  .filter((p) => p.is_vip_only)
+                  .slice(0, 3)
+                  .map((p) => {
+                    const mainImg = p.image_url
+                      ? p.image_url.split(",")[0]
+                      : null;
+                    return (
+                      <div
+                        key={p.id}
+                        className="min-w-[120px] bg-zinc-900 rounded-xl border border-zinc-800 p-2 relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 backdrop-blur-[2px] bg-black/40 z-10 flex items-center justify-center">
+                          <Lock
+                            size={20}
+                            className="text-amber-500 drop-shadow-lg"
+                          />
+                        </div>
+                        {mainImg ? (
+                          <img
+                            src={mainImg}
+                            className="w-full aspect-square object-cover rounded-lg opacity-40 mb-2"
+                            alt=""
+                          />
+                        ) : (
+                          <div className="w-full aspect-square bg-black rounded-lg mb-2"></div>
+                        )}
+                        <p className="text-white font-bold text-[10px] truncate opacity-50">
+                          {p.name}
+                        </p>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* THE PAYMENT FORM */}
+          <div className="bg-black border border-amber-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(245,158,11,0.05)] text-center relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
+              Upgrade Now
+            </div>
+
+            <div className="bg-zinc-900 p-4 rounded-xl text-left border border-zinc-800 mt-4 mb-6">
+              <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
                 የክፍያ መመሪያ (Payment Info):
               </p>
               <p className="text-sm font-black text-white">
@@ -1376,10 +1458,10 @@ export default function App() {
 
             <form
               onSubmit={handleVipRegistrationSubmit}
-              className="space-y-4 text-left border-t border-zinc-800 pt-4"
+              className="space-y-4 text-left border-t border-zinc-800/50 pt-6"
             >
               <div>
-                <label className="text-xs font-bold text-zinc-400 block mb-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
                   ስልክ ቁጥር (Phone Number)
                 </label>
                 <input
@@ -1388,32 +1470,32 @@ export default function App() {
                   value={vipPhone}
                   onChange={(e) => setVipPhone(e.target.value)}
                   placeholder="09..."
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-amber-500 outline-none"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-amber-500 outline-none transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-zinc-400 block mb-1">
-                  የክፍያ ደረሰኝ (Upload Payment Receipt)
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                  የክፍያ ደረሰኝ (Upload Receipt)
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setVipReceipt(e.target.files[0])}
-                  className="w-full text-xs text-zinc-400 bg-black border border-zinc-800 p-2 rounded-lg"
+                  className="w-full text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 p-2 rounded-xl"
                   required
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSubmittingVip}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl flex justify-center items-center space-x-2 transition-colors mt-2"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors mt-2"
               >
                 {isSubmittingVip ? (
                   <Loader2 className="animate-spin" size={18} />
                 ) : (
                   <CheckCircle2 size={18} />
                 )}
-                <span>{isSubmittingVip ? "በመላክ ላይ..." : "የክፍያ ማረጋገጫ ላክ"}</span>
+                <span>{isSubmittingVip ? "በመላክ ላይ..." : "Upgrade to VIP"}</span>
               </button>
             </form>
           </div>
@@ -1421,6 +1503,7 @@ export default function App() {
       );
     }
 
+    // 3. Logged In AND is VIP (Access Granted)
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
         <div className="text-center text-amber-500 font-black mb-6 border border-amber-500/50 bg-amber-500/10 px-6 py-2 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center space-x-2">
