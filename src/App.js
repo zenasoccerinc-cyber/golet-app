@@ -176,63 +176,67 @@ export default function App() {
   };
 
   const fetchData = async () => {
-    const { data: nData } = await supabase
-      .from("news")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    const { data: gData } = await supabase
-      .from("gossip")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    const { data: pData } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-    const { data: prData = [] } = await supabase
-      .from("predictions")
-      .select("*")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-    const { data: oData } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    let lData = [];
-    if (prData && prData.length > 0) {
-      const activeMatch = prData[0];
-      const { data: matchGuesses } = await supabase
-        .from("user_predictions")
+    try {
+      const { data: nData } = await supabase
+        .from("news")
         .select("*")
-        .eq("match_id", activeMatch.id);
-      if (matchGuesses && matchGuesses.length > 0) {
-        const userIds = matchGuesses.map((g) => g.user_id);
-        const { data: guessUsers } = await supabase
-          .from("users")
-          .select("id, name, total_points")
-          .in("id", userIds);
-        if (guessUsers) {
-          lData = matchGuesses.map((guess) => {
-            const u = guessUsers.find((user) => user.id === guess.user_id);
-            return {
-              ...guess,
-              name: u ? u.name : "Unknown",
-              total_points: u ? u.total_points : 0,
-            };
-          });
-          lData.sort((a, b) => b.total_points - a.total_points);
+        .order("created_at", { ascending: false })
+        .limit(50);
+      const { data: gData } = await supabase
+        .from("gossip")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      const { data: pData } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
+      const { data: prData = [] } = await supabase
+        .from("predictions")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      const { data: oData } = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      let lData = [];
+      if (prData && prData.length > 0) {
+        const activeMatch = prData[0];
+        const { data: matchGuesses } = await supabase
+          .from("user_predictions")
+          .select("*")
+          .eq("match_id", activeMatch.id);
+        if (matchGuesses && matchGuesses.length > 0) {
+          const userIds = matchGuesses.map((g) => g.user_id);
+          const { data: guessUsers } = await supabase
+            .from("users")
+            .select("id, name, total_points")
+            .in("id", userIds);
+          if (guessUsers) {
+            lData = matchGuesses.map((guess) => {
+              const u = guessUsers.find((user) => user.id === guess.user_id);
+              return {
+                ...guess,
+                name: u ? u.name : "Unknown",
+                total_points: u ? u.total_points : 0,
+              };
+            });
+            lData.sort((a, b) => b.total_points - a.total_points);
+          }
         }
       }
-    }
 
-    if (nData) setNews(nData);
-    if (gData) setGossip(gData);
-    if (pData) setProducts(pData);
-    if (prData) setPredictions(prData);
-    if (oData) setOrders(oData);
-    setLeaderboard(lData);
+      if (nData) setNews(nData);
+      if (gData) setGossip(gData);
+      if (pData) setProducts(pData);
+      if (prData) setPredictions(prData);
+      if (oData) setOrders(oData);
+      setLeaderboard(lData);
+    } catch (e) {
+      console.error("Database fetch error:", e);
+    }
   };
 
   const fetchMyProfileData = async () => {
@@ -409,19 +413,19 @@ export default function App() {
     const payload = {};
     if (["news", "gossip"].includes(adminTab)) {
       Object.assign(payload, {
-        title: formData.title,
-        subtitle: formData.subtitle,
+        title: formData.title || "Untitled",
+        subtitle: formData.subtitle || "",
         author: formData.author || "Goleth",
-        body: formData.body,
-        category: formData.category,
+        body: formData.body || "",
+        category: formData.category || "ዋና",
         image_url: finalImageUrl,
       });
     } else if (adminTab === "products") {
       Object.assign(payload, {
-        name: formData.title,
-        body: formData.body,
-        price: Number(formData.price),
-        category: formData.category,
+        name: formData.title || "Untitled",
+        body: formData.body || "",
+        price: Number(formData.price) || 0,
+        category: formData.category || "ሌላ",
         image_url: finalImageUrl,
         is_vip_only: formData.is_vip_only || false,
         brand: formData.brand || null,
@@ -431,9 +435,9 @@ export default function App() {
       });
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
-        league_name: formData.league,
-        team_a_name: formData.teamA,
-        team_b_name: formData.teamB,
+        league_name: formData.league || "Unknown",
+        team_a_name: formData.teamA || "Team A",
+        team_b_name: formData.teamB || "Team B",
         team_a_logo: finalTeamALogo,
         team_b_logo: finalTeamBLogo,
       });
@@ -593,12 +597,14 @@ export default function App() {
           </button>
           <div className="flex items-center space-x-4">
             <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center text-2xl font-black text-black shadow-lg uppercase">
-              {user.name.charAt(0)}
+              {user?.name?.charAt(0) || "U"}
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">{user.name}</h2>
+              <h2 className="text-xl font-black text-white">
+                {user?.name || "User"}
+              </h2>
               <span className="bg-amber-500/20 text-amber-500 text-xs font-black px-3 py-1 rounded-full border border-amber-500/30 mt-1 inline-block">
-                {user.isVIP ? "VIP Active" : "Free Account"}
+                {user?.isVIP ? "VIP Active" : "Free Account"}
               </span>
             </div>
           </div>
@@ -1152,14 +1158,41 @@ export default function App() {
   };
 
   const renderArticle = (item, isHero, table) => {
+    // Titanium Armor: If an item somehow has no data, silently skip it to prevent crash
+    if (!item) return null;
+
     const isExpanded = expandedPosts[item.id];
-    const shouldTruncate = item.body && item.body.length > 150;
-    const isBreaking = item.category === "ሰበር ዜና";
+    const shouldTruncate =
+      item.body && typeof item.body === "string" && item.body.length > 150;
+    const isBreaking = (item.category || "") === "ሰበር ዜና";
     const imagesArray =
       item.image_url && typeof item.image_url === "string"
         ? item.image_url.split(",")
         : [];
     const mainImage = imagesArray[0];
+
+    // Safely format date
+    const formatDateStr = (dateString) => {
+      try {
+        return dateString
+          ? new Date(dateString).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })
+          : "Recent";
+      } catch (e) {
+        return "Recent";
+      }
+    };
+
+    // Safely format author
+    const getMaskedAuthorStr = (dbAuthor) => {
+      if (!dbAuthor) return "Goleth";
+      return String(dbAuthor).toLowerCase().includes("zenasoccer")
+        ? "Goleth"
+        : String(dbAuthor);
+    };
 
     if (isHero) {
       return (
@@ -1198,10 +1231,11 @@ export default function App() {
                 isBreaking ? "text-red-500" : "text-amber-500"
               }`}
             >
-              {item.title}
+              {item.title || "Untitled"}
             </h3>
             <div className="text-zinc-500 text-[10px] uppercase mb-2">
-              {getMaskedAuthor(item.author)} • {formatDate(item.created_at)}
+              {getMaskedAuthorStr(item.author)} •{" "}
+              {formatDateStr(item.created_at)}
             </div>
             {renderSmartBody(item.body, imagesArray, isExpanded, item.id)}
             {shouldTruncate && (
@@ -1240,10 +1274,10 @@ export default function App() {
         )}
         <div className="w-2/3 p-3 flex flex-col justify-center">
           <h3 className="text-white font-bold text-sm line-clamp-2">
-            {item.title}
+            {item.title || "Untitled"}
           </h3>
           <span className="text-zinc-500 text-[10px] mt-1">
-            {formatDate(item.created_at)}
+            {formatDateStr(item.created_at)}
           </span>
         </div>
       </div>
@@ -1256,11 +1290,15 @@ export default function App() {
     setCategoryFunc,
     categoriesList
   ) => {
+    // Protective array check
+    const safeFeedData = Array.isArray(feedData) ? feedData : [];
+
     const filteredData =
       currentCategory === "ዋና" || currentCategory === "ሁሉም"
-        ? feedData
-        : feedData.filter((n) => n.category === currentCategory);
+        ? safeFeedData
+        : safeFeedData.filter((n) => (n.category || "") === currentCategory);
     const visibleData = filteredData.slice(0, newsLimit);
+
     return (
       <div className="pb-24 pt-2">
         <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
@@ -1284,17 +1322,33 @@ export default function App() {
             </button>
           ))}
         </div>
-        <div className="space-y-2">
-          {visibleData.map((item, index) =>
-            renderArticle(item, index === 0, "news")
-          )}
-        </div>
+
+        {/* Empty State Fallback (If there are 0 news articles in the database) */}
+        {visibleData.length === 0 ? (
+          <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
+            <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
+              <AlertCircle className="text-zinc-600" size={24} />
+            </div>
+            <p className="text-zinc-400 font-bold text-sm">
+              ምንም አልተገኘም (Empty)
+            </p>
+            <p className="text-zinc-600 text-xs mt-1">
+              Check back later for updates.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {visibleData.map((item, index) =>
+              renderArticle(item, index === 0, "news")
+            )}
+          </div>
+        )}
       </div>
     );
   };
 
   const renderSmartBody = (text, imagesArray, isExpanded, articleId) => {
-    if (!text) return null;
+    if (!text || typeof text !== "string") return null;
     if (!isExpanded) {
       let truncated = text.substring(0, 150) + "...";
       truncated = truncated.replace(/\[IMAGE\d+\]/g, "");
@@ -1628,9 +1682,13 @@ export default function App() {
   };
 
   const renderShop = () => {
-    let initialFiltered = products;
+    // Array safety check
+    const safeProducts = Array.isArray(products) ? products : [];
+
+    let initialFiltered = safeProducts;
     if (shopCategory !== "ሁሉም") {
-      initialFiltered = products.filter((p) => {
+      initialFiltered = safeProducts.filter((p) => {
+        if (!p) return false;
         const cat = (p.category || "").toLowerCase();
         if (shopCategory === "ወንዶች")
           return cat.includes("ወንድ") || cat === "men" || cat === "men's";
@@ -1652,6 +1710,7 @@ export default function App() {
       shopSubCategory === "ሁሉም"
         ? initialFiltered
         : initialFiltered.filter((p) => {
+            if (!p) return false;
             const bodyText = (p.body || "").toLowerCase();
             const nameText = (p.name || "").toLowerCase();
             if (shopSubCategory === "ልብሶች")
@@ -1727,7 +1786,9 @@ export default function App() {
 
         {finalFiltered.length === 0 && (
           <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed">
-            <ShoppingBag size={32} className="text-zinc-600 mb-3" />
+            <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
+              <ShoppingBag size={24} className="text-zinc-600" />
+            </div>
             <p className="text-zinc-400 font-bold text-sm">ምንም እቃ አልተገኘም</p>
             <p className="text-zinc-600 text-xs mt-1">
               No products found in this category.
@@ -1737,6 +1798,7 @@ export default function App() {
 
         <div className="grid grid-cols-2 gap-3">
           {finalFiltered.map((item) => {
+            if (!item) return null;
             const productImages =
               item.image_url && typeof item.image_url === "string"
                 ? item.image_url.split(",")
@@ -1783,7 +1845,7 @@ export default function App() {
                     )}
                   </div>
                   <h3 className="text-white font-black text-sm leading-tight line-clamp-2 min-h-[35px]">
-                    {item.name}
+                    {item.name || "Product"}
                   </h3>
                 </div>
                 <div className="bg-black/20 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30">
@@ -1817,15 +1879,15 @@ export default function App() {
                     {user && user.isVIP ? (
                       <>
                         <span className="text-amber-500 font-black text-sm">
-                          {Math.round(item.price * 0.9)} ብር
+                          {Math.round((item.price || 0) * 0.9)} ብር
                         </span>
                         <span className="text-zinc-600 line-through text-[9px] font-bold">
-                          {item.price}
+                          {item.price || 0}
                         </span>
                       </>
                     ) : (
                       <span className="text-amber-500 font-black text-sm">
-                        {item.price} ብር
+                        {item.price || 0} ብር
                       </span>
                     )}
                   </div>
@@ -1901,9 +1963,9 @@ export default function App() {
               className="bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold flex items-center gap-2"
             >
               <div className="w-5 h-5 bg-amber-500 rounded-full text-black flex items-center justify-center font-black uppercase">
-                {user.name.charAt(0)}
+                {user?.name?.charAt(0) || "U"}
               </div>
-              {user.name}
+              {user?.name || "User"}
             </div>
           ) : (
             <button
@@ -2175,7 +2237,21 @@ export default function App() {
           )}
         {activeTab === "ሹክሹክታ" && (
           <div className="space-y-4">
-            {gossip.map((g, index) => renderArticle(g, index === 0, "gossip"))}
+            {gossip && gossip.length > 0 ? (
+              gossip.map((g, index) => renderArticle(g, index === 0, "gossip"))
+            ) : (
+              <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
+                <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
+                  <Flame className="text-zinc-600" size={24} />
+                </div>
+                <p className="text-zinc-400 font-bold text-sm">
+                  ምንም አልተገኘም (Empty)
+                </p>
+                <p className="text-zinc-600 text-xs mt-1">
+                  Check back later for updates.
+                </p>
+              </div>
+            )}
           </div>
         )}
         {activeTab === "ቪአይፒ" && renderVIP()}
