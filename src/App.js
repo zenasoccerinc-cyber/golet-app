@@ -20,6 +20,11 @@ import {
   AlertCircle,
   TrendingUp,
   Package,
+  Clock,
+  Truck,
+  Globe2,
+  MapPin,
+  AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -91,12 +96,15 @@ export default function App() {
   const [showSourcingModal, setShowSourcingModal] = useState(false);
   const [sourcingLink, setSourcingLink] = useState("");
 
-  // ORDER FORM STATES
+  // GLOBAL CHECKOUT STATES
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
+  const [orderDestination, setOrderDestination] = useState("local");
   const [orderName, setOrderName] = useState("");
+  const [countryCode, setCountryCode] = useState("+251");
   const [orderPhone, setOrderPhone] = useState("");
-  const [orderShipping, setOrderShipping] = useState("local");
+  const [receiverPhone, setReceiverPhone] = useState("");
+  const [orderShipping, setOrderShipping] = useState("local_delivery");
   const [orderReceipt, setOrderReceipt] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
@@ -113,6 +121,10 @@ export default function App() {
 
   const [leaderboard, setLeaderboard] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
+
+  // DASHBOARD STATES
+  const [myOrders, setMyOrders] = useState([]);
+  const [userJoinedDate, setUserJoinedDate] = useState(null);
 
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
@@ -138,6 +150,12 @@ export default function App() {
       fetchUserPoints();
     }
   }, [user, predictions]);
+
+  useEffect(() => {
+    if (showProfile && user) {
+      fetchMyProfileData();
+    }
+  }, [showProfile, user]);
 
   const fetchData = async () => {
     const { data: nData } = await supabase
@@ -197,6 +215,22 @@ export default function App() {
     if (prData) setPredictions(prData);
     if (oData) setOrders(oData);
     setLeaderboard(lData);
+  };
+
+  const fetchMyProfileData = async () => {
+    const { data: myOrderData } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    if (myOrderData) setMyOrders(myOrderData);
+
+    const { data: uData } = await supabase
+      .from("users")
+      .select("created_at")
+      .eq("id", user.id)
+      .single();
+    if (uData) setUserJoinedDate(uData.created_at);
   };
 
   const fetchUserPoints = async () => {
@@ -303,7 +337,7 @@ export default function App() {
     setUser(null);
     localStorage.removeItem("goleth_user");
     setShowProfile(false);
-    setIsCEO(false); // Also clear CEO status on logout
+    setIsCEO(false);
     navigateHome();
   };
 
@@ -341,6 +375,14 @@ export default function App() {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
     }
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    await supabase
+      .from("orders")
+      .update({ status: newStatus })
+      .eq("id", orderId);
+    fetchData();
   };
 
   const handleEdit = (item = null, table) => {
@@ -492,30 +534,74 @@ export default function App() {
 
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
+
+    if (orderDestination === "local") {
+      if (
+        orderPhone.length !== 10 ||
+        (!orderPhone.startsWith("09") && !orderPhone.startsWith("07"))
+      ) {
+        alert("Local phone must be 10 digits and start with 09 or 07.");
+        return;
+      }
+    } else {
+      if (orderPhone.length < 7) {
+        alert("Please enter a valid international phone number.");
+        return;
+      }
+      if (
+        receiverPhone.length !== 10 ||
+        (!receiverPhone.startsWith("09") && !receiverPhone.startsWith("07"))
+      ) {
+        alert(
+          "The receiver's Ethiopian phone number must be 10 digits and start with 09 or 07."
+        );
+        return;
+      }
+    }
+
     if (!orderReceipt) {
       alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ (Please upload receipt)");
       return;
     }
+
     setIsSubmittingOrder(true);
     let basePrice = selectedProduct.price;
     let vipText = "";
-    if (user && user.isVIP) {
+    let isVipUser = user && user.isVIP;
+
+    if (isVipUser) {
       basePrice = selectedProduct.price * 0.9;
       vipText = " (VIP 10% Discount Applied!)";
     }
-    const shippingCost = orderShipping === "local" ? 150 : 500;
+
+    let shippingCost = orderShipping === "local_delivery" ? 150 : 500;
+
+    if (orderDestination === "international") {
+      // Waive the service fee for VIPs
+      shippingCost = isVipUser ? 0 : 750; // Example 750 ETB handling fee for non-VIPs
+      if (isVipUser) {
+        vipText += " (International Service Fee Waived!)";
+      }
+    }
+
     const total = basePrice + shippingCost;
-    const shippingName = orderShipping === "local" ? "Intra-City" : "Traveler";
+    const finalPhone =
+      orderDestination === "local"
+        ? orderPhone
+        : `${countryCode} ${orderPhone} (Receiver: ${receiverPhone})`;
 
     try {
       const orderPayload = {
+        user_id: user ? user.id : null,
         customer_name: orderName,
-        phone: orderPhone,
+        phone: finalPhone,
         product_name: selectedProduct.name,
         total_price: total,
-        shipping_method: shippingName,
-        is_vip: user ? user.isVIP : false,
+        shipping_method:
+          orderDestination === "local" ? orderShipping : "Diaspora Delivery",
+        is_vip: isVipUser,
         order_type: "product",
+        status: "Pending",
       };
 
       const { error: dbError } = await supabase
@@ -527,8 +613,9 @@ export default function App() {
       console.error("Database connection issue:", err);
     }
 
-    // 1. Send to Admin (CEO)
-    const adminCaptionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${selectedProduct.name}\n👤 <b>Customer:</b> ${orderName}\n📞 <b>Phone:</b> ${orderPhone}\n🚚 <b>Shipping Method:</b> ${shippingName}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
+    const adminCaptionText = `🚨 <b>New Order Received!</b>\n\n📦 <b>Product:</b> ${
+      selectedProduct.name
+    }\n👤 <b>Customer:</b> ${orderName}\n🌍 <b>Type:</b> ${orderDestination.toUpperCase()}\n📞 <b>Phone:</b> ${finalPhone}\n🚚 <b>Shipping:</b> ${orderShipping}\n💰 <b>Total Paid:</b> ${total} ETB${vipText}`;
     const formPayload = new FormData();
     formPayload.append("chat_id", CHAT_ID);
     formPayload.append("photo", orderReceipt);
@@ -541,10 +628,9 @@ export default function App() {
         { method: "POST", body: formPayload }
       );
       if (response.ok) {
-        // 2. Automated Confirmation to Customer
         if (user && user.id) {
           try {
-            const customerMsg = `✅ <b>ትዕዛዝዎ ደርሶናል! (Order Received!)</b>\n\n📦 <b>እቃ (Product):</b> ${selectedProduct.name}\n💰 <b>የተከፈለ (Total Paid):</b> ${total} ETB\n\nየክፍያ ማረጋገጫዎን እያየን ነው፣ በቅርቡ እናሳውቅዎታለን። (We are verifying your payment and will process your order shortly.)\n\n- Goleth Team`;
+            const customerMsg = `✅ <b>ትዕዛዝዎ ደርሶናል! (Order Received!)</b>\n\n📦 <b>እቃ (Product):</b> ${selectedProduct.name}\n💰 <b>የተከፈለ (Total Paid):</b> ${total} ETB\n\nWe are verifying your payment and processing your order. You can track this order in your My Account Dashboard!\n\n- Goleth Team`;
             const customerPayload = {
               chat_id: user.id,
               text: customerMsg,
@@ -564,13 +650,13 @@ export default function App() {
         }
 
         alert(
-          "ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)\n\nማሳሰቢያ፡ ማረጋገጫ መልእክት ካልደረስዎ፣ እባክዎ ቴሌግራም ላይ @goleth_app_bot ፈልገው 'START' ይበሉ። (If you didn't get a receipt, press START on @goleth_app_bot)."
+          "ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order submitted successfully!)\n\nYou can now track your order status in your Profile Dashboard."
         );
         setSelectedProduct(null);
         setActiveProductImageIndex(0);
         setOrderName("");
         setOrderPhone("");
-        setOrderShipping("local");
+        setReceiverPhone("");
         setOrderReceipt(null);
       } else {
         const errorData = await response.json();
@@ -597,6 +683,7 @@ export default function App() {
 
     try {
       const vipPayload = {
+        user_id: user ? user.id : null,
         customer_name: user.name,
         phone: vipPhone,
         product_name: "Goleth VIP 1-Month Membership",
@@ -604,8 +691,8 @@ export default function App() {
         shipping_method: "Digital Delivery",
         is_vip: false,
         order_type: "vip_signup",
+        status: "Pending",
       };
-
       const { error: dbError } = await supabase
         .from("orders")
         .insert([vipPayload]);
@@ -614,7 +701,6 @@ export default function App() {
       console.error(err);
     }
 
-    // 1. Send to Admin (CEO)
     const adminCaptionText = `👑 <b>New VIP Subscription Request!</b>\n\n👤 <b>User Name:</b> ${user.name}\n📞 <b>Phone Number:</b> ${vipPhone}\n💰 <b>Amount Due:</b> 50 ETB\n\n<i>Verify payment on your bank app, then mark this user as VIP in CEO Studio!</i>`;
     const formPayload = new FormData();
     formPayload.append("chat_id", CHAT_ID);
@@ -628,7 +714,6 @@ export default function App() {
         { method: "POST", body: formPayload }
       );
       if (response.ok) {
-        // 2. Automated Confirmation to Customer
         if (user && user.id) {
           try {
             const customerMsg = `👑 <b>የቪአይፒ ጥያቄዎ ደርሶናል! (VIP Request Received!)</b>\n\nየ 50 ብር ክፍያዎን እንዳረጋገጥን አካውንትዎን ወደ VIP እናሳድጋለን። እናመሰግናለን! (Once we verify your payment, your account will be upgraded.)\n\n- Goleth Team`;
@@ -649,10 +734,7 @@ export default function App() {
             console.error("Failed to send customer confirmation", e);
           }
         }
-
-        alert(
-          "የክፍያ ማረጋገጫዎ ተልኳል! ማሳሰቢያ፡ ማረጋገጫ መልእክት ካልደረስዎ፣ እባክዎ ቴሌግራም ላይ @goleth_app_bot ፈልገው 'START' ይበሉ።"
-        );
+        alert("የክፍያ ማረጋገጫዎ ተልኳል! (Request sent!)");
         setVipPhone("");
         setVipReceipt(null);
         fetchData();
@@ -674,9 +756,7 @@ export default function App() {
       handleNavClick("ቪአይፒ");
       return;
     }
-
     const adminMessage = `🌍 <b>New Custom Sourcing Request</b>\n\n👤 <b>Customer:</b> ${user.name}\n🔗 <b>Link:</b> ${sourcingLink}`;
-
     try {
       await fetch(
         `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`,
@@ -690,9 +770,8 @@ export default function App() {
           }),
         }
       );
-
       try {
-        const customerMsg = `✅ <b>የግል እቃ ጥያቄዎ ደርሶናል! (Sourcing Request Received!)</b>\n\n🔗 <b>Link:</b> ${sourcingLink}\n\nዋጋውን እና መጓጓዣውን አጣርተን በቅርቡ እናሳውቅዎታለን። (We will calculate the price + shipping and get back to you shortly.)\n\n- Goleth Team`;
+        const customerMsg = `✅ <b>የግል እቃ ጥያቄዎ ደርሶናል! (Sourcing Request Received!)</b>\n\n🔗 <b>Link:</b> ${sourcingLink}\n\nዋጋውን እና መጓጓዣውን አጣርተን በቅርቡ እናሳውቅዎታለን።\n\n- Goleth Team`;
         await fetch(
           `https://api.telegram.org/bot${APP_BOT_TOKEN}/sendMessage`,
           {
@@ -708,14 +787,10 @@ export default function App() {
       } catch (err) {
         console.error("Could not send customer DM", err);
       }
-
       setShowSourcingModal(false);
       setSourcingLink("");
-      alert(
-        "ጥያቄዎ ተልኳል! (Request sent!)\n\nማሳሰቢያ፡ መልእክት ካልደረስዎ፣ እባክዎ ቴሌግራም ላይ @goleth_app_bot ፈልገው 'START' ይበሉ። (If you didn't get a DM, please press START on @goleth_app_bot)."
-      );
+      alert("ጥያቄዎ ተልኳል! (Request sent!)");
     } catch (error) {
-      console.error("Error sending link:", error);
       alert("There was an error sending your link. Please try again.");
     }
   };
@@ -728,9 +803,23 @@ export default function App() {
       month: "short",
       day: "numeric",
     });
+
   const getMaskedAuthor = (dbAuthor) => {
     if (!dbAuthor) return "Goleth";
     return dbAuthor.toLowerCase().includes("zenasoccer") ? "Goleth" : dbAuthor;
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "Processing":
+        return "text-orange-500 bg-orange-500/10 border-orange-500/30";
+      case "Out for Delivery":
+        return "text-blue-500 bg-blue-500/10 border-blue-500/30";
+      case "Completed":
+        return "text-green-500 bg-green-500/10 border-green-500/30";
+      default:
+        return "text-amber-500 bg-amber-500/10 border-amber-500/30"; // Pending
+    }
   };
 
   const renderSmartBody = (text, imagesArray, isExpanded, articleId) => {
@@ -754,16 +843,15 @@ export default function App() {
           const match = part.match(/\[IMAGE(\d+)\]/);
           if (match) {
             const imgIndex = parseInt(match[1], 10);
-            if (imagesArray[imgIndex]) {
+            if (imagesArray[imgIndex])
               return (
                 <img
                   key={i}
                   src={imagesArray[imgIndex]}
-                  alt="Article Content"
+                  alt=""
                   className="w-full my-4 rounded-lg object-cover"
                 />
               );
-            }
             return null;
           }
           return <span key={i}>{part}</span>;
@@ -838,9 +926,9 @@ export default function App() {
 
                 <div className="mt-4">
                   <h3 className="text-sm font-bold text-zinc-400 mb-2 uppercase tracking-widest">
-                    Recent Transactions
+                    Live Order Pipeline
                   </h3>
-                  <div className="bg-black border border-zinc-800 rounded-xl max-h-60 overflow-y-auto p-2 space-y-2">
+                  <div className="bg-black border border-zinc-800 rounded-xl max-h-[60vh] overflow-y-auto p-2 space-y-2">
                     {orders.length === 0 && (
                       <p className="text-zinc-600 text-xs text-center py-4">
                         No orders yet.
@@ -849,33 +937,67 @@ export default function App() {
                     {orders.map((o) => (
                       <div
                         key={o.id}
-                        className="bg-zinc-900 p-3 rounded-lg border border-zinc-800/50"
+                        className="bg-zinc-900 p-4 rounded-lg border border-zinc-800/50"
                       >
-                        <div className="flex justify-between items-center mb-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-white font-bold text-sm">
-                              {o.customer_name}
-                            </span>
-                            {o.order_type === "vip_signup" && (
-                              <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black">
-                                VIP APPLY
-                              </span>
-                            )}
-                          </div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-white font-bold text-sm">
+                            {o.customer_name}
+                          </span>
                           <span className="text-amber-500 font-black text-sm">
                             {o.total_price} ETB
                           </span>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400 text-xs truncate max-w-[200px]">
-                            {o.product_name}
-                          </span>
-                          <span className="text-zinc-500 text-[10px] whitespace-nowrap">
-                            {formatDate(o.created_at)}
-                          </span>
+                        <div className="text-zinc-400 text-xs mb-1 truncate">
+                          {o.product_name}
                         </div>
-                        <div className="text-blue-400 text-xs mt-1">
+                        <div className="text-blue-400 text-xs mb-3">
                           {o.phone}
+                        </div>
+
+                        <div className="flex justify-between items-center bg-black p-2 rounded-lg border border-zinc-800">
+                          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
+                            Update Status:
+                          </span>
+                          <select
+                            value={o.status || "Pending"}
+                            onChange={(e) =>
+                              handleUpdateOrderStatus(o.id, e.target.value)
+                            }
+                            className={`text-xs font-bold bg-transparent outline-none cursor-pointer ${
+                              o.status === "Completed"
+                                ? "text-green-500"
+                                : o.status === "Out for Delivery"
+                                ? "text-blue-500"
+                                : o.status === "Processing"
+                                ? "text-orange-500"
+                                : "text-amber-500"
+                            }`}
+                          >
+                            <option
+                              value="Pending"
+                              className="bg-zinc-900 text-amber-500"
+                            >
+                              Pending
+                            </option>
+                            <option
+                              value="Processing"
+                              className="bg-zinc-900 text-orange-500"
+                            >
+                              Processing
+                            </option>
+                            <option
+                              value="Out for Delivery"
+                              className="bg-zinc-900 text-blue-500"
+                            >
+                              Out for Delivery
+                            </option>
+                            <option
+                              value="Completed"
+                              className="bg-zinc-900 text-green-500"
+                            >
+                              Completed
+                            </option>
+                          </select>
                         </div>
                       </div>
                     ))}
@@ -1302,37 +1424,148 @@ export default function App() {
     );
   };
 
-  const renderProfileModal = () => (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80">
-      <div className="bg-zinc-900 w-full max-w-sm rounded-2xl p-6 relative border border-zinc-800">
-        <button
-          onClick={() => setShowProfile(false)}
-          className="absolute top-4 right-4 text-zinc-500"
-        >
-          <X size={20} />
-        </button>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-xl font-black text-black mx-auto mb-2 uppercase">
-            {user.name.charAt(0)}
+  const renderProfileDashboard = () => (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/90 p-0 sm:p-4 transition-all duration-300">
+      <div className="bg-zinc-950 w-full sm:max-w-2xl h-[90vh] sm:h-[80vh] rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-800 flex flex-col relative overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+        {/* Header Area */}
+        <div className="bg-zinc-900 border-b border-zinc-800 p-6 relative">
+          <button
+            onClick={() => setShowProfile(false)}
+            className="absolute top-6 right-6 text-zinc-500 hover:text-white bg-black p-2 rounded-full border border-zinc-800"
+          >
+            <X size={20} />
+          </button>
+          <div className="flex items-center space-x-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-lg uppercase">
+              {user.name.charAt(0)}
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white">{user.name}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                {user.isVIP ? (
+                  <span className="bg-amber-500/20 text-amber-500 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1 border border-amber-500/30">
+                    <Crown size={12} /> VIP Active
+                  </span>
+                ) : (
+                  <span className="bg-zinc-800 text-zinc-400 text-xs font-bold px-3 py-1 rounded-full border border-zinc-700">
+                    Free Account
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          <h2 className="text-white font-bold">{user.name}</h2>
-          <span className="text-xs text-amber-500 font-bold">
-            {user.isVIP ? "VIP Member" : "Free Account"}
-          </span>
+
+          <div className="flex justify-between items-center mt-6">
+            <div className="text-xs text-zinc-500">
+              Member since:{" "}
+              <span className="text-zinc-300 font-bold">
+                {userJoinedDate ? formatDate(userJoinedDate) : "Recently"}
+              </span>
+            </div>
+            {user.isVIP && user.vipUntil && (
+              <div className="text-xs font-bold text-amber-500 flex items-center gap-1">
+                <Clock size={14} /> Renews: {formatDate(user.vipUntil)}
+              </div>
+            )}
+          </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="w-full bg-red-900/20 text-red-500 py-3 rounded-xl font-bold"
-        >
-          ውጣ
-        </button>
+
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-black">
+          {/* VIP CTA if not VIP */}
+          {!user.isVIP && (
+            <div className="bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/30 rounded-2xl p-5 flex justify-between items-center">
+              <div>
+                <h3 className="text-amber-500 font-black mb-1 flex items-center gap-2">
+                  <Crown size={18} /> Upgrade to VIP
+                </h3>
+                <p className="text-zinc-400 text-xs">
+                  Unlock 10% shop discounts, waived international fees, and
+                  predictions!
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProfile(false);
+                  handleNavClick("ቪአይፒ");
+                }}
+                className="bg-amber-500 text-black text-xs font-black px-4 py-2 rounded-xl"
+              >
+                Upgrade
+              </button>
+            </div>
+          )}
+
+          {/* Order History */}
+          <div>
+            <h3 className="text-white font-black text-lg mb-4 flex items-center gap-2">
+              <Package size={20} className="text-blue-500" /> My Order Tracking
+            </h3>
+
+            {myOrders.length === 0 ? (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
+                <ShoppingBag size={32} className="text-zinc-700 mx-auto mb-3" />
+                <p className="text-zinc-500 text-sm font-bold">
+                  You haven't placed any orders yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {myOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start sm:items-center mb-1">
+                        <span className="text-white font-bold text-sm sm:text-base">
+                          {order.product_name}
+                        </span>
+                        <span className="text-amber-500 font-black text-sm whitespace-nowrap ml-4">
+                          {order.total_price} ETB
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">
+                        {formatDate(order.created_at)} • {order.shipping_method}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-black px-2 py-1 rounded border uppercase tracking-wider flex items-center gap-1 ${getStatusColor(
+                            order.status || "Pending"
+                          )}`}
+                        >
+                          {order.status === "Completed" ? (
+                            <CheckCircle2 size={12} />
+                          ) : order.status === "Out for Delivery" ? (
+                            <Truck size={12} />
+                          ) : (
+                            <Clock size={12} />
+                          )}
+                          {order.status || "Pending"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="bg-zinc-900 border-t border-zinc-800 p-4">
+          <button
+            onClick={handleLogout}
+            className="w-full bg-red-900/10 border border-red-900/30 hover:bg-red-900/20 text-red-500 py-4 rounded-xl font-black flex items-center justify-center gap-2 transition-colors"
+          >
+            <LogOut size={18} /> Sign Out
+          </button>
+        </div>
       </div>
     </div>
   );
 
-  // UPDATED PHASE 3: VIP PAGE REDESIGN
   const renderVIP = () => {
-    // 1. Not Logged In
     if (!user && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center justify-center pt-10">
@@ -1350,7 +1583,6 @@ export default function App() {
       );
     }
 
-    // 2. Logged In, but NOT VIP (The Sales Pitch)
     if (user && !user.isVIP && !isCEO) {
       return (
         <div className="pb-24 flex flex-col items-center pt-6 px-2">
@@ -1363,25 +1595,22 @@ export default function App() {
               GOLETH VIP
             </h2>
             <p className="text-zinc-400 text-xs px-4">
-              Unlock exclusive matches and deep shop discounts for just{" "}
-              <b>50 ETB/month</b>.
+              Unlock exclusive matches, local discounts, and{" "}
+              <b>$0 International Fees</b> for just <b>50 ETB/month</b>.
             </p>
           </div>
 
-          {/* SNEAK PEEK: Match Preview */}
           {predictions.length > 0 && (
             <div className="w-full max-w-sm mb-6">
               <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-2 pl-2">
                 Sneak Peek: Today's Match
               </h3>
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden flex items-center justify-between">
-                {/* Blur Overlay */}
                 <div className="absolute inset-0 backdrop-blur-[3px] bg-black/40 z-10 flex items-center justify-center">
                   <div className="bg-amber-500 text-black px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow-xl">
                     <Lock size={12} /> VIP ONLY PREDICTION
                   </div>
                 </div>
-
                 <span className="text-white font-bold opacity-30">
                   {predictions[0].team_a_name}
                 </span>
@@ -1395,7 +1624,6 @@ export default function App() {
             </div>
           )}
 
-          {/* SNEAK PEEK: VIP Shop Items */}
           {products.filter((p) => p.is_vip_only).length > 0 && (
             <div className="w-full max-w-sm mb-8">
               <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-2 pl-2">
@@ -1439,12 +1667,10 @@ export default function App() {
             </div>
           )}
 
-          {/* THE PAYMENT FORM */}
           <div className="bg-black border border-amber-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(245,158,11,0.05)] text-center relative">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
               Upgrade Now
             </div>
-
             <div className="bg-zinc-900 p-4 rounded-xl text-left border border-zinc-800 mt-4 mb-6">
               <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
                 የክፍያ መመሪያ (Payment Info):
@@ -1456,7 +1682,6 @@ export default function App() {
                 • Telebirr: <span className="text-amber-500">09XXXXXXXX</span>
               </p>
             </div>
-
             <form
               onSubmit={handleVipRegistrationSubmit}
               className="space-y-4 text-left border-t border-zinc-800/50 pt-6"
@@ -1504,7 +1729,6 @@ export default function App() {
       );
     }
 
-    // 3. Logged In AND is VIP (Access Granted)
     return (
       <div className="pb-24 pt-6 flex flex-col items-center">
         <div className="text-center text-amber-500 font-black mb-6 border border-amber-500/50 bg-amber-500/10 px-6 py-2 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center space-x-2">
@@ -1529,7 +1753,6 @@ export default function App() {
               <div className="text-center text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-6">
                 {predictions[0].league_name}
               </div>
-
               <div className="flex justify-between items-center relative z-10">
                 <div className="flex flex-col items-center w-1/3">
                   <div className="w-16 h-16 bg-black border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
@@ -1662,13 +1885,12 @@ export default function App() {
           ))}
         </div>
 
-        {/* CUSTOM SOURCING BUTTON */}
         <button
           onClick={() => setShowSourcingModal(true)}
           className="w-full max-w-md mx-auto mb-6 flex items-center justify-center space-x-2 bg-amber-500/10 border border-amber-500/50 hover:bg-amber-500/20 text-amber-500 font-bold py-3 px-4 rounded-xl transition-colors"
         >
           <PlusCircle size={18} />
-          <span>የግል እቃ ይዘዙ (Custom US/Canada Order)</span>
+          <span>የግል እቃ ይዘዙ (Custom Sourcing Request)</span>
         </button>
 
         <div className="flex flex-col space-y-6">
@@ -1764,6 +1986,7 @@ export default function App() {
                         onClick={() => {
                           setSelectedProduct(item);
                           setActiveProductImageIndex(0);
+                          setOrderDestination("local");
                         }}
                         className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl hover:bg-amber-400"
                       >
@@ -1800,8 +2023,29 @@ export default function App() {
       ? selectedProduct.image_url.split(",")
       : [];
 
+  // VIP Expiry check for warning banner
+  let vipDaysLeft = 0;
+  let showVipWarning = false;
+  if (user && user.isVIP && user.vipUntil) {
+    vipDaysLeft = Math.ceil(
+      (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
+    );
+    if (vipDaysLeft <= 7 && vipDaysLeft > 0) showVipWarning = true;
+  }
+
   return (
     <div className="fixed inset-0 overflow-y-auto bg-black font-sans text-white">
+      {/* WARNING BANNER */}
+      {showVipWarning && (
+        <div
+          className="bg-amber-500 text-black px-4 py-2 text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+          onClick={() => handleNavClick("ቪአይፒ")}
+        >
+          <AlertTriangle size={16} /> Your VIP expires in {vipDaysLeft} days!
+          Renew now to keep benefits.
+        </div>
+      )}
+
       <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center">
         <div
           className="flex items-center space-x-3 cursor-pointer"
@@ -1815,8 +2059,11 @@ export default function App() {
           {user ? (
             <div
               onClick={() => setShowProfile(true)}
-              className="bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold"
+              className="bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold flex items-center gap-2"
             >
+              <div className="w-5 h-5 bg-amber-500 rounded-full text-black flex items-center justify-center font-black uppercase">
+                {user.name.charAt(0)}
+              </div>
               {user.name}
             </div>
           ) : (
@@ -1830,7 +2077,7 @@ export default function App() {
         </div>
       </header>
 
-      {showProfile && renderProfileModal()}
+      {showProfile && renderProfileDashboard()}
       {showAdmin && renderCEOStudio()}
 
       {/* SOURCING CHECKOUT MODAL */}
@@ -1870,13 +2117,13 @@ export default function App() {
         </div>
       )}
 
-      {/* SHOPPING CHECKOUT MODAL */}
+      {/* GLOBAL CHECKOUT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
-              <h2 className="text-xl font-black text-white">
-                ማዘዣ ቅጽ (Order Form)
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <ShoppingBag size={20} /> Order Details
               </h2>
               <button
                 onClick={() => setSelectedProduct(null)}
@@ -1885,69 +2132,196 @@ export default function App() {
                 <X size={20} />
               </button>
             </div>
+
+            <div className="flex space-x-2 mb-6 bg-black p-1 rounded-xl border border-zinc-800">
+              <button
+                onClick={() => setOrderDestination("local")}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                  orderDestination === "local"
+                    ? "bg-amber-500 text-black"
+                    : "text-zinc-500"
+                }`}
+              >
+                <MapPin size={14} /> Local Order
+              </button>
+              <button
+                onClick={() => setOrderDestination("international")}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                  orderDestination === "international"
+                    ? "bg-amber-500 text-black"
+                    : "text-zinc-500"
+                }`}
+              >
+                <Globe2 size={14} /> Diaspora Gift
+              </button>
+            </div>
+
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
               {currentOrderImages.length > 0 && (
                 <img
                   src={currentOrderImages[activeProductImageIndex]}
-                  className="w-full h-48 object-cover rounded-md border border-zinc-700"
+                  className="w-full h-32 object-cover rounded-xl border border-zinc-800 mb-2"
                   alt=""
                 />
               )}
+
+              {/* Conditional VIP Upsell Banner */}
+              {!user?.isVIP && (
+                <div className="bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/30 p-3 rounded-xl mb-4">
+                  <p className="text-amber-500 text-[10px] font-black uppercase mb-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> Wait! You're paying full price.
+                  </p>
+                  <p className="text-zinc-300 text-xs leading-relaxed">
+                    {orderDestination === "local"
+                      ? "VIP Members get an instant 10% discount on this item. Close this window and upgrade to VIP first!"
+                      : "Diaspora VIP Benefit: Become a Goleth VIP and we will completely WAIVE the international service handling fee on this order!"}
+                  </p>
+                </div>
+              )}
+
               <div>
-                <label className="text-xs font-bold text-zinc-500 block mb-1">
-                  ሙሉ ስም (Full Name)
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                  Your Full Name
                 </label>
                 <input
                   required
                   type="text"
                   value={orderName}
                   onChange={(e) => setOrderName(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white outline-none"
+                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500 transition-colors"
                 />
               </div>
-              <div>
-                <label className="text-xs font-bold text-zinc-500 block mb-1">
-                  ስልክ ቁጥር (Phone Number)
-                </label>
-                <input
-                  required
-                  type="tel"
-                  value={orderPhone}
-                  onChange={(e) => setOrderPhone(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white outline-none"
-                />
+
+              {orderDestination === "local" ? (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                    Local Phone Number
+                  </label>
+                  <input
+                    required
+                    type="tel"
+                    value={orderPhone}
+                    onChange={(e) => setOrderPhone(e.target.value)}
+                    placeholder="09..."
+                    className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                      Your International Phone
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none w-24"
+                      >
+                        <option value="+1">US/CA (+1)</option>
+                        <option value="+44">UK (+44)</option>
+                        <option value="+971">UAE (+971)</option>
+                        <option value="+49">GER (+49)</option>
+                        <option value="+251">ETH (+251)</option>
+                      </select>
+                      <input
+                        required
+                        type="tel"
+                        value={orderPhone}
+                        onChange={(e) => setOrderPhone(e.target.value)}
+                        placeholder="Phone Number"
+                        className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1 text-amber-500">
+                      Receiver's Phone (In Ethiopia)
+                    </label>
+                    <input
+                      required
+                      type="tel"
+                      value={receiverPhone}
+                      onChange={(e) => setReceiverPhone(e.target.value)}
+                      placeholder="09..."
+                      className="w-full bg-amber-500/5 border border-amber-500/30 rounded-xl p-3 text-white outline-none focus:border-amber-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {orderDestination === "local" && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                    Shipping Method
+                  </label>
+                  <select
+                    value={orderShipping}
+                    onChange={(e) => setOrderShipping(e.target.value)}
+                    className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500 transition-colors"
+                  >
+                    <option value="local_delivery">በከተማ ውስጥ (+150 ETB)</option>
+                    <option value="traveler">በመንገደኛ መላክ (+500 ETB)</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 mt-4">
+                <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
+                  Payment Instructions:
+                </p>
+                {orderDestination === "local" ? (
+                  <>
+                    <p className="text-sm font-black text-white">
+                      • CBE:{" "}
+                      <span className="text-amber-500">1000XXXXXXXXX</span>
+                    </p>
+                    <p className="text-sm font-black text-white">
+                      • Telebirr:{" "}
+                      <span className="text-amber-500">09XXXXXXXX</span>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-black text-white mb-2">
+                      • PayPal:{" "}
+                      <span className="text-blue-400">paypal.me/goleth</span>
+                    </p>
+                    <p className="text-sm font-black text-white">
+                      • Sendwave / Remitly to Receiver
+                    </p>
+                    <p className="text-[10px] text-zinc-400 mt-2 italic">
+                      * Upload screenshot of successful transfer below.
+                    </p>
+                  </>
+                )}
               </div>
+
               <div>
-                <label className="text-xs font-bold text-zinc-500 block mb-1">
-                  የማጓጓዣ አማራጭ (Shipping)
-                </label>
-                <select
-                  value={orderShipping}
-                  onChange={(e) => setOrderShipping(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white outline-none"
-                >
-                  <option value="local">በከተማ ውስጥ (+150 ETB)</option>
-                  <option value="traveler">በመንገደኛ መላክ (+500 ETB)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-zinc-500 block mb-1">
-                  የክፍያ ደረሰኝ (Upload Receipt)
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                  Upload Receipt
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setOrderReceipt(e.target.files[0])}
-                  className="w-full text-xs bg-black border border-zinc-800 p-2 rounded-lg"
+                  className="w-full text-xs text-zinc-400 bg-black border border-zinc-800 p-2 rounded-xl focus:border-amber-500"
                   required
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSubmittingOrder}
-                className="w-full bg-[#229ED9] text-white font-black py-4 rounded-xl mt-2"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-2 flex justify-center items-center gap-2 transition-colors"
               >
-                {isSubmittingOrder ? "በመላክ ላይ..." : "ትዕዛዝ ላክ (Submit)"}
+                {isSubmittingOrder ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  <CheckCircle2 size={18} />
+                )}
+                <span>
+                  {isSubmittingOrder ? "Processing..." : "Confirm & Send"}
+                </span>
               </button>
             </form>
           </div>
