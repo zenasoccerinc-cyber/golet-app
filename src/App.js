@@ -1155,7 +1155,10 @@ export default function App() {
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate = item.body && item.body.length > 150;
     const isBreaking = item.category === "ሰበር ዜና";
-    const imagesArray = item.image_url ? item.image_url.split(",") : [];
+    const imagesArray =
+      item.image_url && typeof item.image_url === "string"
+        ? item.image_url.split(",")
+        : [];
     const mainImage = imagesArray[0];
 
     if (isHero) {
@@ -1397,9 +1400,10 @@ export default function App() {
                   .filter((p) => p.is_vip_only)
                   .slice(0, 3)
                   .map((p) => {
-                    const mainImg = p.image_url
-                      ? p.image_url.split(",")[0]
-                      : null;
+                    const mainImg =
+                      p.image_url && typeof p.image_url === "string"
+                        ? p.image_url.split(",")[0]
+                        : null;
                     return (
                       <div
                         key={p.id}
@@ -1733,9 +1737,10 @@ export default function App() {
 
         <div className="grid grid-cols-2 gap-3">
           {finalFiltered.map((item) => {
-            const productImages = item.image_url
-              ? item.image_url.split(",")
-              : [];
+            const productImages =
+              item.image_url && typeof item.image_url === "string"
+                ? item.image_url.split(",")
+                : [];
             const mainImg = productImages[0];
             const isVipOnly = item.is_vip_only;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
@@ -1793,7 +1798,7 @@ export default function App() {
                   )}
                 </div>
                 <div className="p-3 pt-2 flex flex-col gap-2.5">
-                  {item.sizes && (
+                  {item.sizes && typeof item.sizes === "string" && (
                     <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5">
                       {item.sizes
                         .split(",")
@@ -1852,6 +1857,22 @@ export default function App() {
     );
   };
 
+  let vipDaysLeft = 0;
+  let showVipWarning = false;
+  if (user && user.isVIP && user.vipUntil) {
+    vipDaysLeft = Math.ceil(
+      (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
+    );
+    if (vipDaysLeft <= 7 && vipDaysLeft > 0) showVipWarning = true;
+  }
+
+  const currentOrderImages =
+    selectedProduct &&
+    selectedProduct.image_url &&
+    typeof selectedProduct.image_url === "string"
+      ? selectedProduct.image_url.split(",")
+      : [];
+
   return (
     <div className="fixed inset-0 overflow-y-auto bg-black font-sans text-white">
       {showVipWarning && (
@@ -1898,6 +1919,7 @@ export default function App() {
       {showProfile && renderProfileDashboard()}
       {showAdmin && renderCEOStudio()}
 
+      {/* SOURCING MODAL */}
       {showSourcingModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
           <div className="bg-zinc-900 border border-amber-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_15px_rgba(245,158,11,0.2)] relative">
@@ -1934,6 +1956,7 @@ export default function App() {
         </div>
       )}
 
+      {/* GLOBAL CHECKOUT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
