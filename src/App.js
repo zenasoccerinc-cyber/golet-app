@@ -81,6 +81,7 @@ export default function App() {
   const [tapCount, setTapCount] = useState(0);
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
+  const [expandedProducts, setExpandedProducts] = useState({});
 
   const [newsCategory, setNewsCategory] = useState("ዋና");
   const [newsLimit, setNewsLimit] = useState(10);
@@ -172,7 +173,7 @@ export default function App() {
       .from("products")
       .select("*")
       .order("created_at", { ascending: false });
-    const { data: prData } = await supabase
+    const { data: prData = [] } = await supabase
       .from("predictions")
       .select("*")
       .eq("is_active", true)
@@ -820,6 +821,8 @@ export default function App() {
 
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleProductReadMore = (id) =>
+    setExpandedProducts((prev) => ({ ...prev, [id]: !prev[id] }));
   const formatDate = (dateString) =>
     new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -1999,16 +2002,26 @@ export default function App() {
             const isVipOnly = item.is_vip_only;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
 
+            // Text truncation config
+            const isDescExpanded = expandedProducts[item.id];
+            const maxDescLength = 120;
+            const shouldTruncateDesc =
+              item.body && item.body.length > maxDescLength;
+            const displayedDesc =
+              shouldTruncateDesc && !isDescExpanded
+                ? `${item.body.substring(0, maxDescLength)}...`
+                : item.body;
+
             return (
               <div
                 key={item.id}
                 className={`bg-zinc-900 rounded-2xl overflow-hidden shadow-xl max-w-md mx-auto w-full border relative ${
-                  isVipOnly ? "border-amber-500/30" : "border-zinc-800"
+                  isVipOnly ? "border-amber-500/30" : "border-zinc-800/80"
                 }`}
               >
                 {/* Custom Highlight Tag Badge */}
                 {item.highlight_tag && (
-                  <div className="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded shadow-lg uppercase z-10 tracking-widest">
+                  <div className="absolute top-3 left-3 bg-amber-500 text-black text-[9px] font-black px-2.5 py-1 rounded shadow-lg uppercase z-10 tracking-widest">
                     {item.highlight_tag}
                   </div>
                 )}
@@ -2040,34 +2053,35 @@ export default function App() {
                   <div className="w-full aspect-square bg-black"></div>
                 )}
 
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] text-amber-500 font-bold uppercase">
-                      {item.category}
-                    </span>
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-1">
+                    {/* Brand Name - Placed elegantly above the title, in muted modern gray */}
+                    {item.brand ? (
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                        {item.brand}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                        Goleth
+                      </span>
+                    )}
                     {isVipOnly && (
                       <span className="text-[9px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded font-black flex items-center gap-1">
-                        <Lock size={10} /> VIP ONLY
+                        <Lock size={10} /> VIP ብቻ
                       </span>
                     )}
                   </div>
 
-                  {/* Brand / Origin (Optional) */}
-                  {item.brand && (
-                    <div className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-1">
-                      {item.brand}
-                    </div>
-                  )}
-
-                  <h3 className="text-white font-black text-xl mb-3">
+                  {/* Clean product title */}
+                  <h3 className="text-white font-black text-lg leading-tight mb-2">
                     {item.name}
                   </h3>
 
-                  {/* Stock Status Indicator */}
+                  {/* Stock Status Indicator - Sleek & simple */}
                   {item.stock_status && (
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-1.5 mb-3">
                       <span
-                        className={`w-2 h-2 rounded-full ${
+                        className={`w-1.5 h-1.5 rounded-full ${
                           item.stock_status.includes("Low")
                             ? "bg-red-500 animate-pulse"
                             : item.stock_status.includes("Pre")
@@ -2075,19 +2089,19 @@ export default function App() {
                             : "bg-green-500"
                         }`}
                       ></span>
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                      <span className="text-[9px] text-zinc-400 font-bold tracking-wider">
                         {item.stock_status}
                       </span>
                     </div>
                   )}
 
-                  {/* Dynamic Sizes/Options */}
+                  {/* Dynamic Sizes/Options - Styled as elegant clickable badges */}
                   {item.sizes && (
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-wrap gap-1.5 mb-4 border-t border-zinc-800/50 pt-3">
                       {item.sizes.split(",").map((s, idx) => (
                         <span
                           key={idx}
-                          className="bg-zinc-950 text-zinc-300 text-[10px] font-black px-3 py-1.5 rounded-md border border-zinc-800 uppercase tracking-widest"
+                          className="bg-zinc-950 text-zinc-300 text-[9px] font-black px-2.5 py-1.5 rounded-lg border border-zinc-800/80 uppercase tracking-wider"
                         >
                           {s.trim()}
                         </span>
@@ -2095,30 +2109,41 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Clean descriptions with collapsing feature */}
                   {item.body && (
-                    <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
-                      {item.body}
-                    </p>
+                    <div className="border-b border-zinc-800/50 pb-4 mb-4">
+                      <p className="text-zinc-400 text-xs leading-relaxed whitespace-pre-wrap">
+                        {displayedDesc}
+                      </p>
+                      {shouldTruncateDesc && (
+                        <button
+                          onClick={() => toggleProductReadMore(item.id)}
+                          className="text-amber-500 text-[10px] font-black mt-2 inline-block focus:outline-none"
+                        >
+                          {isDescExpanded ? "አሳጥር" : "ተጨማሪ አንብብ"}
+                        </button>
+                      )}
+                    </div>
                   )}
 
-                  <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center justify-between mt-3">
                     <div className="flex flex-col">
-                      <span className="text-zinc-500 text-[10px] font-bold uppercase">
-                        Price
+                      <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">
+                        ዋጋ
                       </span>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1.5">
                         {user && user.isVIP ? (
                           <>
-                            <p className="text-amber-500 font-black text-2xl">
+                            <p className="text-amber-500 font-black text-xl">
                               {Math.round(item.price * 0.9)} ብር
                             </p>
-                            <p className="text-zinc-500 line-through text-sm">
-                              {item.price}
+                            <p className="text-zinc-500 line-through text-xs font-semibold">
+                              {item.price} ብር
                             </p>
                           </>
                         ) : (
                           <p
-                            className={`font-black text-2xl ${
+                            className={`font-black text-xl ${
                               isVipOnly ? "text-zinc-500" : "text-amber-500"
                             }`}
                           >
@@ -2135,16 +2160,16 @@ export default function App() {
                           setActiveProductImageIndex(0);
                           setOrderDestination("local");
                         }}
-                        className="bg-amber-500 text-black font-black px-6 py-3 rounded-xl hover:bg-amber-400"
+                        className="bg-amber-500 text-black font-black px-5 py-2.5 rounded-xl hover:bg-amber-400 text-xs transition-transform active:scale-95"
                       >
                         እዘዝ
                       </button>
                     ) : (
                       <button
                         onClick={() => handleNavClick("ቪአይፒ")}
-                        className="bg-zinc-800 text-amber-500 border border-amber-500/30 font-black px-4 py-3 rounded-xl hover:bg-zinc-700 flex items-center space-x-1"
+                        className="bg-zinc-800 text-amber-500 border border-amber-500/30 font-black px-4 py-2.5 rounded-xl hover:bg-zinc-700 flex items-center space-x-1 text-xs transition-transform active:scale-95"
                       >
-                        <Lock size={16} /> <span>VIP ብቻ</span>
+                        <Lock size={14} /> <span>VIP ብቻ</span>
                       </button>
                     )}
                   </div>
