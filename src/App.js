@@ -81,7 +81,6 @@ export default function App() {
   const [tapCount, setTapCount] = useState(0);
   const [editingId, setEditingId] = useState(null);
   const [expandedPosts, setExpandedPosts] = useState({});
-  const [expandedProducts, setExpandedProducts] = useState({});
 
   const [newsCategory, setNewsCategory] = useState("ዋና");
   const [newsLimit, setNewsLimit] = useState(10);
@@ -102,7 +101,7 @@ export default function App() {
   const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
   const [orderDestination, setOrderDestination] = useState("local");
   const [orderName, setOrderName] = useState("");
-  const [countryCode, setCountryCode] = useState("+251");
+  const [countryCode, setCountryCode] = useState("+1");
   const [orderPhone, setOrderPhone] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [orderShipping, setOrderShipping] = useState("local_delivery");
@@ -601,8 +600,7 @@ export default function App() {
     let shippingCost = orderShipping === "local_delivery" ? 150 : 500;
 
     if (orderDestination === "international") {
-      // Waive the service fee for VIPs
-      shippingCost = isVipUser ? 0 : 750; // Example 750 ETB handling fee for non-VIPs
+      shippingCost = isVipUser ? 0 : 750;
       if (isVipUser) {
         vipText += " (International Service Fee Waived!)";
       }
@@ -821,8 +819,6 @@ export default function App() {
 
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
-  const toggleProductReadMore = (id) =>
-    setExpandedProducts((prev) => ({ ...prev, [id]: !prev[id] }));
   const formatDate = (dateString) =>
     new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -844,7 +840,7 @@ export default function App() {
       case "Completed":
         return "text-green-500 bg-green-500/10 border-green-500/30";
       default:
-        return "text-amber-500 bg-amber-500/10 border-amber-500/30"; // Pending
+        return "text-amber-500 bg-amber-500/10 border-amber-500/30";
     }
   };
 
@@ -1969,15 +1965,16 @@ export default function App() {
         : products.filter((p) => p.category === shopCategory);
     return (
       <div className="pb-24 pt-2">
-        <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
+        {/* Modern horizontally scrollable category tabs exactly as requested */}
+        <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide border-b border-zinc-900/50">
           {shopCategories.map((cat) => (
             <button
               key={cat}
               onClick={() => setShopCategory(cat)}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
+              className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap tracking-wider transition-all ${
                 shopCategory === cat
-                  ? "bg-amber-500 text-black"
-                  : "bg-zinc-800 text-white"
+                  ? "bg-amber-500 text-black shadow-lg"
+                  : "bg-zinc-900 text-zinc-400 border border-zinc-800/80"
               }`}
             >
               {cat}
@@ -1987,13 +1984,14 @@ export default function App() {
 
         <button
           onClick={() => setShowSourcingModal(true)}
-          className="w-full max-w-md mx-auto mb-6 flex items-center justify-center space-x-2 bg-amber-500/10 border border-amber-500/50 hover:bg-amber-500/20 text-amber-500 font-bold py-3 px-4 rounded-xl transition-colors"
+          className="w-full mb-6 flex items-center justify-center space-x-2 bg-amber-500/5 border border-amber-500/30 hover:bg-amber-500/10 text-amber-500 font-black py-3 px-4 rounded-xl text-xs tracking-wide transition-colors"
         >
-          <PlusCircle size={18} />
+          <PlusCircle size={16} />
           <span>የግል እቃ ይዘዙ (Custom Sourcing Request)</span>
         </button>
 
-        <div className="flex flex-col space-y-6">
+        {/* High-converting 2-column mobile grid based on Canadian Tire benchmark */}
+        <div className="grid grid-cols-2 gap-3.5">
           {filteredProducts.map((item) => {
             const productImages = item.image_url
               ? item.image_url.split(",")
@@ -2002,86 +2000,74 @@ export default function App() {
             const isVipOnly = item.is_vip_only;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
 
-            // Text truncation config
-            const isDescExpanded = expandedProducts[item.id];
-            const maxDescLength = 120;
-            const shouldTruncateDesc =
-              item.body && item.body.length > maxDescLength;
-            const displayedDesc =
-              shouldTruncateDesc && !isDescExpanded
-                ? `${item.body.substring(0, maxDescLength)}...`
-                : item.body;
-
             return (
               <div
                 key={item.id}
-                className={`bg-zinc-900 rounded-2xl overflow-hidden shadow-xl max-w-md mx-auto w-full border relative ${
-                  isVipOnly ? "border-amber-500/30" : "border-zinc-800/80"
+                className={`bg-zinc-900/40 border rounded-2xl flex flex-col justify-between overflow-hidden shadow-md relative transition-transform duration-200 active:scale-[0.98] ${
+                  isVipOnly ? "border-amber-500/30" : "border-zinc-800/60"
                 }`}
               >
                 {/* Custom Highlight Tag Badge */}
                 {item.highlight_tag && (
-                  <div className="absolute top-3 left-3 bg-amber-500 text-black text-[9px] font-black px-2.5 py-1 rounded shadow-lg uppercase z-10 tracking-widest">
+                  <div className="absolute top-2 left-2 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded-md shadow uppercase z-10 tracking-widest scale-90 origin-top-left">
                     {item.highlight_tag}
                   </div>
                 )}
 
                 {isCEO && (
-                  <div className="absolute top-3 right-3 flex space-x-2 z-10 bg-black/50 p-1.5 rounded-lg">
+                  <div className="absolute top-2 right-2 flex space-x-1.5 z-10 bg-black/60 p-1 rounded-md">
                     <button
                       onClick={() => handleEdit(item, "products")}
-                      className="p-1"
+                      className="p-0.5"
                     >
-                      <Edit size={16} className="text-blue-400" />
+                      <Edit size={12} className="text-blue-400" />
                     </button>
                     <button
                       onClick={() => handleDelete("products", item.id)}
-                      className="p-1"
+                      className="p-0.5"
                     >
-                      <Trash2 size={16} className="text-red-400" />
+                      <Trash2 size={12} className="text-red-400" />
                     </button>
                   </div>
                 )}
 
-                {mainImg ? (
-                  <img
-                    src={mainImg}
-                    className="w-full aspect-square object-cover"
-                    alt=""
-                  />
-                ) : (
-                  <div className="w-full aspect-square bg-black"></div>
-                )}
-
-                <div className="p-5">
-                  <div className="flex justify-between items-start mb-1">
-                    {/* Brand Name - Placed elegantly above the title, in muted modern gray */}
-                    {item.brand ? (
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                        {item.brand}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                        Goleth
-                      </span>
-                    )}
+                {/* Card Top: Metadata & Title Container */}
+                <div className="p-3 pb-0">
+                  <div className="flex justify-between items-center mb-0.5">
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider truncate max-w-[70px]">
+                      {item.brand || "Goleth"}
+                    </span>
                     {isVipOnly && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded font-black flex items-center gap-1">
-                        <Lock size={10} /> VIP ብቻ
+                      <span className="text-[8px] bg-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-black">
+                        VIP Only
                       </span>
                     )}
                   </div>
-
-                  {/* Clean product title */}
-                  <h3 className="text-white font-black text-lg leading-tight mb-2">
+                  <h3 className="text-white font-black text-sm leading-tight line-clamp-2 h-10 mb-1">
                     {item.name}
                   </h3>
+                </div>
 
-                  {/* Stock Status Indicator - Sleek & simple */}
+                {/* Card Center: Product Image */}
+                <div className="bg-black/20 aspect-square w-full flex items-center justify-center p-2">
+                  {mainImg ? (
+                    <img
+                      src={mainImg}
+                      className="max-w-full max-h-full object-contain rounded-lg shadow-sm"
+                      alt=""
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-black/40 rounded-lg"></div>
+                  )}
+                </div>
+
+                {/* Card Bottom: Product specifications & Actions */}
+                <div className="p-3 pt-2 space-y-2">
+                  {/* Dynamic stock status */}
                   {item.stock_status && (
-                    <div className="flex items-center gap-1.5 mb-3">
+                    <div className="flex items-center gap-1">
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${
+                        className={`w-1 h-1 rounded-full ${
                           item.stock_status.includes("Low")
                             ? "bg-red-500 animate-pulse"
                             : item.stock_status.includes("Pre")
@@ -2089,90 +2075,54 @@ export default function App() {
                             : "bg-green-500"
                         }`}
                       ></span>
-                      <span className="text-[9px] text-zinc-400 font-bold tracking-wider">
+                      <span className="text-[8px] text-zinc-400 font-black tracking-wider uppercase truncate max-w-[120px]">
                         {item.stock_status}
                       </span>
                     </div>
                   )}
 
-                  {/* Dynamic Sizes/Options - Styled as elegant clickable badges */}
-                  {item.sizes && (
-                    <div className="flex flex-wrap gap-1.5 mb-4 border-t border-zinc-800/50 pt-3">
-                      {item.sizes.split(",").map((s, idx) => (
-                        <span
-                          key={idx}
-                          className="bg-zinc-950 text-zinc-300 text-[9px] font-black px-2.5 py-1.5 rounded-lg border border-zinc-800/80 uppercase tracking-wider"
-                        >
-                          {s.trim()}
+                  {/* Clean pricing container without the word 'price' */}
+                  <div className="flex items-baseline gap-1 flex-wrap">
+                    {user && user.isVIP ? (
+                      <>
+                        <span className="text-amber-500 font-black text-base">
+                          {Math.round(item.price * 0.9)} ብር
                         </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Clean descriptions with collapsing feature */}
-                  {item.body && (
-                    <div className="border-b border-zinc-800/50 pb-4 mb-4">
-                      <p className="text-zinc-400 text-xs leading-relaxed whitespace-pre-wrap">
-                        {displayedDesc}
-                      </p>
-                      {shouldTruncateDesc && (
-                        <button
-                          onClick={() => toggleProductReadMore(item.id)}
-                          className="text-amber-500 text-[10px] font-black mt-2 inline-block focus:outline-none"
-                        >
-                          {isDescExpanded ? "አሳጥር" : "ተጨማሪ አንብብ"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex flex-col">
-                      <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">
-                        ዋጋ
-                      </span>
-                      <div className="flex items-center space-x-1.5">
-                        {user && user.isVIP ? (
-                          <>
-                            <p className="text-amber-500 font-black text-xl">
-                              {Math.round(item.price * 0.9)} ብር
-                            </p>
-                            <p className="text-zinc-500 line-through text-xs font-semibold">
-                              {item.price} ብር
-                            </p>
-                          </>
-                        ) : (
-                          <p
-                            className={`font-black text-xl ${
-                              isVipOnly ? "text-zinc-500" : "text-amber-500"
-                            }`}
-                          >
-                            {item.price} ብር
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {canBuy ? (
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(item);
-                          setActiveProductImageIndex(0);
-                          setOrderDestination("local");
-                        }}
-                        className="bg-amber-500 text-black font-black px-5 py-2.5 rounded-xl hover:bg-amber-400 text-xs transition-transform active:scale-95"
-                      >
-                        እዘዝ
-                      </button>
+                        <span className="text-zinc-500 line-through text-[10px] font-bold">
+                          {item.price} ብር
+                        </span>
+                      </>
                     ) : (
-                      <button
-                        onClick={() => handleNavClick("ቪአይፒ")}
-                        className="bg-zinc-800 text-amber-500 border border-amber-500/30 font-black px-4 py-2.5 rounded-xl hover:bg-zinc-700 flex items-center space-x-1 text-xs transition-transform active:scale-95"
+                      <span
+                        className={`font-black text-base ${
+                          isVipOnly ? "text-zinc-500" : "text-amber-500"
+                        }`}
                       >
-                        <Lock size={14} /> <span>VIP ብቻ</span>
-                      </button>
+                        {item.price} ብር
+                      </span>
                     )}
                   </div>
+
+                  {/* Conversion Button */}
+                  {canBuy ? (
+                    <button
+                      onClick={() => {
+                        setSelectedProduct(item);
+                        setActiveProductImageIndex(0);
+                        setOrderDestination("local");
+                      }}
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2 rounded-xl text-[11px] tracking-wide transition-all"
+                    >
+                      እዘዝ
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleNavClick("ቪአይፒ")}
+                      className="w-full bg-zinc-800 text-amber-500 border border-amber-500/20 font-black py-2 rounded-xl text-[10px] tracking-wide flex items-center justify-center gap-1"
+                    >
+                      <Lock size={10} /> VIP ብቻ
+                    </button>
+                  )}
                 </div>
               </div>
             );
