@@ -403,6 +403,10 @@ export default function App() {
         teamBLogo: item.team_b_logo || "",
         image_url: item.image_url || null,
         is_vip_only: item.is_vip_only || false,
+        brand: item.brand || "",
+        sizes: item.sizes || "",
+        stock_status: item.stock_status || "In Stock",
+        highlight_tag: item.highlight_tag || "",
       });
     } else {
       setEditingId(null);
@@ -420,6 +424,10 @@ export default function App() {
         teamBLogo: "",
         image_url: null,
         is_vip_only: false,
+        brand: "",
+        sizes: "",
+        stock_status: "In Stock",
+        highlight_tag: "",
       });
     }
     setShowAdmin(true);
@@ -501,6 +509,10 @@ export default function App() {
         category: formData.category,
         image_url: finalImageUrl,
         is_vip_only: formData.is_vip_only || false,
+        brand: formData.brand || null,
+        sizes: formData.sizes || null,
+        stock_status: formData.stock_status || "In Stock",
+        highlight_tag: formData.highlight_tag || null,
       });
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
@@ -527,7 +539,9 @@ export default function App() {
       setUploading(false);
       fetchData();
     } catch (err) {
-      alert("DB Error!");
+      alert(
+        "DB Error! Did you make sure to add the new columns (brand, sizes, stock_status, highlight_tag) to Supabase?"
+      );
       setUploading(false);
     }
   };
@@ -1102,12 +1116,88 @@ export default function App() {
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Brand / Origin (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Nike, Made in CA"
+                      value={formData.brand || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, brand: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Highlight Tag (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Free Delivery!"
+                      value={formData.highlight_tag || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          highlight_tag: e.target.value,
+                        })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Sizes / Options (Comma separated)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., S, M, L, XL"
+                      value={formData.sizes || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, sizes: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Stock Status
+                    </label>
+                    <select
+                      value={formData.stock_status || "In Stock"}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          stock_status: e.target.value,
+                        })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                    >
+                      <option value="In Stock">In Stock</option>
+                      <option value="Low Stock (Hurry!)">
+                        Low Stock (Hurry!)
+                      </option>
+                      <option value="Pre-Order / Sourcing">
+                        Pre-Order / Sourcing
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Description
+                    Detailed Description
                   </label>
                   <textarea
-                    rows="3"
+                    rows="4"
+                    placeholder="Add full details, tech specs, or materials here..."
                     value={formData.body || ""}
                     onChange={(e) =>
                       setFormData({ ...formData, body: e.target.value })
@@ -1115,10 +1205,11 @@ export default function App() {
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   ></textarea>
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Price
+                      Price (ETB)
                     </label>
                     <input
                       required
@@ -1150,7 +1241,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="flex items-center space-x-2 text-zinc-300">
+                  <label className="flex items-center space-x-2 text-zinc-300 bg-black p-3 border border-zinc-800 rounded-lg cursor-pointer">
                     <input
                       type="checkbox"
                       checked={formData.is_vip_only || false}
@@ -1163,12 +1254,9 @@ export default function App() {
                       className="w-4 h-4 rounded text-amber-500 bg-black border-zinc-800"
                     />
                     <span className="text-sm font-bold text-amber-500">
-                      VIP Only Product
+                      Make this a VIP-Only Product
                     </span>
                   </label>
-                  <p className="text-[9px] text-zinc-500 mt-1">
-                    If checked, only VIP users can purchase this item.
-                  </p>
                 </div>
               </>
             )}
@@ -1905,10 +1993,17 @@ export default function App() {
             return (
               <div
                 key={item.id}
-                className={`bg-zinc-900 rounded-2xl overflow-hidden shadow-xl max-w-md mx-auto w-full border ${
+                className={`bg-zinc-900 rounded-2xl overflow-hidden shadow-xl max-w-md mx-auto w-full border relative ${
                   isVipOnly ? "border-amber-500/30" : "border-zinc-800"
                 }`}
               >
+                {/* Custom Highlight Tag Badge */}
+                {item.highlight_tag && (
+                  <div className="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded shadow-lg uppercase z-10 tracking-widest">
+                    {item.highlight_tag}
+                  </div>
+                )}
+
                 {isCEO && (
                   <div className="absolute top-3 right-3 flex space-x-2 z-10 bg-black/50 p-1.5 rounded-lg">
                     <button
@@ -1925,6 +2020,7 @@ export default function App() {
                     </button>
                   </div>
                 )}
+
                 {mainImg ? (
                   <img
                     src={mainImg}
@@ -1934,8 +2030,9 @@ export default function App() {
                 ) : (
                   <div className="w-full aspect-square bg-black"></div>
                 )}
+
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] text-amber-500 font-bold uppercase">
                       {item.category}
                     </span>
@@ -1945,9 +2042,50 @@ export default function App() {
                       </span>
                     )}
                   </div>
-                  <h3 className="text-white font-black text-xl mb-2">
+
+                  {/* Brand / Origin (Optional) */}
+                  {item.brand && (
+                    <div className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-1">
+                      {item.brand}
+                    </div>
+                  )}
+
+                  <h3 className="text-white font-black text-xl mb-3">
                     {item.name}
                   </h3>
+
+                  {/* Stock Status Indicator */}
+                  {item.stock_status && (
+                    <div className="flex items-center gap-2 mb-3">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          item.stock_status.includes("Low")
+                            ? "bg-red-500 animate-pulse"
+                            : item.stock_status.includes("Pre")
+                            ? "bg-blue-500"
+                            : "bg-green-500"
+                        }`}
+                      ></span>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                        {item.stock_status}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Dynamic Sizes/Options */}
+                  {item.sizes && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {item.sizes.split(",").map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="bg-zinc-950 text-zinc-300 text-[10px] font-black px-3 py-1.5 rounded-md border border-zinc-800 uppercase tracking-widest"
+                        >
+                          {s.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {item.body && (
                     <p className="text-zinc-400 text-sm mb-4 leading-relaxed whitespace-pre-wrap border-b border-zinc-800/50 pb-4">
                       {item.body}
