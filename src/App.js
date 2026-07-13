@@ -525,23 +525,32 @@ export default function App() {
     }
 
     try {
-      if (editingId)
-        await supabase.from(adminTab).update(payload).eq("id", editingId);
-      else {
+      let error;
+      if (editingId) {
+        const res = await supabase
+          .from(adminTab)
+          .update(payload)
+          .eq("id", editingId);
+        error = res.error;
+      } else {
         if (adminTab === "predictions")
           await supabase
             .from("predictions")
             .update({ is_active: false })
             .neq("id", 0);
-        await supabase.from(adminTab).insert([payload]);
+        const res = await supabase.from(adminTab).insert([payload]);
+        error = res.error;
       }
-      closeAdmin();
+
+      if (error) {
+        alert("Database rejected your upload:\n\n" + error.message);
+      } else {
+        closeAdmin();
+        fetchData();
+      }
       setUploading(false);
-      fetchData();
     } catch (err) {
-      alert(
-        "DB Error! Did you make sure to add the new columns (brand, sizes, stock_status, highlight_tag) to Supabase?"
-      );
+      alert("System connection error: " + err.message);
       setUploading(false);
     }
   };
