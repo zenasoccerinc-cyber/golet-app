@@ -24,7 +24,7 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  Heart, // PHASE 14: Added Heart for Wishlist
+  Heart,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -100,7 +100,6 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
 
-  // PHASE 14: WISHLIST STATE
   const [favorites, setFavorites] = useState([]);
 
   const toggleFavorite = (e, id) => {
@@ -242,7 +241,6 @@ export default function App() {
       .from("user_predictions")
       .select("*")
       .eq("user_id", user.id)
-      .eq("match_id", matchId)
       .single();
     if (data) setExistingPrediction(data);
   };
@@ -405,6 +403,7 @@ export default function App() {
         category: formData.category || "ሌላ",
         sub_category: formData.sub_category || "ሌላ",
         is_vip_only: formData.is_vip_only || false,
+        is_new: formData.is_new || false, // NEW TAG ADDED TO DB PAYLOAD
         brand: formData.brand || null,
         sizes: formData.sizes || null,
         stock_status: formData.stock_status || "In Stock",
@@ -489,6 +488,7 @@ export default function App() {
         sub_category: item.sub_category || "ሌላ",
         image_url: item.image_url || null,
         is_vip_only: item.is_vip_only || false,
+        is_new: item.is_new || false,
         brand: item.brand || "",
         sizes: item.sizes || "",
         stock_status: item.stock_status || "In Stock",
@@ -511,6 +511,7 @@ export default function App() {
         sub_category: "ሌላ",
         image_url: null,
         is_vip_only: false,
+        is_new: false,
         brand: "",
         sizes: "",
         stock_status: "In Stock",
@@ -645,14 +646,14 @@ export default function App() {
             <X size={20} />
           </button>
           <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center text-2xl font-black text-[#09090b] shadow-lg uppercase">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-2xl font-black text-white shadow-lg uppercase">
               {user?.name?.charAt(0) || "U"}
             </div>
             <div>
               <h2 className="text-xl font-black text-white">
                 {user?.name || "User"}
               </h2>
-              <span className="bg-amber-500/20 text-amber-500 text-xs font-black px-3 py-1 rounded-full border border-amber-500/30 mt-1 inline-block">
+              <span className="bg-blue-500/20 text-blue-500 text-xs font-black px-3 py-1 rounded-full border border-blue-500/30 mt-1 inline-block">
                 {user?.isVIP ? "VIP Active" : "Free Account"}
               </span>
             </div>
@@ -714,7 +715,7 @@ export default function App() {
       case "Completed":
         return "text-green-500 bg-green-500/10 border-green-500/30";
       default:
-        return "text-amber-500 bg-amber-500/10 border-amber-500/30";
+        return "text-zinc-400 bg-zinc-800 border-zinc-700";
     }
   };
 
@@ -732,7 +733,7 @@ export default function App() {
           >
             <X size={24} />
           </button>
-          <h2 className="text-2xl font-black text-amber-500 mb-6">
+          <h2 className="text-2xl font-black text-blue-500 mb-6">
             {editingId ? "Edit" : "CEO Studio"}
           </h2>
           <form onSubmit={handleAdminSubmit} className="space-y-4">
@@ -746,7 +747,7 @@ export default function App() {
                       onClick={() => setAdminTab(tab)}
                       className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
                         adminTab === tab
-                          ? "bg-amber-500 text-[#09090b]"
+                          ? "bg-blue-600 text-white"
                           : "bg-zinc-800 text-zinc-400"
                       }`}
                     >
@@ -799,7 +800,7 @@ export default function App() {
                           <span className="text-white font-bold text-sm">
                             {o.customer_name}
                           </span>
-                          <span className="text-amber-500 font-black text-sm">
+                          <span className="text-blue-500 font-black text-sm">
                             {o.total_price} ETB
                           </span>
                         </div>
@@ -825,12 +826,12 @@ export default function App() {
                                 ? "text-blue-500"
                                 : o.status === "Processing"
                                 ? "text-orange-500"
-                                : "text-amber-500"
+                                : "text-zinc-400"
                             }`}
                           >
                             <option
                               value="Pending"
-                              className="bg-zinc-900 text-amber-500"
+                              className="bg-zinc-900 text-zinc-400"
                             >
                               Pending
                             </option>
@@ -1080,7 +1081,9 @@ export default function App() {
                     className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
-                <div className="mt-2">
+
+                {/* VIP & NEW Options Checkboxes */}
+                <div className="grid grid-cols-2 gap-2 mt-2">
                   <label className="flex items-center space-x-2 text-zinc-300 bg-[#09090b] p-3 border border-zinc-800 rounded-lg cursor-pointer">
                     <input
                       type="checkbox"
@@ -1091,10 +1094,24 @@ export default function App() {
                           is_vip_only: e.target.checked,
                         })
                       }
-                      className="w-4 h-4 rounded text-amber-500 bg-[#09090b] border-zinc-800"
+                      className="w-4 h-4 rounded text-blue-500 bg-[#09090b] border-zinc-800"
                     />
-                    <span className="text-sm font-bold text-amber-500">
+                    <span className="text-sm font-bold text-blue-500">
                       VIP Only
+                    </span>
+                  </label>
+
+                  <label className="flex items-center space-x-2 text-zinc-300 bg-[#09090b] p-3 border border-zinc-800 rounded-lg cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_new || false}
+                      onChange={(e) =>
+                        setFormData({ ...formData, is_new: e.target.checked })
+                      }
+                      className="w-4 h-4 rounded text-red-500 bg-[#09090b] border-zinc-800"
+                    />
+                    <span className="text-sm font-bold text-red-500">
+                      Mark as New
                     </span>
                   </label>
                 </div>
@@ -1148,7 +1165,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="bg-[#09090b] p-3 border border-zinc-800 rounded-lg">
-                  <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
+                  <label className="text-[10px] text-blue-500 uppercase block mb-2 font-bold">
                     Team Logos (Upload)
                   </label>
                   <div className="space-y-3">
@@ -1185,13 +1202,13 @@ export default function App() {
                   Select Images
                 </label>
                 <div className="flex items-center space-x-4 bg-[#09090b] border border-zinc-800 rounded-lg p-3">
-                  <ImageIcon size={20} className="text-amber-500" />
+                  <ImageIcon size={20} className="text-blue-500" />
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     onChange={(e) => setImageFiles(Array.from(e.target.files))}
-                    className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
+                    className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/20 file:text-blue-500"
                   />
                 </div>
               </div>
@@ -1200,7 +1217,7 @@ export default function App() {
               <button
                 type="submit"
                 disabled={uploading}
-                className="w-full bg-amber-500 text-[#09090b] font-black py-4 rounded-xl mt-4"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl mt-4"
               >
                 {uploading ? "Publishing..." : "Publish"}
               </button>
@@ -1284,7 +1301,7 @@ export default function App() {
           <div className="p-5">
             <h3
               className={`font-black text-2xl leading-tight mb-2 ${
-                isBreaking ? "text-red-500" : "text-amber-500"
+                isBreaking ? "text-red-500" : "text-amber-500" // kept amber for news hero title as requested only for shop
               }`}
             >
               {item.title || "Untitled"}
@@ -1755,20 +1772,9 @@ export default function App() {
     if (shopCategory !== "ሁሉም") {
       initialFiltered = safeProducts.filter((p) => {
         if (!p) return false;
-        const cat = (p.category || "").toLowerCase();
-        if (shopCategory === "ወንዶች")
-          return cat.includes("ወንድ") || cat === "men" || cat === "men's";
-        if (shopCategory === "ሴቶች")
-          return cat.includes("ሴት") || cat === "women" || cat === "women's";
-        if (shopCategory === "ልጆች")
-          return cat.includes("ልጅ") || cat === "kids" || cat === "children";
-        if (shopCategory === "መድሃኒት")
-          return (
-            cat.includes("መድሃኒት") ||
-            cat.includes("med") ||
-            cat.includes("pharm")
-          );
-        return p.category === shopCategory;
+        // Strictly exact match category filtering to solve men's shoe bug
+        const cat = (p.category || "").trim();
+        return cat === shopCategory;
       });
     }
 
@@ -1777,29 +1783,8 @@ export default function App() {
         ? initialFiltered
         : initialFiltered.filter((p) => {
             if (!p) return false;
-            if (p.sub_category === shopSubCategory) return true;
-            const bodyText = (p.body || "").toLowerCase();
-            const nameText = (p.name || "").toLowerCase();
-            if (shopSubCategory === "ልብሶች")
-              return (
-                bodyText.includes("cloth") ||
-                bodyText.includes("jersey") ||
-                bodyText.includes("t-shirt") ||
-                bodyText.includes("ልብስ") ||
-                bodyText.includes("ቀሚስ") ||
-                nameText.includes("shirt") ||
-                nameText.includes("ልብስ")
-              );
-            if (shopSubCategory === "ጫማዎች")
-              return (
-                bodyText.includes("shoe") ||
-                bodyText.includes("sneaker") ||
-                bodyText.includes("ጫማ") ||
-                bodyText.includes("ቦቲ") ||
-                nameText.includes("shoe") ||
-                nameText.includes("ጫማ")
-              );
-            return false;
+            // Strictly exact match sub-category filtering to solve men's shoe bug
+            return (p.sub_category || "").trim() === shopSubCategory;
           });
 
     return (
@@ -1811,7 +1796,7 @@ export default function App() {
               onClick={() => resetShopFilters(cat)}
               className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all ${
                 shopCategory === cat
-                  ? "bg-amber-500 text-[#09090b] shadow-lg"
+                  ? "bg-blue-600 text-white shadow-lg"
                   : "bg-zinc-900 text-zinc-400 border border-zinc-800/60"
               }`}
             >
@@ -1833,7 +1818,7 @@ export default function App() {
                 onClick={() => setShopSubCategory(sub)}
                 className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
                   shopSubCategory === sub
-                    ? "bg-amber-500 text-[#09090b] shadow-md scale-105"
+                    ? "bg-blue-600 text-white shadow-md scale-105"
                     : "bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-white"
                 }`}
               >
@@ -1843,7 +1828,6 @@ export default function App() {
           </div>
         )}
 
-        {/* CUSTOM SOURCING BANNER */}
         <div
           onClick={(e) => {
             e.preventDefault();
@@ -1880,17 +1864,20 @@ export default function App() {
                 : [];
             const mainImg = productImages[0];
             const isVipOnly = item.is_vip_only;
+            const isNew = item.is_new;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
 
-            // PHASE 14: UPDATED PRODUCT CARD
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-lg relative h-full"
               >
-                {item.highlight_tag && (
-                  <div className="w-full bg-red-600 text-white text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-red-700">
-                    {item.highlight_tag}
+                {/* NEW OR HIGHLIGHT TAG */}
+                {(isNew || item.highlight_tag) && (
+                  <div className="absolute top-0 left-0 z-10 w-full bg-red-600 text-white text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm">
+                    {isNew && !item.highlight_tag
+                      ? "አዲስ (NEW)"
+                      : item.highlight_tag}
                   </div>
                 )}
 
@@ -1911,61 +1898,75 @@ export default function App() {
                   </div>
                 )}
 
+                {/* IMAGE HALF: LIGHT BACKGROUND TO POP */}
                 <div
-                  className={`px-3 pb-2 flex flex-col flex-grow ${
-                    item.highlight_tag ? "pt-2" : "pt-4"
+                  onClick={() => {
+                    setSelectedProduct(item);
+                    setActiveProductImageIndex(0);
+                    setOrderDestination("local");
+                  }}
+                  className={`bg-zinc-100 aspect-square w-full relative cursor-pointer group flex items-center justify-center p-2 ${
+                    isNew || item.highlight_tag ? "mt-6" : ""
                   }`}
                 >
+                  <button
+                    onClick={(e) => toggleFavorite(e, item.id)}
+                    className="absolute top-2 right-2 z-10 bg-white/80 p-1.5 rounded-full backdrop-blur-sm border border-zinc-200 transition-transform active:scale-90 shadow-sm"
+                  >
+                    <Heart
+                      size={14}
+                      className={
+                        favorites.includes(item.id)
+                          ? "fill-red-500 text-red-500"
+                          : "text-zinc-400"
+                      }
+                    />
+                  </button>
+
+                  {mainImg ? (
+                    <img
+                      src={mainImg}
+                      className="max-w-full max-h-full object-contain mix-blend-multiply"
+                      alt=""
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-zinc-200 rounded-lg flex items-center justify-center">
+                      <ShoppingBag className="text-zinc-400" />
+                    </div>
+                  )}
+
+                  {productImages.length > 1 && (
+                    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm flex items-center gap-1">
+                      1 / {productImages.length} <ImageIcon size={8} />
+                    </div>
+                  )}
+                </div>
+
+                {/* DETAILS HALF: DARK BACKGROUND */}
+                <div className="p-3 flex flex-col flex-grow">
                   <div className="flex justify-between items-start mb-1">
-                    <span className="text-[14px] text-[#82baff] font-black uppercase tracking-widest break-words leading-tight w-full mr-1">
+                    <span className="text-[11px] text-blue-400 font-black uppercase tracking-widest break-words leading-tight w-full mr-1">
                       {item.brand || "Goleth"}
                     </span>
                     {isVipOnly && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black shrink-0">
+                      <span className="text-[9px] bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded font-black shrink-0">
                         የቪአይፒ ብቻ
                       </span>
                     )}
                   </div>
-                  <h3 className="text-white font-bold text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2">
+
+                  <h3
+                    onClick={() => {
+                      setSelectedProduct(item);
+                      setActiveProductImageIndex(0);
+                      setOrderDestination("local");
+                    }}
+                    className="text-white font-bold text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2 cursor-pointer hover:text-blue-400 transition-colors"
+                  >
                     {item.name || "Product"}
                   </h3>
 
-                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto relative group rounded-xl overflow-hidden">
-                    {/* PHASE 14: WISHLIST BUTTON */}
-                    <button
-                      onClick={(e) => toggleFavorite(e, item.id)}
-                      className="absolute top-2 right-2 z-10 bg-zinc-900/60 p-1.5 rounded-full backdrop-blur-sm border border-zinc-700/50 transition-transform active:scale-90"
-                    >
-                      <Heart
-                        size={14}
-                        className={
-                          favorites.includes(item.id)
-                            ? "fill-red-500 text-red-500"
-                            : "text-zinc-400"
-                        }
-                      />
-                    </button>
-
-                    {mainImg ? (
-                      <img
-                        src={mainImg}
-                        className="max-w-full max-h-full object-contain mix-blend-screen"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
-                    )}
-
-                    {productImages.length > 1 && (
-                      <div className="absolute bottom-2 left-2 bg-[#09090b]/80 text-zinc-300 text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm border border-zinc-700/50 flex items-center gap-1">
-                        1 / {productImages.length} <ImageIcon size={8} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="px-3 pb-3 flex flex-col gap-2.5">
-                  {/* PHASE 14: CONDITIONAL SWATCH/SIZE UI */}
+                  {/* SIZES / COLORS (CIRCULAR) */}
                   {item.sizes &&
                     typeof item.sizes === "string" &&
                     item.sizes.trim() !== "" && (
@@ -1975,39 +1976,38 @@ export default function App() {
                             ? "መጠን / ቀለም:"
                             : "ክብደት / መጠን:"}
                         </span>
-                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1">
                           {item.sizes
                             .split(",")
                             .slice(0, 4)
-                            .map((s, idx) => (
-                              <div
-                                key={idx}
-                                className="h-6 min-w-[24px] px-1.5 rounded border-2 border-zinc-700 bg-zinc-800 flex items-center justify-center shrink-0 shadow-sm overflow-hidden"
-                              >
-                                <span className="text-[10px] text-white font-black truncate">
-                                  {s.trim()}
-                                </span>
-                              </div>
-                            ))}
+                            .map((s, idx) => {
+                              const val = s.trim();
+                              return (
+                                <div
+                                  key={idx}
+                                  className="w-6 h-6 rounded-full border border-zinc-600 bg-zinc-800 flex items-center justify-center shrink-0 shadow-sm overflow-hidden"
+                                >
+                                  <span className="text-[9px] text-white font-black truncate px-0.5">
+                                    {val}
+                                  </span>
+                                </div>
+                              );
+                            })}
                         </div>
                       </div>
                     )}
 
-                  <div className="flex items-baseline gap-1 mt-1">
-                    {user && user.isVIP ? (
-                      <>
-                        <span className="text-white font-black text-[15px]">
-                          {Math.round((item.price || 0) * 0.9)} ብር
-                        </span>
-                        <span className="text-zinc-500 line-through text-[10px] font-bold">
-                          {item.price || 0}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-white font-black text-[15px]">
-                        {item.price || 0} ብር
+                  <div className="mt-auto pt-3 flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-500 font-black text-[14px]">
+                        የቪአይፒ: {Math.round((item.price || 0) * 0.9)} ብር
                       </span>
-                    )}
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 font-bold text-[11px] line-through">
+                        መደበኛ: {item.price || 0} ብር
+                      </span>
+                    </div>
                   </div>
 
                   {canBuy ? (
@@ -2017,14 +2017,14 @@ export default function App() {
                         setActiveProductImageIndex(0);
                         setOrderDestination("local");
                       }}
-                      className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 mt-1 flex items-center justify-center gap-2"
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 mt-3 flex items-center justify-center gap-2"
                     >
                       <ShoppingBag size={14} /> ወደ ዘንቢል ጨምር
                     </button>
                   ) : (
                     <button
                       onClick={() => handleNavClick("ቪአይፒ")}
-                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1 mt-1"
+                      className="w-full bg-zinc-900 text-red-500/70 border border-red-500/30 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1 mt-3"
                     >
                       <Lock size={12} /> የቪአይፒ ብቻ
                     </button>
@@ -2038,27 +2038,11 @@ export default function App() {
     );
   };
 
-  let vipDaysLeft = 0;
-  let showVipWarning = false;
-  if (user && user.isVIP && user.vipUntil) {
-    vipDaysLeft = Math.ceil(
-      (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
-    );
-    if (vipDaysLeft <= 7 && vipDaysLeft > 0) showVipWarning = true;
-  }
-
-  const currentOrderImages =
-    selectedProduct &&
-    selectedProduct.image_url &&
-    typeof selectedProduct.image_url === "string"
-      ? selectedProduct.image_url.split(",")
-      : [];
-
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[#09090b] font-sans text-white">
       {showVipWarning && (
         <div
-          className="bg-amber-500 text-[#09090b] px-4 py-2 text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+          className="bg-red-500 text-white px-4 py-2 text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg"
           onClick={() => handleNavClick("ቪአይፒ")}
         >
           <AlertTriangle size={16} /> Your VIP expires in {vipDaysLeft} days!
@@ -2072,7 +2056,7 @@ export default function App() {
           onClick={handleLogoTap}
         >
           <h1 className="text-white font-black text-2xl tracking-widest">
-            GOL<span className="text-amber-500">ETH</span>
+            GOL<span className="text-blue-500">ETH</span>
           </h1>
         </div>
         <div>
@@ -2081,7 +2065,7 @@ export default function App() {
               onClick={() => setShowProfile(true)}
               className="bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold flex items-center gap-2"
             >
-              <div className="w-5 h-5 bg-amber-500 rounded-full text-[#09090b] flex items-center justify-center font-black uppercase">
+              <div className="w-5 h-5 bg-blue-500 rounded-full text-white flex items-center justify-center font-black uppercase">
                 {user?.name?.charAt(0) || "U"}
               </div>
               {user?.name || "User"}
@@ -2144,7 +2128,8 @@ export default function App() {
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
               <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <ShoppingBag size={20} /> Order Details
+                <ShoppingBag size={20} className="text-blue-500" /> Order
+                Details
               </h2>
               <button
                 onClick={() => setSelectedProduct(null)}
@@ -2159,7 +2144,7 @@ export default function App() {
                 onClick={() => setOrderDestination("local")}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   orderDestination === "local"
-                    ? "bg-amber-500 text-[#09090b]"
+                    ? "bg-blue-600 text-white"
                     : "text-zinc-500"
                 }`}
               >
@@ -2169,7 +2154,7 @@ export default function App() {
                 onClick={() => setOrderDestination("international")}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   orderDestination === "international"
-                    ? "bg-amber-500 text-[#09090b]"
+                    ? "bg-blue-600 text-white"
                     : "text-zinc-500"
                 }`}
               >
@@ -2179,10 +2164,10 @@ export default function App() {
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
               {currentOrderImages.length > 0 && (
-                <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
+                <div className="relative w-full h-56 bg-zinc-100 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
                   <img
                     src={currentOrderImages[activeProductImageIndex]}
-                    className="max-w-full max-h-full object-contain transition-opacity duration-300"
+                    className="max-w-full max-h-full object-contain mix-blend-multiply transition-opacity duration-300"
                     alt=""
                   />
                   {currentOrderImages.length > 1 && (
@@ -2196,7 +2181,7 @@ export default function App() {
                               : prev - 1
                           )
                         }
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
                       >
                         <ChevronLeft size={20} />
                       </button>
@@ -2209,7 +2194,7 @@ export default function App() {
                               : prev + 1
                           )
                         }
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
                       >
                         <ChevronRight size={20} />
                       </button>
@@ -2219,8 +2204,8 @@ export default function App() {
                             key={i}
                             className={`w-2 h-2 rounded-full cursor-pointer transition-colors ${
                               i === activeProductImageIndex
-                                ? "bg-amber-500 scale-110"
-                                : "bg-zinc-600"
+                                ? "bg-blue-600 scale-110"
+                                : "bg-zinc-400"
                             }`}
                             onClick={() => setActiveProductImageIndex(i)}
                           />
@@ -2232,8 +2217,8 @@ export default function App() {
               )}
 
               {!user?.isVIP && (
-                <div className="bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/30 p-4 rounded-xl mb-4">
-                  <p className="text-amber-500 text-xs font-black uppercase mb-1 flex items-center gap-1">
+                <div className="bg-gradient-to-r from-red-500/20 to-transparent border border-red-500/30 p-4 rounded-xl mb-4">
+                  <p className="text-red-500 text-xs font-black uppercase mb-1 flex items-center gap-1">
                     <AlertCircle size={14} /> ቆም ይበሉ! (Wait!)
                   </p>
                   <p className="text-zinc-300 text-sm leading-relaxed font-bold">
@@ -2253,7 +2238,7 @@ export default function App() {
                   type="text"
                   value={orderName}
                   onChange={(e) => setOrderName(e.target.value)}
-                  className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                  className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -2268,7 +2253,7 @@ export default function App() {
                     value={orderPhone}
                     onChange={(e) => setOrderPhone(e.target.value)}
                     placeholder="09..."
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-blue-500"
                   />
                 </div>
               ) : (
@@ -2295,12 +2280,12 @@ export default function App() {
                         value={orderPhone}
                         onChange={(e) => setOrderPhone(e.target.value)}
                         placeholder="Phone Number"
-                        className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                        className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-blue-500"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1 text-amber-500">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1 text-blue-500">
                       Receiver's Phone (In Ethiopia)
                     </label>
                     <input
@@ -2309,7 +2294,7 @@ export default function App() {
                       value={receiverPhone}
                       onChange={(e) => setReceiverPhone(e.target.value)}
                       placeholder="09..."
-                      className="w-full bg-amber-500/5 border border-amber-500/30 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                      className="w-full bg-blue-500/5 border border-blue-500/30 rounded-xl p-3 text-white outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -2325,14 +2310,14 @@ export default function App() {
                       onClick={() => setOrderShipping("standard")}
                       className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
                         orderShipping === "standard"
-                          ? "border-amber-500 bg-amber-500/10"
+                          ? "border-blue-500 bg-blue-500/10"
                           : "border-zinc-800 bg-[#09090b]"
                       }`}
                     >
                       <span className="text-sm font-bold text-white">
                         በ3-5 ቀናት ውስጥ - መደበኛ (3-5 Days)
                       </span>
-                      <span className="text-xs font-black text-amber-500">
+                      <span className="text-xs font-black text-blue-500">
                         +150 ETB
                       </span>
                     </label>
@@ -2340,14 +2325,14 @@ export default function App() {
                       onClick={() => setOrderShipping("express")}
                       className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
                         orderShipping === "express"
-                          ? "border-amber-500 bg-amber-500/10"
+                          ? "border-blue-500 bg-blue-500/10"
                           : "border-zinc-800 bg-[#09090b]"
                       }`}
                     >
                       <span className="text-sm font-bold text-white">
                         ቀጣይ ቀን - ፈጣን (Next Day)
                       </span>
-                      <span className="text-xs font-black text-amber-500">
+                      <span className="text-xs font-black text-blue-500">
                         +300 ETB
                       </span>
                     </label>
@@ -2355,14 +2340,14 @@ export default function App() {
                       onClick={() => setOrderShipping("traveler")}
                       className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
                         orderShipping === "traveler"
-                          ? "border-amber-500 bg-amber-500/10"
+                          ? "border-blue-500 bg-blue-500/10"
                           : "border-zinc-800 bg-[#09090b]"
                       }`}
                     >
                       <span className="text-sm font-bold text-white">
                         በመንገደኛ መላክ (Traveler)
                       </span>
-                      <span className="text-xs font-black text-amber-500">
+                      <span className="text-xs font-black text-blue-500">
                         +500 ETB
                       </span>
                     </label>
@@ -2378,11 +2363,11 @@ export default function App() {
                   <>
                     <p className="text-sm font-black text-white">
                       • CBE:{" "}
-                      <span className="text-amber-500">1000XXXXXXXXX</span>
+                      <span className="text-blue-500">1000XXXXXXXXX</span>
                     </p>
                     <p className="text-sm font-black text-white">
                       • Telebirr:{" "}
-                      <span className="text-amber-500">09XXXXXXXX</span>
+                      <span className="text-blue-500">09XXXXXXXX</span>
                     </p>
                   </>
                 ) : (
@@ -2408,14 +2393,14 @@ export default function App() {
                   type="file"
                   accept="image/*"
                   onChange={(e) => setOrderReceipt(e.target.files[0])}
-                  className="w-full text-xs text-zinc-400 bg-[#09090b] border border-zinc-800 p-2 rounded-xl focus:border-amber-500"
+                  className="w-full text-xs text-zinc-400 bg-[#09090b] border border-zinc-800 p-2 rounded-xl focus:border-blue-500"
                   required
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSubmittingOrder}
-                className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-black py-4 rounded-xl mt-4 flex justify-center items-center gap-2 transition-colors shadow-lg"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl mt-4 flex justify-center items-center gap-2 transition-colors shadow-lg"
               >
                 {isSubmittingOrder ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -2423,12 +2408,11 @@ export default function App() {
                   <CheckCircle2 size={18} />
                 )}
                 <span>
-                  {isSubmittingOrder ? "Processing..." : "Confirm & Send"}
+                  {isSubmittingOrder ? "Processing..." : "አረጋግጥ እና ላክ"}
                 </span>
               </button>
             </form>
 
-            {/* PHASE 14: YOU MAY ALSO LIKE (CROSS-SELL) */}
             <div className="mt-8 pt-6 border-t border-zinc-800">
               <h3 className="text-sm font-black text-white mb-4">
                 ተመሳሳይ እቃዎች (You May Also Like)
@@ -2450,21 +2434,21 @@ export default function App() {
                         setActiveProductImageIndex(0);
                       }}
                     >
-                      <div className="w-full aspect-square bg-[#09090b] rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                      <div className="w-full aspect-square bg-zinc-100 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
                         {recommended.image_url ? (
                           <img
                             src={recommended.image_url.split(",")[0]}
-                            className="w-full h-full object-cover opacity-80"
+                            className="w-full h-full object-contain mix-blend-multiply"
                             alt=""
                           />
                         ) : (
-                          <ShoppingBag className="text-zinc-800" />
+                          <ShoppingBag className="text-zinc-400" />
                         )}
                       </div>
                       <p className="text-xs text-white font-bold line-clamp-2 leading-tight mb-1">
                         {recommended.name}
                       </p>
-                      <p className="text-[10px] text-amber-500 font-bold">
+                      <p className="text-[10px] text-blue-500 font-bold">
                         {recommended.price} ብር
                       </p>
                     </div>
@@ -2517,7 +2501,7 @@ export default function App() {
               if (activeTab === "ቪአይፒ") defaultTab = "predictions";
               handleEdit(null, defaultTab);
             }}
-            className="fixed bottom-24 right-4 bg-amber-500 text-[#09090b] p-4 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)] z-30 flex items-center justify-center"
+            className="fixed bottom-24 right-4 bg-blue-500 text-white p-4 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)] z-30 flex items-center justify-center"
           >
             <PlusCircle size={28} />
           </button>
@@ -2533,7 +2517,7 @@ export default function App() {
               key={tab.id}
               onClick={() => handleNavClick(tab.id)}
               className={`flex flex-col items-center p-2 ${
-                isActive ? "text-amber-500" : "text-white/90"
+                isActive ? "text-blue-500" : "text-white/90"
               }`}
             >
               <Icon size={24} className="mb-1.5" />
@@ -2545,3 +2529,8 @@ export default function App() {
     </div>
   );
 }
+
+/* ==========================================
+   GOLETH COMMIT/SAVE COMMENT
+   "Phase 14 Fixes: Implemented sleek blue/red theme for Shop. Added white background to product images, fixed category filtering bug, created circle-style size/color swatches, added side-by-side VIP pricing, and updated the Amharic checkout button."
+   ========================================== */
