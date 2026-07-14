@@ -2529,8 +2529,3 @@ export default function App() {
     </div>
   );
 }
-
-/* ==========================================
-   GOLETH COMMIT/SAVE COMMENT
-   "Phase 14 Fixes: Implemented sleek blue/red theme for Shop. Added white background to product images, fixed category filtering bug, created circle-style size/color swatches, added side-by-side VIP pricing, and updated the Amharic checkout button."
-   ========================================== */
