@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Heart, // PHASE 14: Added Heart for Wishlist
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -72,7 +73,6 @@ export default function App() {
     return null;
   });
 
-  // CHANGED: Default active tab is now News
   const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -89,19 +89,27 @@ export default function App() {
   const [sportCategory, setSportCategory] = useState("የዝውውር ዜና");
   const sportCategories = ["የዝውውር ዜና"];
 
-  // PRIMARY & SECONDARY NESTED NAVIGATION STATES
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
   const shopCategories = ["ሁሉም", "ወንዶች", "ሴቶች", "ልጆች", "መድሃኒት", "ሌላ"];
   const shopSubCategories = ["ሁሉም", "ልብሶች", "ጫማዎች", "ሌላ"];
 
-  // CUSTOM SOURCING STATES
   const [showSourcingModal, setShowSourcingModal] = useState(false);
   const [sourcingLink, setSourcingLink] = useState("");
 
-  // GLOBAL CHECKOUT STATES
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
+
+  // PHASE 14: WISHLIST STATE
+  const [favorites, setFavorites] = useState([]);
+
+  const toggleFavorite = (e, id) => {
+    e.stopPropagation();
+    setFavorites((prev) =>
+      prev.includes(id) ? prev.filter((fId) => fId !== id) : [...prev, id]
+    );
+  };
+
   const [orderDestination, setOrderDestination] = useState("local");
   const [orderName, setOrderName] = useState("");
   const [countryCode, setCountryCode] = useState("+251");
@@ -111,12 +119,10 @@ export default function App() {
   const [orderReceipt, setOrderReceipt] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  // VIP ORDER STATE
   const [vipPhone, setVipPhone] = useState("");
   const [vipReceipt, setVipReceipt] = useState(null);
   const [isSubmittingVip, setIsSubmittingVip] = useState(false);
 
-  // PREDICTION STATES
   const [teamAScore, setTeamAScore] = useState("");
   const [teamBScore, setTeamBScore] = useState("");
   const [predictionStatus, setPredictionStatus] = useState("idle");
@@ -125,7 +131,6 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
 
-  // DASHBOARD STATES
   const [myOrders, setMyOrders] = useState([]);
   const [userJoinedDate, setUserJoinedDate] = useState(null);
 
@@ -136,7 +141,6 @@ export default function App() {
   const [allUsers, setAllUsers] = useState([]);
   const [orders, setOrders] = useState([]);
 
-  // ADMIN FILE UPLOAD STATES
   const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
   const [imageFiles, setImageFiles] = useState([]);
@@ -243,7 +247,6 @@ export default function App() {
     if (data) setExistingPrediction(data);
   };
 
-  // CHANGED: Logo now navigates to News
   const navigateHome = () => {
     setActiveTab("ዜና");
     setNewsCategory("ዋና");
@@ -345,7 +348,6 @@ export default function App() {
     let finalTeamALogo = formData.teamALogo;
     let finalTeamBLogo = formData.teamBLogo;
 
-    // Image Upload Logic
     if (imageFiles && imageFiles.length > 0) {
       const uploadedUrls = [];
       for (let i = 0; i < imageFiles.length; i++) {
@@ -427,7 +429,6 @@ export default function App() {
           .update(payload)
           .eq("id", editingId);
         error = res.error;
-        // Optimistic UI Update
         if (!error) {
           if (adminTab === "news")
             setNews((prev) =>
@@ -457,7 +458,7 @@ export default function App() {
       } else {
         alert("✅ የተቀየረው በተሳካ ሁኔታ ተቀምጧል! (Update Saved Successfully!)");
         closeAdmin();
-        await fetchData(); // Strict fetch to sync UI
+        await fetchData();
       }
     } catch (err) {
       alert("System Error: " + err.message);
@@ -969,7 +970,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* CATEGORY & SUB-CATEGORY DROPDOWNS */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase block mb-1">
@@ -989,7 +989,6 @@ export default function App() {
                       <option value="ሌላ">ሌላ (Other)</option>
                     </select>
                   </div>
-                  {/* Conditional Sub-Category Dropdown */}
                   {["ወንዶች", "ሴቶች", "ልጆች"].includes(
                     formData.category || "ወንዶች"
                   ) && (
@@ -1245,7 +1244,6 @@ export default function App() {
         : String(dbAuthor);
     };
 
-    // CHANGED: Expanded articles (or the hero) show the full layout
     if (isHero || isExpanded) {
       return (
         <div
@@ -1312,7 +1310,6 @@ export default function App() {
       );
     }
 
-    // CHANGED: Grid items are now clickable to expand
     return (
       <div
         key={item.id}
@@ -1885,27 +1882,20 @@ export default function App() {
             const isVipOnly = item.is_vip_only;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
 
-            // CHANGED: Smart Label logic based on Category
-            const isClothingCat = ["ወንዶች", "ሴቶች", "ልጆች"].includes(
-              item.category
-            );
-            const sizeLabelStr = isClothingCat
-              ? "መጠን (Size)"
-              : "ክብደት/መጠን (Weight/Unit)";
-
+            // PHASE 14: UPDATED PRODUCT CARD
             return (
               <div
                 key={item.id}
                 className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
               >
                 {item.highlight_tag && (
-                  <div className="w-full bg-amber-500 text-[#09090b] text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-amber-600">
+                  <div className="w-full bg-red-600 text-white text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-red-700">
                     {item.highlight_tag}
                   </div>
                 )}
 
                 {isCEO && (
-                  <div className="absolute top-8 right-2 flex space-x-1 z-10 bg-[#09090b]/70 p-1 rounded-md">
+                  <div className="absolute top-8 right-2 flex space-x-1 z-20 bg-[#09090b]/70 p-1 rounded-md">
                     <button
                       onClick={() => handleEdit(item, "products")}
                       className="p-0.5"
@@ -1932,27 +1922,42 @@ export default function App() {
                     </span>
                     {isVipOnly && (
                       <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black shrink-0">
-                        VIP ONLY
+                        የቪአይፒ ብቻ
                       </span>
                     )}
                   </div>
-                  <h3 className="text-white font-black text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2">
+                  <h3 className="text-white font-bold text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2">
                     {item.name || "Product"}
                   </h3>
 
-                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto relative">
+                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto relative group rounded-xl overflow-hidden">
+                    {/* PHASE 14: WISHLIST BUTTON */}
+                    <button
+                      onClick={(e) => toggleFavorite(e, item.id)}
+                      className="absolute top-2 right-2 z-10 bg-zinc-900/60 p-1.5 rounded-full backdrop-blur-sm border border-zinc-700/50 transition-transform active:scale-90"
+                    >
+                      <Heart
+                        size={14}
+                        className={
+                          favorites.includes(item.id)
+                            ? "fill-red-500 text-red-500"
+                            : "text-zinc-400"
+                        }
+                      />
+                    </button>
+
                     {mainImg ? (
                       <img
                         src={mainImg}
-                        className="max-w-full max-h-full object-contain"
+                        className="max-w-full max-h-full object-contain mix-blend-screen"
                         alt=""
                       />
                     ) : (
                       <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
                     )}
-                    {/* CHANGED: Multiple Images Badge */}
+
                     {productImages.length > 1 && (
-                      <div className="absolute bottom-2 right-2 bg-[#09090b]/80 text-zinc-300 text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm border border-zinc-700/50 flex items-center gap-1">
+                      <div className="absolute bottom-2 left-2 bg-[#09090b]/80 text-zinc-300 text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm border border-zinc-700/50 flex items-center gap-1">
                         1 / {productImages.length} <ImageIcon size={8} />
                       </div>
                     )}
@@ -1960,39 +1965,46 @@ export default function App() {
                 </div>
 
                 <div className="px-3 pb-3 flex flex-col gap-2.5">
-                  {item.sizes && typeof item.sizes === "string" && (
-                    <div>
-                      <span className="text-[9px] text-zinc-500 font-bold mb-0.5 block">
-                        {sizeLabelStr}:
-                      </span>
-                      <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5">
-                        {item.sizes
-                          .split(",")
-                          .slice(0, 3)
-                          .map((s, idx) => (
-                            <span
-                              key={idx}
-                              className="bg-zinc-950 text-zinc-300 text-[11px] font-black px-2.5 py-1 rounded border border-zinc-800 shrink-0 shadow-sm"
-                            >
-                              {s.trim()}
-                            </span>
-                          ))}
+                  {/* PHASE 14: CONDITIONAL SWATCH/SIZE UI */}
+                  {item.sizes &&
+                    typeof item.sizes === "string" &&
+                    item.sizes.trim() !== "" && (
+                      <div className="mt-1">
+                        <span className="text-[9px] text-zinc-500 font-bold mb-1 block">
+                          {["ወንዶች", "ሴቶች", "ልጆች"].includes(item.category)
+                            ? "መጠን / ቀለም:"
+                            : "ክብደት / መጠን:"}
+                        </span>
+                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+                          {item.sizes
+                            .split(",")
+                            .slice(0, 4)
+                            .map((s, idx) => (
+                              <div
+                                key={idx}
+                                className="h-6 min-w-[24px] px-1.5 rounded border-2 border-zinc-700 bg-zinc-800 flex items-center justify-center shrink-0 shadow-sm overflow-hidden"
+                              >
+                                <span className="text-[10px] text-white font-black truncate">
+                                  {s.trim()}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   <div className="flex items-baseline gap-1 mt-1">
                     {user && user.isVIP ? (
                       <>
-                        <span className="text-amber-500 font-black text-sm">
+                        <span className="text-white font-black text-[15px]">
                           {Math.round((item.price || 0) * 0.9)} ብር
                         </span>
-                        <span className="text-zinc-600 line-through text-[10px] font-bold">
+                        <span className="text-zinc-500 line-through text-[10px] font-bold">
                           {item.price || 0}
                         </span>
                       </>
                     ) : (
-                      <span className="text-amber-500 font-black text-sm">
+                      <span className="text-white font-black text-[15px]">
                         {item.price || 0} ብር
                       </span>
                     )}
@@ -2005,16 +2017,16 @@ export default function App() {
                         setActiveProductImageIndex(0);
                         setOrderDestination("local");
                       }}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-[#09090b] font-black py-3 rounded-xl text-[16px] tracking-wide transition-all duration-150 transform active:scale-95 mt-1"
+                      className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 mt-1 flex items-center justify-center gap-2"
                     >
-                      እዘዝ
+                      <ShoppingBag size={14} /> ወደ ዘንቢል ጨምር
                     </button>
                   ) : (
                     <button
                       onClick={() => handleNavClick("ቪአይፒ")}
-                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-3 rounded-xl text-xs tracking-wide flex items-center justify-center gap-1 mt-1"
+                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1 mt-1"
                     >
-                      <Lock size={12} /> የቪአይፒ አባል ይሁኑ
+                      <Lock size={12} /> የቪአይፒ ብቻ
                     </button>
                   )}
                 </div>
@@ -2166,7 +2178,6 @@ export default function App() {
             </div>
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              {/* CHANGED: Modal Image Carousel */}
               {currentOrderImages.length > 0 && (
                 <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
                   <img
@@ -2304,7 +2315,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Delivery Options - Converted to Radio Cards */}
               {orderDestination === "local" && (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">
@@ -2405,7 +2415,7 @@ export default function App() {
               <button
                 type="submit"
                 disabled={isSubmittingOrder}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-[#09090b] font-black py-4 rounded-xl mt-2 flex justify-center items-center gap-2 transition-colors"
+                className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-black py-4 rounded-xl mt-4 flex justify-center items-center gap-2 transition-colors shadow-lg"
               >
                 {isSubmittingOrder ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -2417,6 +2427,50 @@ export default function App() {
                 </span>
               </button>
             </form>
+
+            {/* PHASE 14: YOU MAY ALSO LIKE (CROSS-SELL) */}
+            <div className="mt-8 pt-6 border-t border-zinc-800">
+              <h3 className="text-sm font-black text-white mb-4">
+                ተመሳሳይ እቃዎች (You May Also Like)
+              </h3>
+              <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
+                {products
+                  .filter(
+                    (p) =>
+                      p.id !== selectedProduct.id &&
+                      p.category === selectedProduct.category
+                  )
+                  .slice(0, 3)
+                  .map((recommended) => (
+                    <div
+                      key={recommended.id}
+                      className="min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl p-2 shrink-0 cursor-pointer"
+                      onClick={() => {
+                        setSelectedProduct(recommended);
+                        setActiveProductImageIndex(0);
+                      }}
+                    >
+                      <div className="w-full aspect-square bg-[#09090b] rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                        {recommended.image_url ? (
+                          <img
+                            src={recommended.image_url.split(",")[0]}
+                            className="w-full h-full object-cover opacity-80"
+                            alt=""
+                          />
+                        ) : (
+                          <ShoppingBag className="text-zinc-800" />
+                        )}
+                      </div>
+                      <p className="text-xs text-white font-bold line-clamp-2 leading-tight mb-1">
+                        {recommended.name}
+                      </p>
+                      <p className="text-[10px] text-amber-500 font-bold">
+                        {recommended.price} ብር
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
