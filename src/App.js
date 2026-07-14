@@ -24,7 +24,7 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  Heart, // PHASE 14: Added Heart for Wishlist
+  Heart,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -100,7 +100,6 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
 
-  // PHASE 14: WISHLIST STATE
   const [favorites, setFavorites] = useState([]);
 
   const toggleFavorite = (e, id) => {
@@ -1882,12 +1881,13 @@ export default function App() {
             const isVipOnly = item.is_vip_only;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
 
-            // PHASE 14: UPDATED PRODUCT CARD
+            // --- SKETCH 1 UPDATES: SHOP FEED LAYOUT REORDERED ---
             return (
               <div
                 key={item.id}
                 className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
               >
+                {/* 1. Highlight Tag / New Free Delivery Banner */}
                 {item.highlight_tag && (
                   <div className="w-full bg-red-600 text-white text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-red-700">
                     {item.highlight_tag}
@@ -1916,22 +1916,8 @@ export default function App() {
                     item.highlight_tag ? "pt-2" : "pt-4"
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-[14px] text-[#82baff] font-black uppercase tracking-widest break-words leading-tight w-full mr-1">
-                      {item.brand || "Goleth"}
-                    </span>
-                    {isVipOnly && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black shrink-0">
-                        የቪአይፒ ብቻ
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-white font-bold text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2">
-                    {item.name || "Product"}
-                  </h3>
-
-                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto relative group rounded-xl overflow-hidden">
-                    {/* PHASE 14: WISHLIST BUTTON */}
+                  {/* 2. Image */}
+                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 relative group rounded-xl overflow-hidden mb-3">
                     <button
                       onClick={(e) => toggleFavorite(e, item.id)}
                       className="absolute top-2 right-2 z-10 bg-zinc-900/60 p-1.5 rounded-full backdrop-blur-sm border border-zinc-700/50 transition-transform active:scale-90"
@@ -1962,73 +1948,68 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                </div>
 
-                <div className="px-3 pb-3 flex flex-col gap-2.5">
-                  {/* PHASE 14: CONDITIONAL SWATCH/SIZE UI */}
+                  {/* 3. Price & Member Price (Discount %) */}
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-white font-black text-[15px]">
+                      {item.price || 0} ብር
+                    </span>
+                    <span className="text-amber-500 text-[10px] font-bold whitespace-nowrap">
+                      VIP: {Math.round((item.price || 0) * 0.9)} ብር (10% Off)
+                    </span>
+                  </div>
+
+                  {/* 4. Product Title */}
+                  <h3 className="text-white font-bold text-[13px] leading-snug line-clamp-2 mb-1">
+                    {item.name || "Product"}
+                    {isVipOnly && (
+                      <span className="inline-block ml-2 text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black shrink-0">
+                        VIP
+                      </span>
+                    )}
+                  </h3>
+
+                  {/* 5. Subtitle (Brand) */}
+                  <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-widest break-words leading-tight w-full mb-2">
+                    {item.brand || "Goleth"}
+                  </p>
+
+                  {/* 6. Size and Colour (Mapped from Sizes) */}
                   {item.sizes &&
                     typeof item.sizes === "string" &&
                     item.sizes.trim() !== "" && (
-                      <div className="mt-1">
+                      <div className="mb-3">
                         <span className="text-[9px] text-zinc-500 font-bold mb-1 block">
-                          {["ወንዶች", "ሴቶች", "ልጆች"].includes(item.category)
-                            ? "መጠን / ቀለም:"
-                            : "ክብደት / መጠን:"}
+                          መጠን/ቀለም (Size/Colour):
                         </span>
-                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
-                          {item.sizes
-                            .split(",")
-                            .slice(0, 4)
-                            .map((s, idx) => (
-                              <div
-                                key={idx}
-                                className="h-6 min-w-[24px] px-1.5 rounded border-2 border-zinc-700 bg-zinc-800 flex items-center justify-center shrink-0 shadow-sm overflow-hidden"
-                              >
-                                <span className="text-[10px] text-white font-black truncate">
-                                  {s.trim()}
-                                </span>
-                              </div>
-                            ))}
-                        </div>
+                        <p className="text-[10px] text-zinc-300">
+                          {item.sizes}
+                        </p>
                       </div>
                     )}
 
-                  <div className="flex items-baseline gap-1 mt-1">
-                    {user && user.isVIP ? (
-                      <>
-                        <span className="text-white font-black text-[15px]">
-                          {Math.round((item.price || 0) * 0.9)} ብር
-                        </span>
-                        <span className="text-zinc-500 line-through text-[10px] font-bold">
-                          {item.price || 0}
-                        </span>
-                      </>
+                  {/* 7. Action Button */}
+                  <div className="mt-auto">
+                    {canBuy ? (
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(item);
+                          setActiveProductImageIndex(0);
+                          setOrderDestination("local");
+                        }}
+                        className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <ShoppingBag size={14} /> ወደ ዘንቢል ጨምር
+                      </button>
                     ) : (
-                      <span className="text-white font-black text-[15px]">
-                        {item.price || 0} ብር
-                      </span>
+                      <button
+                        onClick={() => handleNavClick("ቪአይፒ")}
+                        className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1"
+                      >
+                        <Lock size={12} /> የቪአይፒ ብቻ
+                      </button>
                     )}
                   </div>
-
-                  {canBuy ? (
-                    <button
-                      onClick={() => {
-                        setSelectedProduct(item);
-                        setActiveProductImageIndex(0);
-                        setOrderDestination("local");
-                      }}
-                      className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 mt-1 flex items-center justify-center gap-2"
-                    >
-                      <ShoppingBag size={14} /> ወደ ዘንቢል ጨምር
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleNavClick("ቪአይፒ")}
-                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1 mt-1"
-                    >
-                      <Lock size={12} /> የቪአይፒ ብቻ
-                    </button>
-                  )}
                 </div>
               </div>
             );
@@ -2144,7 +2125,7 @@ export default function App() {
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
               <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <ShoppingBag size={20} /> Order Details
+                <ShoppingBag size={20} /> Checkout
               </h2>
               <button
                 onClick={() => setSelectedProduct(null)}
@@ -2154,6 +2135,87 @@ export default function App() {
               </button>
             </div>
 
+            {/* --- SKETCH 2 UPDATES: CHECKOUT LAYOUT REORDERED --- */}
+
+            {/* 1. Title, Sub Title, Size, Colour (Top) */}
+            <div className="mb-4 text-center">
+              <h2 className="text-2xl font-black text-white mb-1">
+                {selectedProduct.name}
+              </h2>
+              <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">
+                {selectedProduct.brand || "Goleth Official"}
+              </p>
+              {selectedProduct.sizes &&
+                typeof selectedProduct.sizes === "string" && (
+                  <p className="text-zinc-500 text-xs mt-2 font-bold">
+                    Size / Colour:{" "}
+                    <span className="text-zinc-300">
+                      {selectedProduct.sizes}
+                    </span>
+                  </p>
+                )}
+            </div>
+
+            {/* 2. Image (Middle) */}
+            <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
+              <img
+                src={currentOrderImages[activeProductImageIndex]}
+                className="max-w-full max-h-full object-contain transition-opacity duration-300"
+                alt=""
+              />
+              {currentOrderImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveProductImageIndex((prev) =>
+                        prev === 0 ? currentOrderImages.length - 1 : prev - 1
+                      )
+                    }
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveProductImageIndex((prev) =>
+                        prev === currentOrderImages.length - 1 ? 0 : prev + 1
+                      )
+                    }
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                  <div className="absolute bottom-3 flex gap-1.5 justify-center w-full">
+                    {currentOrderImages.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`w-2 h-2 rounded-full cursor-pointer transition-colors ${
+                          i === activeProductImageIndex
+                            ? "bg-amber-500 scale-110"
+                            : "bg-zinc-600"
+                        }`}
+                        onClick={() => setActiveProductImageIndex(i)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 3. Price & Member Price (Below Image) */}
+            <div className="flex flex-col items-center mb-6 bg-[#09090b] p-4 rounded-xl border border-zinc-800">
+              <span className="text-white font-black text-xl mb-1">
+                Price: {selectedProduct.price} ብር
+              </span>
+              <span className="text-amber-500 font-bold text-sm">
+                Member Price: {Math.round(selectedProduct.price * 0.9)} ብር (10%
+                Off)
+              </span>
+            </div>
+
+            {/* 4. Rest of the previous settings (Forms) */}
             <div className="flex space-x-2 mb-6 bg-[#09090b] p-1 rounded-xl border border-zinc-800">
               <button
                 onClick={() => setOrderDestination("local")}
@@ -2178,59 +2240,6 @@ export default function App() {
             </div>
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              {currentOrderImages.length > 0 && (
-                <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
-                  <img
-                    src={currentOrderImages[activeProductImageIndex]}
-                    className="max-w-full max-h-full object-contain transition-opacity duration-300"
-                    alt=""
-                  />
-                  {currentOrderImages.length > 1 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveProductImageIndex((prev) =>
-                            prev === 0
-                              ? currentOrderImages.length - 1
-                              : prev - 1
-                          )
-                        }
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
-                      >
-                        <ChevronLeft size={20} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveProductImageIndex((prev) =>
-                            prev === currentOrderImages.length - 1
-                              ? 0
-                              : prev + 1
-                          )
-                        }
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
-                      >
-                        <ChevronRight size={20} />
-                      </button>
-                      <div className="absolute bottom-3 flex gap-1.5 justify-center w-full">
-                        {currentOrderImages.map((_, i) => (
-                          <div
-                            key={i}
-                            className={`w-2 h-2 rounded-full cursor-pointer transition-colors ${
-                              i === activeProductImageIndex
-                                ? "bg-amber-500 scale-110"
-                                : "bg-zinc-600"
-                            }`}
-                            onClick={() => setActiveProductImageIndex(i)}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
               {!user?.isVIP && (
                 <div className="bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/30 p-4 rounded-xl mb-4">
                   <p className="text-amber-500 text-xs font-black uppercase mb-1 flex items-center gap-1">
@@ -2428,7 +2437,7 @@ export default function App() {
               </button>
             </form>
 
-            {/* PHASE 14: YOU MAY ALSO LIKE (CROSS-SELL) */}
+            {/* YOU MAY ALSO LIKE */}
             <div className="mt-8 pt-6 border-t border-zinc-800">
               <h3 className="text-sm font-black text-white mb-4">
                 ተመሳሳይ እቃዎች (You May Also Like)
@@ -2491,16 +2500,15 @@ export default function App() {
               gossip.map((g, index) => renderArticle(g, index === 0, "gossip"))
             ) : (
               <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
-                {" "}
                 <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
                   <Flame className="text-zinc-600" size={24} />
-                </div>{" "}
+                </div>
                 <p className="text-zinc-400 font-bold text-sm">
                   ምንም አልተገኘም (Empty)
-                </p>{" "}
+                </p>
                 <p className="text-zinc-600 text-xs mt-1">
                   Check back later for updates.
-                </p>{" "}
+                </p>
               </div>
             )}
           </div>
