@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   LogOut,
   Lock,
-  ChevronRight,
   Crown,
   Users,
   PlusCircle,
@@ -28,7 +27,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
-// SECURE CONNECTION: Pulling from your .env vault
+// SECURE CONNECTION
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -109,7 +108,7 @@ export default function App() {
   const [countryCode, setCountryCode] = useState("+251");
   const [orderPhone, setOrderPhone] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
-  const [orderShipping, setOrderShipping] = useState("local_delivery");
+  const [orderShipping, setOrderShipping] = useState("standard");
   const [orderReceipt, setOrderReceipt] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
@@ -201,41 +200,13 @@ export default function App() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      let lData = [];
-      if (prData && prData.length > 0) {
-        const activeMatch = prData[0];
-        const { data: matchGuesses } = await supabase
-          .from("user_predictions")
-          .select("*")
-          .eq("match_id", activeMatch.id);
-        if (matchGuesses && matchGuesses.length > 0) {
-          const userIds = matchGuesses.map((g) => g.user_id);
-          const { data: guessUsers } = await supabase
-            .from("users")
-            .select("id, name, total_points")
-            .in("id", userIds);
-          if (guessUsers) {
-            lData = matchGuesses.map((guess) => {
-              const u = guessUsers.find((user) => user.id === guess.user_id);
-              return {
-                ...guess,
-                name: u ? u.name : "Unknown",
-                total_points: u ? u.total_points : 0,
-              };
-            });
-            lData.sort((a, b) => b.total_points - a.total_points);
-          }
-        }
-      }
-
       if (nData) setNews(nData);
       if (gData) setGossip(gData);
       if (pData) setProducts(pData);
       if (prData) setPredictions(prData);
       if (oData) setOrders(oData);
-      setLeaderboard(lData);
     } catch (e) {
-      console.error("Database fetch error:", e);
+      console.error("Fetch error:", e);
     }
   };
 
@@ -246,7 +217,6 @@ export default function App() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     if (myOrderData) setMyOrders(myOrderData);
-
     const { data: uData } = await supabase
       .from("users")
       .select("created_at")
@@ -356,7 +326,7 @@ export default function App() {
   };
 
   const handleDelete = async (table, id) => {
-    if (window.confirm("Are you sure?")) {
+    if (window.confirm("Are you sure you want to delete this?")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
     }
@@ -426,13 +396,15 @@ export default function App() {
         body: formData.body || "",
         price: Number(formData.price) || 0,
         category: formData.category || "ሌላ",
-        image_url: finalImageUrl,
+        sub_category: formData.sub_category || "ሌላ", // CEO Sub-category mapping
         is_vip_only: formData.is_vip_only || false,
         brand: formData.brand || null,
         sizes: formData.sizes || null,
         stock_status: formData.stock_status || "In Stock",
         highlight_tag: formData.highlight_tag || null,
       });
+      // Only attach image_url if we actually have one to avoid wiping out old images
+      if (finalImageUrl) payload.image_url = finalImageUrl;
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
         league_name: formData.league || "Unknown",
@@ -461,13 +433,17 @@ export default function App() {
         error = res.error;
       }
 
-      if (error) alert(error.message);
-      else {
+      if (error) {
+        alert(
+          "Database Error! Did you make sure to add the 'sub_category' column to your Supabase products table?\n\nError: " +
+            error.message
+        );
+      } else {
         closeAdmin();
         fetchData();
       }
     } catch (err) {
-      alert(err.message);
+      alert("System Error: " + err.message);
     } finally {
       setUploading(false);
     }
@@ -492,6 +468,7 @@ export default function App() {
         body: item.body || "",
         price: item.price || "",
         category: item.category || "ዋና",
+        sub_category: item.sub_category || "ሌላ",
         image_url: item.image_url || null,
         is_vip_only: item.is_vip_only || false,
         brand: item.brand || "",
@@ -513,6 +490,7 @@ export default function App() {
         body: "",
         price: "",
         category: "ዋና",
+        sub_category: "ሌላ",
         image_url: null,
         is_vip_only: false,
         brand: "",
@@ -548,7 +526,11 @@ export default function App() {
     let basePrice = selectedProduct.price;
     if (user && user.isVIP) basePrice = selectedProduct.price * 0.9;
 
-    let shippingCost = orderShipping === "local_delivery" ? 150 : 500;
+    // Dynamic Shipping Cost Logic
+    let shippingCost = 150; // Standard 3-5 days
+    if (orderShipping === "express") shippingCost = 300; // Next day
+    if (orderShipping === "traveler") shippingCost = 500; // Traveler
+
     if (orderDestination === "international") {
       shippingCost = user && user.isVIP ? 0 : 750;
     }
@@ -570,7 +552,7 @@ export default function App() {
         status: "Pending",
       };
       await supabase.from("orders").insert([orderPayload]);
-      alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!");
+      alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order successfully sent!)");
       setSelectedProduct(null);
       fetchData();
     } catch (err) {
@@ -914,7 +896,7 @@ export default function App() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g., Nike, Made in CA"
+                      placeholder="Gillette, Nike"
                       value={formData.brand || ""}
                       onChange={(e) =>
                         setFormData({ ...formData, brand: e.target.value })
@@ -928,7 +910,7 @@ export default function App() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g., Free Delivery!"
+                      placeholder="Free Delivery"
                       value={formData.highlight_tag || ""}
                       onChange={(e) =>
                         setFormData({
@@ -940,6 +922,48 @@ export default function App() {
                     />
                   </div>
                 </div>
+
+                {/* CATEGORY & SUB-CATEGORY DROPDOWNS */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Main Category
+                    </label>
+                    <select
+                      value={formData.category || "ወንዶች"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, category: e.target.value })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                    >
+                      <option value="ወንዶች">ወንዶች (Men)</option>
+                      <option value="ሴቶች">ሴቶች (Women)</option>
+                      <option value="ልጆች">ልጆች (Kids)</option>
+                      <option value="መድሃኒት">መድሃኒት (Pharmacy)</option>
+                      <option value="ሌላ">ሌላ (Other)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                      Sub-Category
+                    </label>
+                    <select
+                      value={formData.sub_category || "ሌላ"}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          sub_category: e.target.value,
+                        })
+                      }
+                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                    >
+                      <option value="ልብሶች">ልብሶች (Clothes)</option>
+                      <option value="ጫማዎች">ጫማዎች (Shoes)</option>
+                      <option value="ሌላ">ሌላ (Other)</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase block mb-1">
@@ -947,7 +971,7 @@ export default function App() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g., S, M, L"
+                      placeholder="S, M, L, 108g"
                       value={formData.sizes || ""}
                       onChange={(e) =>
                         setFormData({ ...formData, sizes: e.target.value })
@@ -984,7 +1008,7 @@ export default function App() {
                     Detailed Description
                   </label>
                   <textarea
-                    rows="4"
+                    rows="3"
                     value={formData.body || ""}
                     onChange={(e) =>
                       setFormData({ ...formData, body: e.target.value })
@@ -992,39 +1016,19 @@ export default function App() {
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   ></textarea>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Price (ETB)
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      value={formData.price || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, price: e.target.value })
-                      }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={formData.category || "ሌላ"}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                    >
-                      <option value="ወንዶች">ወንዶች (Men)</option>
-                      <option value="ሴቶች">ሴቶች (Women)</option>
-                      <option value="ልጆች">ልጆች (Kids)</option>
-                      <option value="መድሃኒት">መድሃኒት (Medicine)</option>
-                      <option value="ሌላ">ሌላ (Other)</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Price (ETB)
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    value={formData.price || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  />
                 </div>
                 <div className="mt-2">
                   <label className="flex items-center space-x-2 text-zinc-300 bg-black p-3 border border-zinc-800 rounded-lg cursor-pointer">
@@ -1158,9 +1162,7 @@ export default function App() {
   };
 
   const renderArticle = (item, isHero, table) => {
-    // Titanium Armor: If an item somehow has no data, silently skip it to prevent crash
     if (!item) return null;
-
     const isExpanded = expandedPosts[item.id];
     const shouldTruncate =
       item.body && typeof item.body === "string" && item.body.length > 150;
@@ -1171,7 +1173,6 @@ export default function App() {
         : [];
     const mainImage = imagesArray[0];
 
-    // Safely format date
     const formatDateStr = (dateString) => {
       try {
         return dateString
@@ -1186,7 +1187,6 @@ export default function App() {
       }
     };
 
-    // Safely format author
     const getMaskedAuthorStr = (dbAuthor) => {
       if (!dbAuthor) return "Goleth";
       return String(dbAuthor).toLowerCase().includes("zenasoccer")
@@ -1290,9 +1290,7 @@ export default function App() {
     setCategoryFunc,
     categoriesList
   ) => {
-    // Protective array check
     const safeFeedData = Array.isArray(feedData) ? feedData : [];
-
     const filteredData =
       currentCategory === "ዋና" || currentCategory === "ሁሉም"
         ? safeFeedData
@@ -1322,8 +1320,6 @@ export default function App() {
             </button>
           ))}
         </div>
-
-        {/* Empty State Fallback (If there are 0 news articles in the database) */}
         {visibleData.length === 0 ? (
           <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
             <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
@@ -1682,7 +1678,6 @@ export default function App() {
   };
 
   const renderShop = () => {
-    // Array safety check
     const safeProducts = Array.isArray(products) ? products : [];
 
     let initialFiltered = safeProducts;
@@ -1706,11 +1701,16 @@ export default function App() {
       });
     }
 
+    // Sub-category filter checks our new DB column (or falls back to word search for older products)
     const finalFiltered =
       shopSubCategory === "ሁሉም"
         ? initialFiltered
         : initialFiltered.filter((p) => {
             if (!p) return false;
+            // Check actual sub-category column first
+            if (p.sub_category === shopSubCategory) return true;
+
+            // Fallback word check for old items
             const bodyText = (p.body || "").toLowerCase();
             const nameText = (p.name || "").toLowerCase();
             if (shopSubCategory === "ልብሶች")
@@ -1732,11 +1732,12 @@ export default function App() {
                 nameText.includes("shoe") ||
                 nameText.includes("ጫማ")
               );
-            return true;
+            return false;
           });
 
     return (
       <div className="pb-24 pt-2">
+        {/* Layer 1 Tabs */}
         <div className="flex overflow-x-auto space-x-2 mb-3 pb-2 scrollbar-hide">
           {shopCategories.map((cat) => (
             <button
@@ -1753,6 +1754,7 @@ export default function App() {
           ))}
         </div>
 
+        {/* Layer 2 Sub-Tabs */}
         {(shopCategory === "ወንዶች" ||
           shopCategory === "ሴቶች" ||
           shopCategory === "ልጆች") && (
@@ -1776,13 +1778,24 @@ export default function App() {
           </div>
         )}
 
-        <button
+        {/* Custom Sourcing Banner - BIG, AMHARIC, BLUE */}
+        <div
           onClick={() => setShowSourcingModal(true)}
-          className="w-full mb-5 flex items-center justify-center space-x-2 bg-amber-500/5 border border-amber-500/20 text-amber-500 font-black py-2.5 px-4 rounded-xl text-xs tracking-wide transition-colors"
+          className="w-full mb-6 bg-gradient-to-br from-[#0052D4] to-[#4364F7] p-6 rounded-2xl border border-blue-400/50 flex flex-col items-center justify-center cursor-pointer shadow-[0_10px_30px_rgba(0,82,212,0.3)] hover:scale-[1.02] transition-transform text-center relative overflow-hidden"
         >
-          <PlusCircle size={15} />
-          <span>የግል እቃ ይዘዙ (Custom Sourcing Request)</span>
-        </button>
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Globe2 size={80} />
+          </div>
+          <h3 className="text-white font-black text-2xl mb-2 drop-shadow-md z-10">
+            የግል እቃ ማዘዝ ይፈልጋሉ?
+          </h3>
+          <p className="text-blue-100 text-sm font-bold z-10">
+            ከአማዞን (Amazon) ወይም ከማንኛውም የውጪ ሱቆች እኛ እናመጣሎታለን!
+          </p>
+          <div className="mt-4 bg-white text-blue-600 font-black px-6 py-2 rounded-full text-sm z-10 shadow-lg flex items-center gap-2">
+            <PlusCircle size={18} /> አሁኑኑ ይዘዙ
+          </div>
+        </div>
 
         {finalFiltered.length === 0 && (
           <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed">
@@ -1790,12 +1803,10 @@ export default function App() {
               <ShoppingBag size={24} className="text-zinc-600" />
             </div>
             <p className="text-zinc-400 font-bold text-sm">ምንም እቃ አልተገኘም</p>
-            <p className="text-zinc-600 text-xs mt-1">
-              No products found in this category.
-            </p>
           </div>
         )}
 
+        {/* PRODUCT GRID */}
         <div className="grid grid-cols-2 gap-3">
           {finalFiltered.map((item) => {
             if (!item) return null;
@@ -1810,15 +1821,17 @@ export default function App() {
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col justify-between overflow-hidden shadow-sm relative"
+                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col justify-between overflow-hidden shadow-sm relative pt-8"
               >
+                {/* Floating Highlight Tag */}
                 {item.highlight_tag && (
-                  <div className="absolute top-2 left-2 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded shadow z-10 uppercase tracking-widest">
+                  <div className="absolute top-0 left-0 w-full bg-amber-500 text-black text-[10px] font-black px-2 py-1 text-center shadow uppercase tracking-widest z-10">
                     {item.highlight_tag}
                   </div>
                 )}
+
                 {isCEO && (
-                  <div className="absolute top-2 right-2 flex space-x-1 z-10 bg-black/70 p-1 rounded-md">
+                  <div className="absolute top-8 right-2 flex space-x-1 z-10 bg-black/70 p-1 rounded-md">
                     <button
                       onClick={() => handleEdit(item, "products")}
                       className="p-0.5"
@@ -1833,13 +1846,15 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                <div className="p-3 pb-2 flex flex-col gap-1">
+
+                <div className="px-3 pb-2 flex flex-col gap-1">
                   <div className="flex justify-between items-start">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider truncate">
+                    {/* Brand - BRIGHTER & LARGER */}
+                    <span className="text-xs text-blue-300 font-black uppercase tracking-wider truncate">
                       {item.brand || "Goleth"}
                     </span>
                     {isVipOnly && (
-                      <span className="text-[8px] bg-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-black">
+                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black">
                         VIP ONLY
                       </span>
                     )}
@@ -1848,6 +1863,7 @@ export default function App() {
                     {item.name || "Product"}
                   </h3>
                 </div>
+
                 <div className="bg-black/20 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30">
                   {mainImg ? (
                     <img
@@ -1859,6 +1875,7 @@ export default function App() {
                     <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
                   )}
                 </div>
+
                 <div className="p-3 pt-2 flex flex-col gap-2.5">
                   {item.sizes && typeof item.sizes === "string" && (
                     <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5">
@@ -1875,6 +1892,7 @@ export default function App() {
                         ))}
                     </div>
                   )}
+
                   <div className="flex items-baseline gap-1">
                     {user && user.isVIP ? (
                       <>
@@ -1891,23 +1909,26 @@ export default function App() {
                       </span>
                     )}
                   </div>
+
                   {canBuy ? (
+                    // ORDER BUTTON - BIGGER FONT
                     <button
                       onClick={() => {
                         setSelectedProduct(item);
                         setActiveProductImageIndex(0);
                         setOrderDestination("local");
                       }}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2 rounded-xl text-[10px] tracking-wide transition-all duration-150 transform active:scale-95"
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl text-sm tracking-wide transition-all duration-150 transform active:scale-95"
                     >
                       እዘዝ
                     </button>
                   ) : (
+                    // AMHARIC LOCK MESSAGE
                     <button
                       onClick={() => handleNavClick("ቪአይፒ")}
-                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-2 rounded-xl text-[9px] tracking-wide flex items-center justify-center gap-1"
+                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-3 rounded-xl text-xs tracking-wide flex items-center justify-center gap-1"
                     >
-                      <Lock size={9} /> VIP ብቻ
+                      <Lock size={12} /> የVIP አባል ይሁኑ
                     </button>
                   )}
                 </div>
@@ -1981,12 +2002,11 @@ export default function App() {
       {showProfile && renderProfileDashboard()}
       {showAdmin && renderCEOStudio()}
 
-      {/* SOURCING MODAL */}
       {showSourcingModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
-          <div className="bg-zinc-900 border border-amber-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_15px_rgba(245,158,11,0.2)] relative">
+          <div className="bg-zinc-900 border border-blue-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_20px_rgba(0,82,212,0.3)] relative">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-black text-amber-500">የግል እቃ ይዘዙ</h2>
+              <h2 className="text-xl font-black text-blue-500">የግል እቃ ይዘዙ</h2>
               <button
                 onClick={() => setShowSourcingModal(false)}
                 className="text-zinc-500 hover:text-white"
@@ -1994,22 +2014,22 @@ export default function App() {
                 <X size={20} />
               </button>
             </div>
-            <p className="text-zinc-400 mb-6 text-xs leading-relaxed">
-              ከ Amazon፣ BestBuy፣ ወይም ሌላ የዩኤስ ሱቅ እቃ መግዛት ይፈልጋሉ? ሊንኩን ከታች ያስገቡ።
-              እቃውን እና መጓጓዣውን አጠቃልለን ዋጋውን እናሳውቅዎታለን።
+            <p className="text-zinc-400 mb-6 text-sm leading-relaxed font-bold">
+              ከአማዞን (Amazon)፣ ቤስትባይ (BestBuy) ወይም ከየትኛውም የውጪ ሱቅ እቃ መግዛት ይፈልጋሉ?
+              ሊንኩን ከታች ያስገቡ። እቃውን እና መጓጓዣውን አጠቃልለን ዋጋውን እናሳውቅዎታለን።
             </p>
             <form onSubmit={handleSourcingSubmit}>
               <input
                 type="url"
                 required
                 placeholder="https://www.amazon.com/item..."
-                className="w-full p-3 rounded-xl bg-black border border-zinc-800 focus:border-amber-500 text-white mb-4 outline-none transition-colors"
+                className="w-full p-3 rounded-xl bg-black border border-zinc-800 focus:border-blue-500 text-white mb-4 outline-none transition-colors"
                 value={sourcingLink}
                 onChange={(e) => setSourcingLink(e.target.value)}
               />
               <button
                 type="submit"
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition-colors"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-colors text-lg"
               >
                 ሊንክ ላክ (Send Link)
               </button>
@@ -2018,7 +2038,6 @@ export default function App() {
         </div>
       )}
 
-      {/* GLOBAL CHECKOUT MODAL */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
@@ -2069,17 +2088,18 @@ export default function App() {
               )}
 
               {!user?.isVIP && (
-                <div className="bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/30 p-3 rounded-xl mb-4">
-                  <p className="text-amber-500 text-[10px] font-black uppercase mb-1 flex items-center gap-1">
-                    <AlertCircle size={12} /> Wait! You're paying full price.
+                <div className="bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/30 p-4 rounded-xl mb-4">
+                  <p className="text-amber-500 text-xs font-black uppercase mb-1 flex items-center gap-1">
+                    <AlertCircle size={14} /> ቆም ይበሉ! (Wait!)
                   </p>
-                  <p className="text-zinc-300 text-xs leading-relaxed">
+                  <p className="text-zinc-300 text-sm leading-relaxed font-bold">
                     {orderDestination === "local"
-                      ? "VIP Members get an instant 10% discount on this item. Close this window and upgrade to VIP first!"
-                      : "Diaspora VIP Benefit: Become a Goleth VIP and we will completely WAIVE the international service handling fee on this order!"}
+                      ? "ሙሉ ዋጋ እየከፈሉ ነው። የVIP አባላት የ10% ቅናሽ ያገኛሉ። ይህን መስኮት ዘግተው መጀመሪያ ወደ VIP ያድጉ!"
+                      : "የዲያስፖራ VIP ጥቅም፡ የVIP አባል ይሁኑ እና ለዚህ ትዕዛዝ የአለም አቀፍ አገልግሎት ክፍያ አንጠይቅም!"}
                   </p>
                 </div>
               )}
+
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
                   Your Full Name
@@ -2092,6 +2112,7 @@ export default function App() {
                   className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
                 />
               </div>
+
               {orderDestination === "local" ? (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
@@ -2149,6 +2170,8 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* NEW DELIVERY OPTIONS */}
               {orderDestination === "local" && (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
@@ -2159,11 +2182,19 @@ export default function App() {
                     onChange={(e) => setOrderShipping(e.target.value)}
                     className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
                   >
-                    <option value="local_delivery">በከተማ ውስጥ (+150 ETB)</option>
-                    <option value="traveler">በመንገደኛ መላክ (+500 ETB)</option>
+                    <option value="standard">
+                      በ3-5 ቀናት ውስጥ (3-5 Days) - መደበኛ (+150 ETB)
+                    </option>
+                    <option value="express">
+                      ቀጣይ ቀን (Next Day) - ፈጣን (+300 ETB)
+                    </option>
+                    <option value="traveler">
+                      በመንገደኛ መላክ (Traveler) - (+500 ETB)
+                    </option>
                   </select>
                 </div>
               )}
+
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 mt-4">
                 <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
                   Payment Instructions:
@@ -2241,15 +2272,16 @@ export default function App() {
               gossip.map((g, index) => renderArticle(g, index === 0, "gossip"))
             ) : (
               <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
+                {" "}
                 <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
                   <Flame className="text-zinc-600" size={24} />
-                </div>
+                </div>{" "}
                 <p className="text-zinc-400 font-bold text-sm">
                   ምንም አልተገኘም (Empty)
-                </p>
+                </p>{" "}
                 <p className="text-zinc-600 text-xs mt-1">
                   Check back later for updates.
-                </p>
+                </p>{" "}
               </div>
             )}
           </div>
