@@ -417,20 +417,14 @@ export default function App() {
         const res = await supabase
           .from(adminTab)
           .update(payload)
-          .eq("id", editingId)
-          .select();
+          .eq("id", editingId);
 
         if (res.error) {
           alert("Database Error: " + res.error.message);
           return;
         }
-        if (res.data && res.data.length === 0) {
-          alert(
-            "Update failed. Please check permissions or if the item exists."
-          );
-          return;
-        }
 
+        // Apply UI updates instantly
         if (adminTab === "news")
           setNews((prev) =>
             prev.map((n) => (n.id === editingId ? { ...n, ...payload } : n))
@@ -2058,7 +2052,7 @@ export default function App() {
                         }}
                         className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 flex items-center justify-center gap-2"
                       >
-                        <ShoppingBag size={14} /> ወደ ዘንቢል ጨምር
+                        <ShoppingBag size={14} /> ይግዙ
                       </button>
                     ) : (
                       <button
@@ -2206,7 +2200,7 @@ export default function App() {
               </p>
               {selectedSize && selectedSize !== "Default" && (
                 <div className="mt-3 inline-block bg-amber-500 text-zinc-950 px-3 py-1 rounded-full text-xs font-black">
-                  {selectedSize}
+                  ተለዋጭ / መጠን (Selected Variant): {selectedSize}
                 </div>
               )}
             </div>
@@ -2262,7 +2256,7 @@ export default function App() {
               <span className="text-white font-black text-xl mb-1">
                 Price: {selectedProduct.price} ብር
               </span>
-              <span className="text-amber-500 font-bold text-sm bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              <span className="text-amber-500 font-black text-sm bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 👑 VIP Member Price: {Math.round(selectedProduct.price * 0.9)}{" "}
                 ብር (10% Off)
               </span>
