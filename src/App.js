@@ -97,13 +97,13 @@ export default function App() {
   const [sourcingLink, setSourcingLink] = useState("");
 
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSize, setSelectedSize] = useState(""); // Track variant picked by customer
-  const [productSelections, setProductSelections] = useState({}); // Track feeds sizes separately
+  const [selectedSize, setSelectedSize] = useState("");
+  const [productSelections, setProductSelections] = useState({});
   const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
 
   const [orderDestination, setOrderDestination] = useState("local");
   const [orderName, setOrderName] = useState("");
-  const [countryCode, setCountryCode] = useState("+1");
+  const [countryCode, setCountryCode] = useState("+251");
   const [orderPhone, setOrderPhone] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [orderShipping, setOrderShipping] = useState("standard");
@@ -413,27 +413,39 @@ export default function App() {
     }
 
     try {
-      let error;
       if (editingId) {
         const res = await supabase
           .from(adminTab)
           .update(payload)
-          .eq("id", editingId);
-        error = res.error;
-        if (!error) {
-          if (adminTab === "news")
-            setNews((prev) =>
-              prev.map((n) => (n.id === editingId ? { ...n, ...payload } : n))
-            );
-          if (adminTab === "gossip")
-            setGossip((prev) =>
-              prev.map((g) => (g.id === editingId ? { ...g, ...payload } : g))
-            );
-          if (adminTab === "products")
-            setProducts((prev) =>
-              prev.map((p) => (p.id === editingId ? { ...p, ...payload } : p))
-            );
+          .eq("id", editingId)
+          .select();
+
+        if (res.error) {
+          alert("Database Error: " + res.error.message);
+          return;
         }
+        if (res.data && res.data.length === 0) {
+          alert(
+            "Update failed. Please check permissions or if the item exists."
+          );
+          return;
+        }
+
+        if (adminTab === "news")
+          setNews((prev) =>
+            prev.map((n) => (n.id === editingId ? { ...n, ...payload } : n))
+          );
+        if (adminTab === "gossip")
+          setGossip((prev) =>
+            prev.map((g) => (g.id === editingId ? { ...g, ...payload } : g))
+          );
+        if (adminTab === "products")
+          setProducts((prev) =>
+            prev.map((p) => (p.id === editingId ? { ...p, ...payload } : p))
+          );
+
+        alert("✅ የተቀየረው በተሳካ ሁኔታ ተቀምጧል! (Update Saved Successfully!)");
+        closeAdmin();
       } else {
         if (adminTab === "predictions")
           await supabase
@@ -441,15 +453,13 @@ export default function App() {
             .update({ is_active: false })
             .neq("id", 0);
         const res = await supabase.from(adminTab).insert([payload]);
-        error = res.error;
-      }
-
-      if (error) {
-        alert("Database Error: " + error.message);
-      } else {
-        alert("✅ የተቀየረው በተሳካ ሁኔታ ተቀምጧል! (Update Saved Successfully!)");
-        closeAdmin();
-        await fetchData();
+        if (res.error) {
+          alert("Database Error: " + res.error.message);
+        } else {
+          alert("✅ አዲስ ነገር ተጨምሯል! (Added Successfully!)");
+          closeAdmin();
+          await fetchData();
+        }
       }
     } catch (err) {
       alert("System Error: " + err.message);
@@ -554,14 +564,14 @@ export default function App() {
         user_id: user ? user.id : null,
         customer_name: orderName,
         phone: finalPhone,
-        product_name: `${selectedProduct.name} (Size/Color: ${selectedSize})`,
+        product_name: `${selectedProduct.name} (Choice: ${selectedSize})`,
         total_price: total,
         shipping_method:
           orderDestination === "local" ? orderShipping : "Diaspora Delivery",
         status: "Pending",
       };
       await supabase.from("orders").insert([orderPayload]);
-      alert("트ዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order successfully sent!)");
+      alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order successfully sent!)");
       setSelectedProduct(null);
       setSelectedSize("");
       fetchData();
@@ -625,6 +635,24 @@ export default function App() {
     setExpandedProducts((prev) => ({ ...prev, [id]: !prev[id] }));
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  // Helper function to extract user selections based on the dynamically split string
+  const getSelectedVariantsText = (itemId, sizesStr) => {
+    if (!sizesStr || sizesStr.trim() === "") return "Default";
+    const groups = sizesStr.split("|");
+    const selections = [];
+    let allSelected = true;
+    groups.forEach((g, gIdx) => {
+      const picked = productSelections[`${itemId}-${gIdx}`];
+      if (!picked) allSelected = false;
+      else {
+        let label = g.includes(":") ? g.split(":")[0].trim() : "Option";
+        selections.push(`${label}: ${picked}`);
+      }
+    });
+    if (!allSelected) return null;
+    return selections.join(" | ");
+  };
 
   const renderProfileDashboard = () => (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#09090b]/95 p-0 sm:p-4">
@@ -1008,17 +1036,17 @@ export default function App() {
 
                 <div className="grid grid-cols-1">
                   <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Sizes / Options (Comma Separated for Choices)
+                    <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">
+                      Sizes / Colors (E.g. Size: S, M, L | Color: Red, Blue)
                     </label>
                     <input
                       type="text"
-                      placeholder="S, M, L, XL or Red, Blue"
+                      placeholder="Size: S, M | Color: Red, Blue"
                       value={formData.sizes || ""}
                       onChange={(e) =>
                         setFormData({ ...formData, sizes: e.target.value })
                       }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      className="w-full bg-[#09090b] border border-zinc-800 focus:border-amber-500 rounded-lg p-3 text-white text-sm outline-none"
                     />
                   </div>
                 </div>
@@ -1882,7 +1910,6 @@ export default function App() {
                 key={item.id}
                 className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
               >
-                {/* 1. Highlight Tag */}
                 {item.highlight_tag && (
                   <div className="w-full bg-red-600 text-white text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-red-700">
                     {item.highlight_tag}
@@ -1908,11 +1935,10 @@ export default function App() {
 
                 <div
                   className={`px-3 pb-2 flex flex-col flex-grow ${
-                    item.highlight_tag ? "pt-2" : "pt-4"
+                    item.highlight_tag ? "pt-1" : "pt-4"
                   }`}
                 >
-                  {/* 2. Image (Heart Sign Removed) */}
-                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 relative group rounded-xl overflow-hidden mb-3">
+                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-2 relative group rounded-xl overflow-hidden mb-2">
                     {mainImg ? (
                       <img
                         src={mainImg}
@@ -1930,21 +1956,18 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* 3. Regular Price Box */}
-                  <div className="flex items-baseline gap-1">
+                  <div className="flex items-baseline gap-1 mt-1">
                     <span className="text-white font-black text-[15px]">
                       {item.price || 0} ብር
                     </span>
                   </div>
 
-                  {/* VIP Member Price Box Directly Underneath Regular Price */}
                   <div className="flex items-baseline mb-2">
-                    <span className="text-amber-500 text-[11px] font-black tracking-wide bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    <span className="text-amber-500 text-[10px] font-black tracking-wide bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                       👑 VIP: {Math.round((item.price || 0) * 0.9)} ብር
                     </span>
                   </div>
 
-                  {/* 4. Product Title */}
                   <h3 className="text-white font-bold text-[13px] leading-snug line-clamp-2 mb-1">
                     {item.name || "Product"}
                     {isVipOnly && (
@@ -1954,67 +1977,81 @@ export default function App() {
                     )}
                   </h3>
 
-                  {/* 5. Subtitle (Brand) */}
                   <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-widest break-words leading-tight w-full mb-3">
                     {item.brand || "Goleth"}
                   </p>
 
-                  {/* 6. Dynamic Size/Colour Selections Configured by CEO */}
                   {item.sizes &&
                     typeof item.sizes === "string" &&
                     item.sizes.trim() !== "" && (
-                      <div className="mb-4 bg-zinc-950/60 p-2 rounded-xl border border-zinc-800/40">
-                        <span className="text-[9px] text-zinc-500 font-bold mb-1.5 block uppercase tracking-wider">
-                          {["ወንዶች", "ሴቶች", "ልጆች"].includes(item.category)
-                            ? "መጠን / ቀለም ይምረጡ (Select Variant):"
-                            : "አማራጭ ይምረጡ (Select Option):"}
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.sizes.split(",").map((s, idx) => {
-                            const cleanedSize = s.trim();
-                            const isSelected =
-                              productSelections[item.id] === cleanedSize;
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  setProductSelections((prev) => ({
-                                    ...prev,
-                                    [item.id]: cleanedSize,
-                                  }));
-                                }}
-                                className={`text-[10px] font-black px-2.5 py-1 rounded transition-all border ${
-                                  isSelected
-                                    ? "bg-amber-500 text-zinc-950 border-amber-600 scale-105 shadow-md"
-                                    : "bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500"
-                                }`}
-                              >
-                                {cleanedSize}
-                              </button>
-                            );
-                          })}
-                        </div>
+                      <div className="mb-4 bg-zinc-950/60 p-2 rounded-xl border border-zinc-800/40 space-y-2">
+                        {item.sizes.split("|").map((group, gIdx) => {
+                          let groupLabel = "አማራጭ ይምረጡ (Option):";
+                          let optionsStr = group;
+                          if (group.includes(":")) {
+                            const parts = group.split(":");
+                            groupLabel = parts[0].trim();
+                            optionsStr = parts[1];
+                          }
+
+                          return (
+                            <div key={gIdx} className="flex flex-col">
+                              <span className="text-[9px] text-zinc-500 font-bold mb-1 block uppercase tracking-wider">
+                                {groupLabel}
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {optionsStr.split(",").map((s, idx) => {
+                                  const cleanedSize = s.trim();
+                                  if (!cleanedSize) return null;
+                                  const selectionKey = `${item.id}-${gIdx}`;
+                                  const isSelected =
+                                    productSelections[selectionKey] ===
+                                    cleanedSize;
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        setProductSelections((prev) => ({
+                                          ...prev,
+                                          [selectionKey]: cleanedSize,
+                                        }));
+                                      }}
+                                      className={`text-[10px] font-black px-2 py-1 rounded transition-all border ${
+                                        isSelected
+                                          ? "bg-amber-500 text-zinc-950 border-amber-600 scale-105 shadow-md"
+                                          : "bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500"
+                                      }`}
+                                    >
+                                      {cleanedSize}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                  {/* 7. Action Button */}
                   <div className="mt-auto">
                     {canBuy ? (
                       <button
                         onClick={() => {
-                          const picked = productSelections[item.id];
-                          if (
-                            item.sizes &&
-                            item.sizes.trim() !== "" &&
-                            !picked
-                          ) {
-                            alert(
-                              "እባክዎ መጀመሪያ መጠን ወይም ቀለም ይምረጡ! (Please select a size/option first!)"
+                          let variantsText = "Default";
+                          if (item.sizes && item.sizes.trim() !== "") {
+                            variantsText = getSelectedVariantsText(
+                              item.id,
+                              item.sizes
                             );
-                            return;
+                            if (!variantsText) {
+                              alert(
+                                "እባክዎ ሁሉንም አማራጮች ይምረጡ! (Please select all sizes/colors first!)"
+                              );
+                              return;
+                            }
                           }
-                          setSelectedSize(picked || "Default");
+                          setSelectedSize(variantsText);
                           setSelectedProduct(item);
                           setActiveProductImageIndex(0);
                           setOrderDestination("local");
@@ -2160,7 +2197,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* 1. Title, Sub Title, Chosen Variant Selection (Top) */}
             <div className="mb-4 text-center">
               <h2 className="text-2xl font-black text-white mb-1">
                 {selectedProduct.name}
@@ -2168,12 +2204,13 @@ export default function App() {
               <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">
                 {selectedProduct.brand || "Goleth Official"}
               </p>
-              <div className="mt-2 inline-block bg-amber-500 text-zinc-950 px-3 py-1 rounded-full text-xs font-black">
-                ተለዋጭ / መጠን (Selected Variant): {selectedSize}
-              </div>
+              {selectedSize && selectedSize !== "Default" && (
+                <div className="mt-3 inline-block bg-amber-500 text-zinc-950 px-3 py-1 rounded-full text-xs font-black">
+                  {selectedSize}
+                </div>
+              )}
             </div>
 
-            {/* 2. Image (Middle) */}
             <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
               <img
                 src={currentOrderImages[activeProductImageIndex]}
@@ -2221,18 +2258,16 @@ export default function App() {
               )}
             </div>
 
-            {/* 3. Regular Price Box with VIP Box Directly Underneath */}
             <div className="flex flex-col items-center mb-6 bg-[#09090b] p-4 rounded-xl border border-zinc-800">
               <span className="text-white font-black text-xl mb-1">
                 Price: {selectedProduct.price} ብር
               </span>
-              <span className="text-amber-500 font-black text-sm bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              <span className="text-amber-500 font-bold text-sm bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 👑 VIP Member Price: {Math.round(selectedProduct.price * 0.9)}{" "}
-                ብር
+                ብር (10% Off)
               </span>
             </div>
 
-            {/* 4. Order Settings Form Panels */}
             <div className="flex space-x-2 mb-6 bg-[#09090b] p-1 rounded-xl border border-zinc-800">
               <button
                 onClick={() => setOrderDestination("local")}
@@ -2473,7 +2508,7 @@ export default function App() {
                       className="min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl p-2 shrink-0 cursor-pointer"
                       onClick={() => {
                         setSelectedProduct(recommended);
-                        setSelectedSize("Default");
+                        setSelectedSize("");
                         setActiveProductImageIndex(0);
                       }}
                     >
