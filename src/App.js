@@ -19,11 +19,11 @@ import {
   AlertCircle,
   TrendingUp,
   Package,
-  Clock,
-  Truck,
-  Globe2,
   MapPin,
+  Globe2,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -72,7 +72,8 @@ export default function App() {
     return null;
   });
 
-  const [activeTab, setActiveTab] = useState("ሱቅ");
+  // CHANGED: Default active tab is now News
+  const [activeTab, setActiveTab] = useState("ዜና");
   const [showAdmin, setShowAdmin] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [isCEO, setIsCEO] = useState(false);
@@ -242,10 +243,16 @@ export default function App() {
     if (data) setExistingPrediction(data);
   };
 
+  // CHANGED: Logo now navigates to News
   const navigateHome = () => {
-    setActiveTab("ሱቅ");
-    setShopCategory("ሁሉም");
+    setActiveTab("ዜና");
+    setNewsCategory("ዋና");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const fetchCEOUsers = async () => {
+    const { data } = await supabase.from("users").select("*");
+    if (data) setAllUsers(data);
   };
 
   const handleLogoTap = () => {
@@ -387,7 +394,7 @@ export default function App() {
         author: formData.author || "Goleth",
         body: formData.body || "",
       });
-      if (finalImageUrl) payload.image_url = finalImageUrl; // PROTECTS EXISTING IMAGES
+      if (finalImageUrl) payload.image_url = finalImageUrl;
     } else if (adminTab === "products") {
       Object.assign(payload, {
         name: formData.title || "Untitled",
@@ -401,7 +408,7 @@ export default function App() {
         stock_status: formData.stock_status || "In Stock",
         highlight_tag: formData.highlight_tag || null,
       });
-      if (finalImageUrl) payload.image_url = finalImageUrl; // PROTECTS EXISTING IMAGES
+      if (finalImageUrl) payload.image_url = finalImageUrl;
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
         league_name: formData.league || "Unknown",
@@ -420,6 +427,21 @@ export default function App() {
           .update(payload)
           .eq("id", editingId);
         error = res.error;
+        // Optimistic UI Update
+        if (!error) {
+          if (adminTab === "news")
+            setNews((prev) =>
+              prev.map((n) => (n.id === editingId ? { ...n, ...payload } : n))
+            );
+          if (adminTab === "gossip")
+            setGossip((prev) =>
+              prev.map((g) => (g.id === editingId ? { ...g, ...payload } : g))
+            );
+          if (adminTab === "products")
+            setProducts((prev) =>
+              prev.map((p) => (p.id === editingId ? { ...p, ...payload } : p))
+            );
+        }
       } else {
         if (adminTab === "predictions")
           await supabase
@@ -435,10 +457,7 @@ export default function App() {
       } else {
         alert("✅ የተቀየረው በተሳካ ሁኔታ ተቀምጧል! (Update Saved Successfully!)");
         closeAdmin();
-        // Delaying fetch to ensure Supabase write resolves before we update UI
-        setTimeout(() => {
-          fetchData();
-        }, 600);
+        await fetchData(); // Strict fetch to sync UI
       }
     } catch (err) {
       alert("System Error: " + err.message);
@@ -524,10 +543,9 @@ export default function App() {
     let basePrice = selectedProduct.price;
     if (user && user.isVIP) basePrice = selectedProduct.price * 0.9;
 
-    // NEW SHIPPING LOGIC
-    let shippingCost = 150; // Standard 3-5 Days
-    if (orderShipping === "express") shippingCost = 300; // Next Day Express
-    if (orderShipping === "traveler") shippingCost = 500; // Traveler option
+    let shippingCost = 150;
+    if (orderShipping === "express") shippingCost = 300;
+    if (orderShipping === "traveler") shippingCost = 500;
 
     if (orderDestination === "international") {
       shippingCost = user && user.isVIP ? 0 : 750;
@@ -591,23 +609,42 @@ export default function App() {
     }
   };
 
+  const handleVipRegistrationSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmittingVip(true);
+    setTimeout(() => {
+      alert("የቪአይፒ ጥያቄዎ በተሳካ ሁኔታ ተልኳል! (VIP Request Sent!)");
+      setIsSubmittingVip(false);
+      setVipPhone("");
+      setVipReceipt(null);
+    }, 1500);
+  };
+
+  const handlePredictSubmit = async (matchId) => {
+    setPredictionStatus("loading");
+    setTimeout(() => {
+      alert("ግምትዎ በተሳካ ሁኔታ ተልኳል! (Prediction submitted!)");
+      setPredictionStatus("idle");
+    }, 1500);
+  };
+
   const toggleProductReadMore = (id) =>
     setExpandedProducts((prev) => ({ ...prev, [id]: !prev[id] }));
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const renderProfileDashboard = () => (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/90 p-0 sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#09090b]/95 p-0 sm:p-4">
       <div className="bg-zinc-950 w-full sm:max-w-2xl h-[90vh] sm:h-[80vh] rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-800 flex flex-col relative overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
         <div className="bg-zinc-900 border-b border-zinc-800 p-6 relative">
           <button
             onClick={() => setShowProfile(false)}
-            className="absolute top-6 right-6 text-zinc-500 hover:text-white bg-black p-2 rounded-full border border-zinc-800"
+            className="absolute top-6 right-6 text-zinc-500 hover:text-white bg-[#09090b] p-2 rounded-full border border-zinc-800"
           >
             <X size={20} />
           </button>
           <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center text-2xl font-black text-black shadow-lg uppercase">
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center text-2xl font-black text-[#09090b] shadow-lg uppercase">
               {user?.name?.charAt(0) || "U"}
             </div>
             <div>
@@ -620,7 +657,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 bg-black">
+        <div className="flex-1 overflow-y-auto p-6 bg-[#09090b]">
           <h3 className="text-white font-black text-lg mb-4">
             My Order Tracking
           </h3>
@@ -686,7 +723,7 @@ export default function App() {
       0
     );
     return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 overflow-y-auto">
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#09090b]/95 overflow-y-auto">
         <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
           <button
             onClick={closeAdmin}
@@ -708,7 +745,7 @@ export default function App() {
                       onClick={() => setAdminTab(tab)}
                       className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
                         adminTab === tab
-                          ? "bg-amber-500 text-black"
+                          ? "bg-amber-500 text-[#09090b]"
                           : "bg-zinc-800 text-zinc-400"
                       }`}
                     >
@@ -722,7 +759,7 @@ export default function App() {
             {adminTab === "analytics" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-black border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
+                  <div className="bg-[#09090b] border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
                     <TrendingUp size={24} className="text-green-500 mb-2" />
                     <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
                       Total Sales
@@ -732,7 +769,7 @@ export default function App() {
                       <span className="text-sm text-zinc-500">ETB</span>
                     </span>
                   </div>
-                  <div className="bg-black border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
+                  <div className="bg-[#09090b] border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
                     <Package size={24} className="text-blue-500 mb-2" />
                     <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
                       Orders
@@ -746,7 +783,7 @@ export default function App() {
                   <h3 className="text-sm font-bold text-zinc-400 mb-2 uppercase tracking-widest">
                     Live Order Pipeline
                   </h3>
-                  <div className="bg-black border border-zinc-800 rounded-xl max-h-[60vh] overflow-y-auto p-2 space-y-2">
+                  <div className="bg-[#09090b] border border-zinc-800 rounded-xl max-h-[60vh] overflow-y-auto p-2 space-y-2">
                     {orders.length === 0 && (
                       <p className="text-zinc-600 text-xs text-center py-4">
                         No orders yet.
@@ -771,7 +808,7 @@ export default function App() {
                         <div className="text-blue-400 text-xs mb-3">
                           {o.phone}
                         </div>
-                        <div className="flex justify-between items-center bg-black p-2 rounded-lg border border-zinc-800">
+                        <div className="flex justify-between items-center bg-[#09090b] p-2 rounded-lg border border-zinc-800">
                           <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
                             Update Status:
                           </span>
@@ -836,7 +873,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, title: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
                 <div>
@@ -849,7 +886,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, subtitle: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
                 <div>
@@ -862,7 +899,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, author: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
                 <div>
@@ -876,7 +913,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, body: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
                   ></textarea>
                 </div>
               </>
@@ -895,7 +932,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, title: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -910,7 +947,7 @@ export default function App() {
                       onChange={(e) =>
                         setFormData({ ...formData, brand: e.target.value })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
                     />
                   </div>
                   <div>
@@ -927,7 +964,7 @@ export default function App() {
                           highlight_tag: e.target.value,
                         })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
                     />
                   </div>
                 </div>
@@ -943,7 +980,7 @@ export default function App() {
                       onChange={(e) =>
                         setFormData({ ...formData, category: e.target.value })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
                     >
                       <option value="ወንዶች">ወንዶች (Men)</option>
                       <option value="ሴቶች">ሴቶች (Women)</option>
@@ -968,7 +1005,7 @@ export default function App() {
                             sub_category: e.target.value,
                           })
                         }
-                        className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                        className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
                       >
                         <option value="ልብሶች">ልብሶች (Clothes)</option>
                         <option value="ጫማዎች">ጫማዎች (Shoes)</option>
@@ -990,7 +1027,7 @@ export default function App() {
                       onChange={(e) =>
                         setFormData({ ...formData, sizes: e.target.value })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
                     />
                   </div>
                   <div>
@@ -1005,7 +1042,7 @@ export default function App() {
                           stock_status: e.target.value,
                         })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
                     >
                       <option value="In Stock">In Stock</option>
                       <option value="Low Stock (Hurry!)">
@@ -1027,7 +1064,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, body: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   ></textarea>
                 </div>
                 <div>
@@ -1041,11 +1078,11 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, price: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
                 <div className="mt-2">
-                  <label className="flex items-center space-x-2 text-zinc-300 bg-black p-3 border border-zinc-800 rounded-lg cursor-pointer">
+                  <label className="flex items-center space-x-2 text-zinc-300 bg-[#09090b] p-3 border border-zinc-800 rounded-lg cursor-pointer">
                     <input
                       type="checkbox"
                       checked={formData.is_vip_only || false}
@@ -1055,7 +1092,7 @@ export default function App() {
                           is_vip_only: e.target.checked,
                         })
                       }
-                      className="w-4 h-4 rounded text-amber-500 bg-black border-zinc-800"
+                      className="w-4 h-4 rounded text-amber-500 bg-[#09090b] border-zinc-800"
                     />
                     <span className="text-sm font-bold text-amber-500">
                       VIP Only
@@ -1078,7 +1115,7 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, league: e.target.value })
                     }
-                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-2">
@@ -1093,7 +1130,7 @@ export default function App() {
                       onChange={(e) =>
                         setFormData({ ...formData, teamA: e.target.value })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                     />
                   </div>
                   <div>
@@ -1107,11 +1144,11 @@ export default function App() {
                       onChange={(e) =>
                         setFormData({ ...formData, teamB: e.target.value })
                       }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
                     />
                   </div>
                 </div>
-                <div className="bg-black p-3 border border-zinc-800 rounded-lg">
+                <div className="bg-[#09090b] p-3 border border-zinc-800 rounded-lg">
                   <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
                     Team Logos (Upload)
                   </label>
@@ -1148,7 +1185,7 @@ export default function App() {
                 <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
                   Select Images
                 </label>
-                <div className="flex items-center space-x-4 bg-black border border-zinc-800 rounded-lg p-3">
+                <div className="flex items-center space-x-4 bg-[#09090b] border border-zinc-800 rounded-lg p-3">
                   <ImageIcon size={20} className="text-amber-500" />
                   <input
                     type="file"
@@ -1164,7 +1201,7 @@ export default function App() {
               <button
                 type="submit"
                 disabled={uploading}
-                className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4"
+                className="w-full bg-amber-500 text-[#09090b] font-black py-4 rounded-xl mt-4"
               >
                 {uploading ? "Publishing..." : "Publish"}
               </button>
@@ -1208,7 +1245,8 @@ export default function App() {
         : String(dbAuthor);
     };
 
-    if (isHero) {
+    // CHANGED: Expanded articles (or the hero) show the full layout
+    if (isHero || isExpanded) {
       return (
         <div
           key={item.id}
@@ -1219,13 +1257,19 @@ export default function App() {
           {isCEO && (
             <div className="absolute top-2 right-2 flex space-x-2 z-10">
               <button
-                onClick={() => handleEdit(item, table)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEdit(item, table);
+                }}
                 className="bg-blue-600 p-2 rounded-full"
               >
                 <Edit size={16} />
               </button>
               <button
-                onClick={() => handleDelete(table, item.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(table, item.id);
+                }}
                 className="bg-red-600 p-2 rounded-full"
               >
                 <Trash2 size={16} />
@@ -1254,27 +1298,43 @@ export default function App() {
             {renderSmartBody(item.body, imagesArray, isExpanded, item.id)}
             {shouldTruncate && (
               <button
-                onClick={() => toggleReadMore(item.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleReadMore(item.id);
+                }}
                 className="text-amber-500 text-xs font-bold mt-3"
               >
-                {isExpanded ? "አሳጥር" : "ሙሉውን ያንብቡ"}
+                {isExpanded ? "አሳጥር (Show Less)" : "ሙሉውን ያንብቡ (Read More)"}
               </button>
             )}
           </div>
         </div>
       );
     }
+
+    // CHANGED: Grid items are now clickable to expand
     return (
       <div
         key={item.id}
-        className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mb-3 flex h-32 relative"
+        onClick={() => toggleReadMore(item.id)}
+        className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mb-3 flex h-32 relative cursor-pointer hover:border-zinc-600 transition-colors"
       >
         {isCEO && (
           <div className="absolute top-2 right-2 flex space-x-2 z-10 bg-black/50 p-1 rounded">
-            <button onClick={() => handleEdit(item, table)}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(item, table);
+              }}
+            >
               <Edit size={14} className="text-blue-400" />
             </button>
-            <button onClick={() => handleDelete(table, item.id)}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(table, item.id);
+              }}
+            >
               <Trash2 size={14} className="text-red-400" />
             </button>
           </div>
@@ -1282,7 +1342,7 @@ export default function App() {
         {mainImage ? (
           <img src={mainImage} className="w-1/3 h-full object-cover" alt="" />
         ) : (
-          <div className="w-1/3 bg-black flex items-center justify-center text-xs text-zinc-800">
+          <div className="w-1/3 bg-[#09090b] flex items-center justify-center text-xs text-zinc-800">
             GOLETH
           </div>
         )}
@@ -1326,7 +1386,7 @@ export default function App() {
               }}
               className={`px-4 py-1.5 rounded-full text-xs font-bold ${
                 currentCategory === cat
-                  ? "bg-amber-500 text-black"
+                  ? "bg-amber-500 text-[#09090b]"
                   : "bg-zinc-800 text-white"
               }`}
             >
@@ -1436,9 +1496,9 @@ export default function App() {
                 Sneak Peek: Today's Match
               </h3>
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden flex items-center justify-between">
-                <div className="absolute inset-0 backdrop-blur-[3px] bg-black/40 z-10 flex items-center justify-center">
-                  <div className="bg-amber-500 text-black px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow-xl">
-                    <Lock size={12} /> VIP ONLY PREDICTION
+                <div className="absolute inset-0 backdrop-blur-[3px] bg-[#09090b]/40 z-10 flex items-center justify-center">
+                  <div className="bg-amber-500 text-[#09090b] px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow-xl">
+                    <Lock size={12} /> የቪአይፒ አባላት ብቻ (VIP ONLY)
                   </div>
                 </div>
                 <span className="text-white font-bold opacity-30">
@@ -1473,7 +1533,7 @@ export default function App() {
                         key={p.id}
                         className="min-w-[120px] bg-zinc-900 rounded-xl border border-zinc-800 p-2 relative overflow-hidden"
                       >
-                        <div className="absolute inset-0 backdrop-blur-[2px] bg-black/40 z-10 flex items-center justify-center">
+                        <div className="absolute inset-0 backdrop-blur-[2px] bg-[#09090b]/40 z-10 flex items-center justify-center">
                           <Lock
                             size={20}
                             className="text-amber-500 drop-shadow-lg"
@@ -1486,7 +1546,7 @@ export default function App() {
                             alt=""
                           />
                         ) : (
-                          <div className="w-full aspect-square bg-black rounded-lg mb-2"></div>
+                          <div className="w-full aspect-square bg-[#09090b] rounded-lg mb-2"></div>
                         )}
                         <p className="text-white font-bold text-[10px] truncate opacity-50">
                           {p.name}
@@ -1498,8 +1558,8 @@ export default function App() {
             </div>
           )}
 
-          <div className="bg-black border border-amber-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(245,158,11,0.05)] text-center relative">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
+          <div className="bg-[#09090b] border border-amber-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(245,158,11,0.05)] text-center relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-[#09090b] text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
               Upgrade Now
             </div>
             <div className="bg-zinc-900 p-4 rounded-xl text-left border border-zinc-800 mt-4 mb-6">
@@ -1545,7 +1605,7 @@ export default function App() {
               <button
                 type="submit"
                 disabled={isSubmittingVip}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors mt-2"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-[#09090b] font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors mt-2"
               >
                 {isSubmittingVip ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -1585,7 +1645,7 @@ export default function App() {
               </div>
               <div className="flex justify-between items-center relative z-10">
                 <div className="flex flex-col items-center w-1/3">
-                  <div className="w-16 h-16 bg-black border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
+                  <div className="w-16 h-16 bg-[#09090b] border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
                     {predictions[0].team_a_logo ? (
                       <img
                         src={predictions[0].team_a_logo}
@@ -1606,7 +1666,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex flex-col items-center w-1/3">
-                  <div className="w-16 h-16 bg-black border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
+                  <div className="w-16 h-16 bg-[#09090b] border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
                     {predictions[0].team_b_logo ? (
                       <img
                         src={predictions[0].team_b_logo}
@@ -1648,7 +1708,7 @@ export default function App() {
                       min="0"
                       value={teamAScore}
                       onChange={(e) => setTeamAScore(e.target.value)}
-                      className="w-16 h-16 bg-black border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
+                      className="w-16 h-16 bg-[#09090b] border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
                     />
                     <span className="text-zinc-600 font-black">-</span>
                     <input
@@ -1656,7 +1716,7 @@ export default function App() {
                       min="0"
                       value={teamBScore}
                       onChange={(e) => setTeamBScore(e.target.value)}
-                      className="w-16 h-16 bg-black border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
+                      className="w-16 h-16 bg-[#09090b] border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
                     />
                   </div>
                   <button
@@ -1666,7 +1726,7 @@ export default function App() {
                       teamAScore === "" ||
                       teamBScore === ""
                     }
-                    className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black py-4 rounded-xl flex justify-center items-center space-x-2"
+                    className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#09090b] font-black py-4 rounded-xl flex justify-center items-center space-x-2"
                   >
                     {predictionStatus === "loading" ? (
                       <Loader2 className="animate-spin" size={20} />
@@ -1754,7 +1814,7 @@ export default function App() {
               onClick={() => resetShopFilters(cat)}
               className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all ${
                 shopCategory === cat
-                  ? "bg-amber-500 text-black shadow-lg"
+                  ? "bg-amber-500 text-[#09090b] shadow-lg"
                   : "bg-zinc-900 text-zinc-400 border border-zinc-800/60"
               }`}
             >
@@ -1776,7 +1836,7 @@ export default function App() {
                 onClick={() => setShopSubCategory(sub)}
                 className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
                   shopSubCategory === sub
-                    ? "bg-amber-500 text-black shadow-md scale-105"
+                    ? "bg-amber-500 text-[#09090b] shadow-md scale-105"
                     : "bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-white"
                 }`}
               >
@@ -1786,21 +1846,23 @@ export default function App() {
           </div>
         )}
 
-        {/* CUSTOM SOURCING BANNER - SAFE ONCLICK WRAPPER TO PREVENT WHITE SCREEN */}
+        {/* CUSTOM SOURCING BANNER */}
         <div
           onClick={(e) => {
             e.preventDefault();
             setShowSourcingModal(true);
           }}
-          className="w-full mb-5 bg-gradient-to-r from-blue-700 to-blue-900 p-4 rounded-xl flex items-center justify-between cursor-pointer shadow-lg hover:scale-[1.02] transition-transform"
+          className="w-full mb-4 bg-gradient-to-r from-[#0d3b66] to-[#1d5b99] p-3 rounded-lg flex items-center justify-between cursor-pointer shadow-md hover:opacity-90 transition-opacity border border-[#2a75c3]"
         >
           <div>
-            <h3 className="text-white font-black text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-            <p className="text-blue-100 text-[11px] mt-0.5 font-bold">
-              አማዞን ወይም ሌላ ሱቅ፣ እኛ እናመጣሎታለን።
+            <h3 className="text-white font-black text-[13px] tracking-wide">
+              ልዩ ዕቃ ማዘዝ ይፈልጋሉ?
+            </h3>
+            <p className="text-blue-100 text-[10px] font-black tracking-wider mt-0.5">
+              ከአማዞን (AMAZON) ወይም ከየትኛውም ሱቅ፣ እኛ እናመጣሎታለን!
             </p>
           </div>
-          <PlusCircle className="text-white shrink-0 ml-2" size={24} />
+          <PlusCircle className="text-blue-300 shrink-0 ml-2" size={20} />
         </div>
 
         {finalFiltered.length === 0 && (
@@ -1823,19 +1885,27 @@ export default function App() {
             const isVipOnly = item.is_vip_only;
             const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
 
+            // CHANGED: Smart Label logic based on Category
+            const isClothingCat = ["ወንዶች", "ሴቶች", "ልጆች"].includes(
+              item.category
+            );
+            const sizeLabelStr = isClothingCat
+              ? "መጠን (Size)"
+              : "ክብደት/መጠን (Weight/Unit)";
+
             return (
               <div
                 key={item.id}
                 className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
               >
                 {item.highlight_tag && (
-                  <div className="w-full bg-amber-500 text-black text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-amber-600">
+                  <div className="w-full bg-amber-500 text-[#09090b] text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-amber-600">
                     {item.highlight_tag}
                   </div>
                 )}
 
                 {isCEO && (
-                  <div className="absolute top-8 right-2 flex space-x-1 z-10 bg-black/70 p-1 rounded-md">
+                  <div className="absolute top-8 right-2 flex space-x-1 z-10 bg-[#09090b]/70 p-1 rounded-md">
                     <button
                       onClick={() => handleEdit(item, "products")}
                       className="p-0.5"
@@ -1851,14 +1921,13 @@ export default function App() {
                   </div>
                 )}
 
-                {/* BRAND IS NOW BELOW TAG, BRIGHTER, AND CLEAR */}
                 <div
                   className={`px-3 pb-2 flex flex-col flex-grow ${
                     item.highlight_tag ? "pt-2" : "pt-4"
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <span className="text-[12px] text-blue-400 font-black uppercase tracking-wider truncate mr-1">
+                    <span className="text-[14px] text-[#82baff] font-black uppercase tracking-widest break-words leading-tight w-full mr-1">
                       {item.brand || "Goleth"}
                     </span>
                     {isVipOnly && (
@@ -1867,12 +1936,11 @@ export default function App() {
                       </span>
                     )}
                   </div>
-                  {/* TITLE WILL NO LONGER BE CUT OFF */}
                   <h3 className="text-white font-black text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2">
                     {item.name || "Product"}
                   </h3>
 
-                  <div className="bg-black/20 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto">
+                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto relative">
                     {mainImg ? (
                       <img
                         src={mainImg}
@@ -1882,28 +1950,38 @@ export default function App() {
                     ) : (
                       <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
                     )}
+                    {/* CHANGED: Multiple Images Badge */}
+                    {productImages.length > 1 && (
+                      <div className="absolute bottom-2 right-2 bg-[#09090b]/80 text-zinc-300 text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm border border-zinc-700/50 flex items-center gap-1">
+                        1 / {productImages.length} <ImageIcon size={8} />
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="px-3 pb-3 flex flex-col gap-2.5">
-                  {/* SIZES ARE NOW LARGER AND MORE VISIBLE */}
                   {item.sizes && typeof item.sizes === "string" && (
-                    <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5 mt-1">
-                      {item.sizes
-                        .split(",")
-                        .slice(0, 3)
-                        .map((s, idx) => (
-                          <span
-                            key={idx}
-                            className="bg-zinc-950 text-zinc-300 text-[11px] font-black px-2.5 py-1 rounded border border-zinc-800 shrink-0 shadow-sm"
-                          >
-                            {s.trim()}
-                          </span>
-                        ))}
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold mb-0.5 block">
+                        {sizeLabelStr}:
+                      </span>
+                      <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5">
+                        {item.sizes
+                          .split(",")
+                          .slice(0, 3)
+                          .map((s, idx) => (
+                            <span
+                              key={idx}
+                              className="bg-zinc-950 text-zinc-300 text-[11px] font-black px-2.5 py-1 rounded border border-zinc-800 shrink-0 shadow-sm"
+                            >
+                              {s.trim()}
+                            </span>
+                          ))}
+                      </div>
                     </div>
                   )}
 
-                  <div className="flex items-baseline gap-1">
+                  <div className="flex items-baseline gap-1 mt-1">
                     {user && user.isVIP ? (
                       <>
                         <span className="text-amber-500 font-black text-sm">
@@ -1927,16 +2005,16 @@ export default function App() {
                         setActiveProductImageIndex(0);
                         setOrderDestination("local");
                       }}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2 rounded-xl text-[13px] tracking-wide transition-all duration-150 transform active:scale-95"
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-[#09090b] font-black py-3 rounded-xl text-[16px] tracking-wide transition-all duration-150 transform active:scale-95 mt-1"
                     >
                       እዘዝ
                     </button>
                   ) : (
                     <button
                       onClick={() => handleNavClick("ቪአይፒ")}
-                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-2 rounded-xl text-xs tracking-wide flex items-center justify-center gap-1"
+                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-3 rounded-xl text-xs tracking-wide flex items-center justify-center gap-1 mt-1"
                     >
-                      <Lock size={12} /> የVIP አባል ይሁኑ
+                      <Lock size={12} /> የቪአይፒ አባል ይሁኑ
                     </button>
                   )}
                 </div>
@@ -1965,10 +2043,10 @@ export default function App() {
       : [];
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-black font-sans text-white">
+    <div className="fixed inset-0 overflow-y-auto bg-[#09090b] font-sans text-white">
       {showVipWarning && (
         <div
-          className="bg-amber-500 text-black px-4 py-2 text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+          className="bg-amber-500 text-[#09090b] px-4 py-2 text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg"
           onClick={() => handleNavClick("ቪአይፒ")}
         >
           <AlertTriangle size={16} /> Your VIP expires in {vipDaysLeft} days!
@@ -1976,7 +2054,7 @@ export default function App() {
         </div>
       )}
 
-      <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center">
+      <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center shadow-md">
         <div
           className="flex items-center space-x-3 cursor-pointer"
           onClick={handleLogoTap}
@@ -1991,7 +2069,7 @@ export default function App() {
               onClick={() => setShowProfile(true)}
               className="bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold flex items-center gap-2"
             >
-              <div className="w-5 h-5 bg-amber-500 rounded-full text-black flex items-center justify-center font-black uppercase">
+              <div className="w-5 h-5 bg-amber-500 rounded-full text-[#09090b] flex items-center justify-center font-black uppercase">
                 {user?.name?.charAt(0) || "U"}
               </div>
               {user?.name || "User"}
@@ -1999,7 +2077,7 @@ export default function App() {
           ) : (
             <button
               onClick={() => handleNavClick("ቪአይፒ")}
-              className="text-xs font-bold bg-[#229ED9] px-4 py-2 rounded-full text-white"
+              className="text-xs font-bold bg-[#229ED9] px-4 py-2 rounded-full text-white shadow-sm"
             >
               ይግቡ / ይመዝገቡ
             </button>
@@ -2011,7 +2089,7 @@ export default function App() {
       {showAdmin && renderCEOStudio()}
 
       {showSourcingModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#09090b]/95 px-4">
           <div className="bg-zinc-900 border border-blue-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_20px_rgba(0,82,212,0.3)] relative">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-black text-blue-500">የግል እቃ ይዘዙ</h2>
@@ -2034,7 +2112,7 @@ export default function App() {
                 type="url"
                 required
                 placeholder="https://www.amazon.com/item..."
-                className="w-full p-3 rounded-xl bg-black border border-zinc-800 focus:border-blue-500 text-white mb-4 outline-none transition-colors"
+                className="w-full p-3 rounded-xl bg-[#09090b] border border-zinc-800 focus:border-blue-500 text-white mb-4 outline-none transition-colors"
                 value={sourcingLink}
                 onChange={(e) => setSourcingLink(e.target.value)}
               />
@@ -2050,7 +2128,7 @@ export default function App() {
       )}
 
       {selectedProduct && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/95 px-4">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#09090b]/95 px-4">
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
               <h2 className="text-xl font-black text-white flex items-center gap-2">
@@ -2064,12 +2142,12 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex space-x-2 mb-6 bg-black p-1 rounded-xl border border-zinc-800">
+            <div className="flex space-x-2 mb-6 bg-[#09090b] p-1 rounded-xl border border-zinc-800">
               <button
                 onClick={() => setOrderDestination("local")}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   orderDestination === "local"
-                    ? "bg-amber-500 text-black"
+                    ? "bg-amber-500 text-[#09090b]"
                     : "text-zinc-500"
                 }`}
               >
@@ -2079,7 +2157,7 @@ export default function App() {
                 onClick={() => setOrderDestination("international")}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   orderDestination === "international"
-                    ? "bg-amber-500 text-black"
+                    ? "bg-amber-500 text-[#09090b]"
                     : "text-zinc-500"
                 }`}
               >
@@ -2088,13 +2166,57 @@ export default function App() {
             </div>
 
             <form onSubmit={handleBotOrderSubmit} className="space-y-4">
+              {/* CHANGED: Modal Image Carousel */}
               {currentOrderImages.length > 0 && (
-                <div className="w-full h-48 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2">
+                <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
                   <img
                     src={currentOrderImages[activeProductImageIndex]}
-                    className="max-w-full max-h-full object-contain"
+                    className="max-w-full max-h-full object-contain transition-opacity duration-300"
                     alt=""
                   />
+                  {currentOrderImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveProductImageIndex((prev) =>
+                            prev === 0
+                              ? currentOrderImages.length - 1
+                              : prev - 1
+                          )
+                        }
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveProductImageIndex((prev) =>
+                            prev === currentOrderImages.length - 1
+                              ? 0
+                              : prev + 1
+                          )
+                        }
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                      <div className="absolute bottom-3 flex gap-1.5 justify-center w-full">
+                        {currentOrderImages.map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-2 h-2 rounded-full cursor-pointer transition-colors ${
+                              i === activeProductImageIndex
+                                ? "bg-amber-500 scale-110"
+                                : "bg-zinc-600"
+                            }`}
+                            onClick={() => setActiveProductImageIndex(i)}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -2105,8 +2227,8 @@ export default function App() {
                   </p>
                   <p className="text-zinc-300 text-sm leading-relaxed font-bold">
                     {orderDestination === "local"
-                      ? "ሙሉ ዋጋ እየከፈሉ ነው። የVIP አባላት የ10% ቅናሽ ያገኛሉ። ይህን መስኮት ዘግተው መጀመሪያ የVIP አባል ይሁኑ!"
-                      : "የዲያስፖራ VIP ጥቅም፡ የVIP አባል ይሁኑ እና ለዚህ ትዕዛዝ የአለም አቀፍ አገልግሎት ክፍያ (Service Fee) አንጠይቅም!"}
+                      ? "ሙሉ ዋጋ እየከፈሉ ነው። የቪአይፒ አባላት የ10% ቅናሽ ያገኛሉ። ይህን መስኮት ዘግተው መጀመሪያ የቪአይፒ አባል ይሁኑ!"
+                      : "የዲያስፖራ ቪአይፒ ጥቅም፡ አሁን ቪአይፒ ይሁኑ እና ለዚህ ትዕዛዝ የአለም አቀፍ አገልግሎት ክፍያ (Service Fee) አይከፍሉም!"}
                   </p>
                 </div>
               )}
@@ -2120,7 +2242,7 @@ export default function App() {
                   type="text"
                   value={orderName}
                   onChange={(e) => setOrderName(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                  className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -2135,7 +2257,7 @@ export default function App() {
                     value={orderPhone}
                     onChange={(e) => setOrderPhone(e.target.value)}
                     placeholder="09..."
-                    className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
                   />
                 </div>
               ) : (
@@ -2148,7 +2270,7 @@ export default function App() {
                       <select
                         value={countryCode}
                         onChange={(e) => setCountryCode(e.target.value)}
-                        className="bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none w-24"
+                        className="bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none w-24"
                       >
                         <option value="+1">US/CA (+1)</option>
                         <option value="+44">UK (+44)</option>
@@ -2162,7 +2284,7 @@ export default function App() {
                         value={orderPhone}
                         onChange={(e) => setOrderPhone(e.target.value)}
                         placeholder="Phone Number"
-                        className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
+                        className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
                       />
                     </div>
                   </div>
@@ -2182,27 +2304,59 @@ export default function App() {
                 </div>
               )}
 
-              {/* Delivery Options */}
+              {/* Delivery Options - Converted to Radio Cards */}
               {orderDestination === "local" && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">
                     Shipping Method
                   </label>
-                  <select
-                    value={orderShipping}
-                    onChange={(e) => setOrderShipping(e.target.value)}
-                    className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
-                  >
-                    <option value="standard">
-                      በ3-5 ቀናት ውስጥ (3-5 Days) - መደበኛ (+150 ETB)
-                    </option>
-                    <option value="express">
-                      ቀጣይ ቀን (Next Day) - ፈጣን (+300 ETB)
-                    </option>
-                    <option value="traveler">
-                      በመንገደኛ መላክ (Traveler) - (+500 ETB)
-                    </option>
-                  </select>
+                  <div className="flex flex-col gap-2">
+                    <label
+                      onClick={() => setOrderShipping("standard")}
+                      className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
+                        orderShipping === "standard"
+                          ? "border-amber-500 bg-amber-500/10"
+                          : "border-zinc-800 bg-[#09090b]"
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-white">
+                        በ3-5 ቀናት ውስጥ - መደበኛ (3-5 Days)
+                      </span>
+                      <span className="text-xs font-black text-amber-500">
+                        +150 ETB
+                      </span>
+                    </label>
+                    <label
+                      onClick={() => setOrderShipping("express")}
+                      className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
+                        orderShipping === "express"
+                          ? "border-amber-500 bg-amber-500/10"
+                          : "border-zinc-800 bg-[#09090b]"
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-white">
+                        ቀጣይ ቀን - ፈጣን (Next Day)
+                      </span>
+                      <span className="text-xs font-black text-amber-500">
+                        +300 ETB
+                      </span>
+                    </label>
+                    <label
+                      onClick={() => setOrderShipping("traveler")}
+                      className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
+                        orderShipping === "traveler"
+                          ? "border-amber-500 bg-amber-500/10"
+                          : "border-zinc-800 bg-[#09090b]"
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-white">
+                        በመንገደኛ መላክ (Traveler)
+                      </span>
+                      <span className="text-xs font-black text-amber-500">
+                        +500 ETB
+                      </span>
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -2244,14 +2398,14 @@ export default function App() {
                   type="file"
                   accept="image/*"
                   onChange={(e) => setOrderReceipt(e.target.files[0])}
-                  className="w-full text-xs text-zinc-400 bg-black border border-zinc-800 p-2 rounded-xl focus:border-amber-500"
+                  className="w-full text-xs text-zinc-400 bg-[#09090b] border border-zinc-800 p-2 rounded-xl focus:border-amber-500"
                   required
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSubmittingOrder}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-2 flex justify-center items-center gap-2 transition-colors"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-[#09090b] font-black py-4 rounded-xl mt-2 flex justify-center items-center gap-2 transition-colors"
               >
                 {isSubmittingOrder ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -2309,7 +2463,7 @@ export default function App() {
               if (activeTab === "ቪአይፒ") defaultTab = "predictions";
               handleEdit(null, defaultTab);
             }}
-            className="fixed bottom-24 right-4 bg-amber-500 text-black p-4 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)] z-30 flex items-center justify-center"
+            className="fixed bottom-24 right-4 bg-amber-500 text-[#09090b] p-4 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)] z-30 flex items-center justify-center"
           >
             <PlusCircle size={28} />
           </button>
