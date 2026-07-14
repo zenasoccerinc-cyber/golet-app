@@ -85,14 +85,12 @@ export default function App() {
   const [newsCategory, setNewsCategory] = useState("ዋና");
   const [newsLimit, setNewsLimit] = useState(10);
   const newsCategories = ["ዋና", "አስተያየት", "ማህበራዊ", "ያግኙን"];
-
   const [sportCategory, setSportCategory] = useState("የዝውውር ዜና");
   const sportCategories = ["የዝውውር ዜና"];
 
   // PRIMARY & SECONDARY NESTED NAVIGATION STATES
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
-
   const shopCategories = ["ሁሉም", "ወንዶች", "ሴቶች", "ልጆች", "መድሃኒት", "ሌላ"];
   const shopSubCategories = ["ሁሉም", "ልብሶች", "ጫማዎች", "ሌላ"];
 
@@ -382,12 +380,12 @@ export default function App() {
 
     const payload = {};
     if (["news", "gossip"].includes(adminTab)) {
+      // CRITICAL FIX: Removed 'category' from news payload to fix the database error
       Object.assign(payload, {
         title: formData.title || "Untitled",
         subtitle: formData.subtitle || "",
         author: formData.author || "Goleth",
         body: formData.body || "",
-        category: formData.category || "ዋና",
         image_url: finalImageUrl,
       });
     } else if (adminTab === "products") {
@@ -396,14 +394,13 @@ export default function App() {
         body: formData.body || "",
         price: Number(formData.price) || 0,
         category: formData.category || "ሌላ",
-        sub_category: formData.sub_category || "ሌላ", // CEO Sub-category mapping
+        sub_category: formData.sub_category || "ሌላ",
         is_vip_only: formData.is_vip_only || false,
         brand: formData.brand || null,
         sizes: formData.sizes || null,
         stock_status: formData.stock_status || "In Stock",
         highlight_tag: formData.highlight_tag || null,
       });
-      // Only attach image_url if we actually have one to avoid wiping out old images
       if (finalImageUrl) payload.image_url = finalImageUrl;
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
@@ -434,10 +431,7 @@ export default function App() {
       }
 
       if (error) {
-        alert(
-          "Database Error! Did you make sure to add the 'sub_category' column to your Supabase products table?\n\nError: " +
-            error.message
-        );
+        alert("Database Error: " + error.message);
       } else {
         closeAdmin();
         fetchData();
@@ -526,14 +520,14 @@ export default function App() {
     let basePrice = selectedProduct.price;
     if (user && user.isVIP) basePrice = selectedProduct.price * 0.9;
 
-    // Dynamic Shipping Cost Logic
-    let shippingCost = 150; // Standard 3-5 days
-    if (orderShipping === "express") shippingCost = 300; // Next day
-    if (orderShipping === "traveler") shippingCost = 500; // Traveler
+    // NEW SHIPPING LOGIC
+    let shippingCost = 150; // Standard 3-5 Days
+    if (orderShipping === "express") shippingCost = 300; // Next Day Express
 
     if (orderDestination === "international") {
       shippingCost = user && user.isVIP ? 0 : 750;
     }
+
     const total = basePrice + shippingCost;
     const finalPhone =
       orderDestination === "local"
@@ -823,38 +817,18 @@ export default function App() {
                     className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={formData.category || "ዋና"}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                    >
-                      <option value="ዋና">ዋና</option>
-                      <option value="ሰበር ዜና">ሰበር ዜና</option>
-                      <option value="የዝውውር ዜና">የዝውውር ዜና</option>
-                      <option value="አስተያየት">አስተያየት</option>
-                      <option value="ማህበራዊ">ማህበራዊ</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Author
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.author || "Goleth"}
-                      onChange={(e) =>
-                        setFormData({ ...formData, author: e.target.value })
-                      }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
-                    />
-                  </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                    Author
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.author || "Goleth"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, author: e.target.value })
+                    }
+                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-zinc-500 uppercase block mb-1">
@@ -923,7 +897,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* CATEGORY & SUB-CATEGORY DROPDOWNS */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase block mb-1">
@@ -943,25 +916,30 @@ export default function App() {
                       <option value="ሌላ">ሌላ (Other)</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Sub-Category
-                    </label>
-                    <select
-                      value={formData.sub_category || "ሌላ"}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          sub_category: e.target.value,
-                        })
-                      }
-                      className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
-                    >
-                      <option value="ልብሶች">ልብሶች (Clothes)</option>
-                      <option value="ጫማዎች">ጫማዎች (Shoes)</option>
-                      <option value="ሌላ">ሌላ (Other)</option>
-                    </select>
-                  </div>
+                  {/* Conditional Sub-Category Dropdown */}
+                  {["ወንዶች", "ሴቶች", "ልጆች"].includes(
+                    formData.category || "ወንዶች"
+                  ) && (
+                    <div>
+                      <label className="text-[10px] text-zinc-500 uppercase block mb-1">
+                        Sub-Category
+                      </label>
+                      <select
+                        value={formData.sub_category || "ሌላ"}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            sub_category: e.target.value,
+                          })
+                        }
+                        className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white text-sm"
+                      >
+                        <option value="ልብሶች">ልብሶች (Clothes)</option>
+                        <option value="ጫማዎች">ጫማዎች (Shoes)</option>
+                        <option value="ሌላ">ሌላ (Other)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1701,16 +1679,12 @@ export default function App() {
       });
     }
 
-    // Sub-category filter checks our new DB column (or falls back to word search for older products)
     const finalFiltered =
       shopSubCategory === "ሁሉም"
         ? initialFiltered
         : initialFiltered.filter((p) => {
             if (!p) return false;
-            // Check actual sub-category column first
             if (p.sub_category === shopSubCategory) return true;
-
-            // Fallback word check for old items
             const bodyText = (p.body || "").toLowerCase();
             const nameText = (p.name || "").toLowerCase();
             if (shopSubCategory === "ልብሶች")
@@ -1737,7 +1711,6 @@ export default function App() {
 
     return (
       <div className="pb-24 pt-2">
-        {/* Layer 1 Tabs */}
         <div className="flex overflow-x-auto space-x-2 mb-3 pb-2 scrollbar-hide">
           {shopCategories.map((cat) => (
             <button
@@ -1754,11 +1727,10 @@ export default function App() {
           ))}
         </div>
 
-        {/* Layer 2 Sub-Tabs */}
         {(shopCategory === "ወንዶች" ||
           shopCategory === "ሴቶች" ||
           shopCategory === "ልጆች") && (
-          <div className="flex overflow-x-auto space-x-2 mb-5 pb-2 scrollbar-hide bg-zinc-900/50 p-2 border border-zinc-800/80 rounded-xl shadow-inner">
+          <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide bg-zinc-900/50 p-2 border border-zinc-800/80 rounded-xl shadow-inner">
             <span className="text-[10px] text-zinc-500 font-bold my-auto mr-1 uppercase">
               Filter:
             </span>
@@ -1778,23 +1750,19 @@ export default function App() {
           </div>
         )}
 
-        {/* Custom Sourcing Banner - BIG, AMHARIC, BLUE */}
         <div
           onClick={() => setShowSourcingModal(true)}
-          className="w-full mb-6 bg-gradient-to-br from-[#0052D4] to-[#4364F7] p-6 rounded-2xl border border-blue-400/50 flex flex-col items-center justify-center cursor-pointer shadow-[0_10px_30px_rgba(0,82,212,0.3)] hover:scale-[1.02] transition-transform text-center relative overflow-hidden"
+          className="w-full mb-5 bg-gradient-to-r from-blue-600 to-blue-800 p-4 rounded-xl flex items-center justify-between cursor-pointer shadow-md hover:scale-[1.02] transition-transform"
         >
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <Globe2 size={80} />
+          <div>
+            <h3 className="text-white font-black text-base">
+              የግል እቃ ማዘዝ ይፈልጋሉ?
+            </h3>
+            <p className="text-blue-100 text-[11px] mt-0.5 font-bold">
+              ከአማዞን (Amazon) ወይም ከማንኛውም የውጪ ሱቆች እናመጣለን!
+            </p>
           </div>
-          <h3 className="text-white font-black text-2xl mb-2 drop-shadow-md z-10">
-            የግል እቃ ማዘዝ ይፈልጋሉ?
-          </h3>
-          <p className="text-blue-100 text-sm font-bold z-10">
-            ከአማዞን (Amazon) ወይም ከማንኛውም የውጪ ሱቆች እኛ እናመጣሎታለን!
-          </p>
-          <div className="mt-4 bg-white text-blue-600 font-black px-6 py-2 rounded-full text-sm z-10 shadow-lg flex items-center gap-2">
-            <PlusCircle size={18} /> አሁኑኑ ይዘዙ
-          </div>
+          <PlusCircle className="text-white shrink-0 ml-2" size={24} />
         </div>
 
         {finalFiltered.length === 0 && (
@@ -1806,7 +1774,6 @@ export default function App() {
           </div>
         )}
 
-        {/* PRODUCT GRID */}
         <div className="grid grid-cols-2 gap-3">
           {finalFiltered.map((item) => {
             if (!item) return null;
@@ -1821,11 +1788,10 @@ export default function App() {
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col justify-between overflow-hidden shadow-sm relative pt-8"
+                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full"
               >
-                {/* Floating Highlight Tag */}
                 {item.highlight_tag && (
-                  <div className="absolute top-0 left-0 w-full bg-amber-500 text-black text-[10px] font-black px-2 py-1 text-center shadow uppercase tracking-widest z-10">
+                  <div className="w-full bg-amber-500 text-black text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm">
                     {item.highlight_tag}
                   </div>
                 )}
@@ -1847,45 +1813,48 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="px-3 pb-2 flex flex-col gap-1">
-                  <div className="flex justify-between items-start">
-                    {/* Brand - BRIGHTER & LARGER */}
-                    <span className="text-xs text-blue-300 font-black uppercase tracking-wider truncate">
+                <div
+                  className={`px-3 pb-2 flex flex-col flex-grow ${
+                    item.highlight_tag ? "pt-2" : "pt-4"
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-[12px] text-blue-400 font-black uppercase tracking-wider truncate mr-1">
                       {item.brand || "Goleth"}
                     </span>
                     {isVipOnly && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black">
+                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black shrink-0">
                         VIP ONLY
                       </span>
                     )}
                   </div>
-                  <h3 className="text-white font-black text-sm leading-tight line-clamp-2 min-h-[35px]">
+                  <h3 className="text-white font-black text-sm leading-snug line-clamp-2 mb-2">
                     {item.name || "Product"}
                   </h3>
+
+                  <div className="bg-black/20 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30 mb-auto mt-auto">
+                    {mainImg ? (
+                      <img
+                        src={mainImg}
+                        className="max-w-full max-h-full object-contain"
+                        alt=""
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="bg-black/20 aspect-square w-full flex items-center justify-center p-3 border-y border-zinc-800/30">
-                  {mainImg ? (
-                    <img
-                      src={mainImg}
-                      className="max-w-full max-h-full object-contain"
-                      alt=""
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
-                  )}
-                </div>
-
-                <div className="p-3 pt-2 flex flex-col gap-2.5">
+                <div className="px-3 pb-3 flex flex-col gap-2.5">
                   {item.sizes && typeof item.sizes === "string" && (
-                    <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5">
+                    <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5 mt-1">
                       {item.sizes
                         .split(",")
                         .slice(0, 3)
                         .map((s, idx) => (
                           <span
                             key={idx}
-                            className="bg-zinc-950 text-zinc-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-zinc-800/80 shrink-0"
+                            className="bg-zinc-950 text-zinc-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-zinc-800/80 shrink-0"
                           >
                             {s.trim()}
                           </span>
@@ -1899,7 +1868,7 @@ export default function App() {
                         <span className="text-amber-500 font-black text-sm">
                           {Math.round((item.price || 0) * 0.9)} ብር
                         </span>
-                        <span className="text-zinc-600 line-through text-[9px] font-bold">
+                        <span className="text-zinc-600 line-through text-[10px] font-bold">
                           {item.price || 0}
                         </span>
                       </>
@@ -1911,22 +1880,20 @@ export default function App() {
                   </div>
 
                   {canBuy ? (
-                    // ORDER BUTTON - BIGGER FONT
                     <button
                       onClick={() => {
                         setSelectedProduct(item);
                         setActiveProductImageIndex(0);
                         setOrderDestination("local");
                       }}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl text-sm tracking-wide transition-all duration-150 transform active:scale-95"
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2 rounded-xl text-sm tracking-wide transition-all duration-150 transform active:scale-95"
                     >
                       እዘዝ
                     </button>
                   ) : (
-                    // AMHARIC LOCK MESSAGE
                     <button
                       onClick={() => handleNavClick("ቪአይፒ")}
-                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-3 rounded-xl text-xs tracking-wide flex items-center justify-center gap-1"
+                      className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/10 font-bold py-2 rounded-xl text-xs tracking-wide flex items-center justify-center gap-1"
                     >
                       <Lock size={12} /> የVIP አባል ይሁኑ
                     </button>
@@ -2094,8 +2061,8 @@ export default function App() {
                   </p>
                   <p className="text-zinc-300 text-sm leading-relaxed font-bold">
                     {orderDestination === "local"
-                      ? "ሙሉ ዋጋ እየከፈሉ ነው። የVIP አባላት የ10% ቅናሽ ያገኛሉ። ይህን መስኮት ዘግተው መጀመሪያ ወደ VIP ያድጉ!"
-                      : "የዲያስፖራ VIP ጥቅም፡ የVIP አባል ይሁኑ እና ለዚህ ትዕዛዝ የአለም አቀፍ አገልግሎት ክፍያ አንጠይቅም!"}
+                      ? "ሙሉ ዋጋ እየከፈሉ ነው። የVIP አባላት የ10% ቅናሽ ያገኛሉ። ይህን መስኮት ዘግተው መጀመሪያ የVIP አባል ይሁኑ!"
+                      : "የዲያስፖራ VIP ጥቅም፡ የVIP አባል ይሁኑ እና ለዚህ ትዕዛዝ የአለም አቀፍ አገልግሎት ክፍያ (Service Fee) አንጠይቅም!"}
                   </p>
                 </div>
               )}
@@ -2171,7 +2138,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* NEW DELIVERY OPTIONS */}
+              {/* Delivery Options */}
               {orderDestination === "local" && (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
