@@ -338,6 +338,7 @@ export default function App() {
     let finalTeamALogo = formData.teamALogo;
     let finalTeamBLogo = formData.teamBLogo;
 
+    // Image Upload Logic
     if (imageFiles && imageFiles.length > 0) {
       const uploadedUrls = [];
       for (let i = 0; i < imageFiles.length; i++) {
@@ -380,14 +381,13 @@ export default function App() {
 
     const payload = {};
     if (["news", "gossip"].includes(adminTab)) {
-      // CRITICAL FIX: Removed 'category' from news payload to fix the database error
       Object.assign(payload, {
         title: formData.title || "Untitled",
         subtitle: formData.subtitle || "",
         author: formData.author || "Goleth",
         body: formData.body || "",
-        image_url: finalImageUrl,
       });
+      if (finalImageUrl) payload.image_url = finalImageUrl; // PROTECTS EXISTING IMAGES
     } else if (adminTab === "products") {
       Object.assign(payload, {
         name: formData.title || "Untitled",
@@ -401,7 +401,7 @@ export default function App() {
         stock_status: formData.stock_status || "In Stock",
         highlight_tag: formData.highlight_tag || null,
       });
-      if (finalImageUrl) payload.image_url = finalImageUrl;
+      if (finalImageUrl) payload.image_url = finalImageUrl; // PROTECTS EXISTING IMAGES
     } else if (adminTab === "predictions") {
       Object.assign(payload, {
         league_name: formData.league || "Unknown",
@@ -433,8 +433,12 @@ export default function App() {
       if (error) {
         alert("Database Error: " + error.message);
       } else {
+        alert("✅ የተቀየረው በተሳካ ሁኔታ ተቀምጧል! (Update Saved Successfully!)");
         closeAdmin();
-        fetchData();
+        // Delaying fetch to ensure Supabase write resolves before we update UI
+        setTimeout(() => {
+          fetchData();
+        }, 600);
       }
     } catch (err) {
       alert("System Error: " + err.message);
@@ -523,6 +527,7 @@ export default function App() {
     // NEW SHIPPING LOGIC
     let shippingCost = 150; // Standard 3-5 Days
     if (orderShipping === "express") shippingCost = 300; // Next Day Express
+    if (orderShipping === "traveler") shippingCost = 500; // Traveler option
 
     if (orderDestination === "international") {
       shippingCost = user && user.isVIP ? 0 : 750;
@@ -553,6 +558,36 @@ export default function App() {
       alert(err.message);
     } finally {
       setIsSubmittingOrder(false);
+    }
+  };
+
+  const handleSourcingSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      alert("እባክዎ የቴሌግራም ቁልፉን ተጠቅመው ይግቡ (Please log in first).");
+      setShowSourcingModal(false);
+      handleNavClick("ቪአይፒ");
+      return;
+    }
+    const adminMessage = `🌍 <b>New Custom Sourcing Request</b>\n\n👤 <b>Customer:</b> ${user.name}\n🔗 <b>Link:</b> ${sourcingLink}`;
+    try {
+      await fetch(
+        `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: adminMessage,
+            parse_mode: "HTML",
+          }),
+        }
+      );
+      setShowSourcingModal(false);
+      setSourcingLink("");
+      alert("ጥያቄዎ ተልኳል! (Request sent!)");
+    } catch (error) {
+      alert("There was an error sending your link.");
     }
   };
 
@@ -897,6 +932,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* CATEGORY & SUB-CATEGORY DROPDOWNS */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase block mb-1">
@@ -1750,16 +1786,18 @@ export default function App() {
           </div>
         )}
 
+        {/* CUSTOM SOURCING BANNER - SAFE ONCLICK WRAPPER TO PREVENT WHITE SCREEN */}
         <div
-          onClick={() => setShowSourcingModal(true)}
-          className="w-full mb-5 bg-gradient-to-r from-blue-600 to-blue-800 p-4 rounded-xl flex items-center justify-between cursor-pointer shadow-md hover:scale-[1.02] transition-transform"
+          onClick={(e) => {
+            e.preventDefault();
+            setShowSourcingModal(true);
+          }}
+          className="w-full mb-5 bg-gradient-to-r from-blue-700 to-blue-900 p-4 rounded-xl flex items-center justify-between cursor-pointer shadow-lg hover:scale-[1.02] transition-transform"
         >
           <div>
-            <h3 className="text-white font-black text-base">
-              የግል እቃ ማዘዝ ይፈልጋሉ?
-            </h3>
+            <h3 className="text-white font-black text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
             <p className="text-blue-100 text-[11px] mt-0.5 font-bold">
-              ከአማዞን (Amazon) ወይም ከማንኛውም የውጪ ሱቆች እናመጣለን!
+              አማዞን ወይም ሌላ ሱቅ፣ እኛ እናመጣሎታለን።
             </p>
           </div>
           <PlusCircle className="text-white shrink-0 ml-2" size={24} />
@@ -1788,10 +1826,10 @@ export default function App() {
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full"
+                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
               >
                 {item.highlight_tag && (
-                  <div className="w-full bg-amber-500 text-black text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm">
+                  <div className="w-full bg-amber-500 text-black text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-amber-600">
                     {item.highlight_tag}
                   </div>
                 )}
@@ -1813,6 +1851,7 @@ export default function App() {
                   </div>
                 )}
 
+                {/* BRAND IS NOW BELOW TAG, BRIGHTER, AND CLEAR */}
                 <div
                   className={`px-3 pb-2 flex flex-col flex-grow ${
                     item.highlight_tag ? "pt-2" : "pt-4"
@@ -1828,7 +1867,8 @@ export default function App() {
                       </span>
                     )}
                   </div>
-                  <h3 className="text-white font-black text-sm leading-snug line-clamp-2 mb-2">
+                  {/* TITLE WILL NO LONGER BE CUT OFF */}
+                  <h3 className="text-white font-black text-[13px] leading-snug line-clamp-2 min-h-[35px] mb-2">
                     {item.name || "Product"}
                   </h3>
 
@@ -1846,6 +1886,7 @@ export default function App() {
                 </div>
 
                 <div className="px-3 pb-3 flex flex-col gap-2.5">
+                  {/* SIZES ARE NOW LARGER AND MORE VISIBLE */}
                   {item.sizes && typeof item.sizes === "string" && (
                     <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5 mt-1">
                       {item.sizes
@@ -1854,7 +1895,7 @@ export default function App() {
                         .map((s, idx) => (
                           <span
                             key={idx}
-                            className="bg-zinc-950 text-zinc-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-zinc-800/80 shrink-0"
+                            className="bg-zinc-950 text-zinc-300 text-[11px] font-black px-2.5 py-1 rounded border border-zinc-800 shrink-0 shadow-sm"
                           >
                             {s.trim()}
                           </span>
@@ -1886,7 +1927,7 @@ export default function App() {
                         setActiveProductImageIndex(0);
                         setOrderDestination("local");
                       }}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2 rounded-xl text-sm tracking-wide transition-all duration-150 transform active:scale-95"
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2 rounded-xl text-[13px] tracking-wide transition-all duration-150 transform active:scale-95"
                     >
                       እዘዝ
                     </button>
@@ -1975,7 +2016,10 @@ export default function App() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-black text-blue-500">የግል እቃ ይዘዙ</h2>
               <button
-                onClick={() => setShowSourcingModal(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowSourcingModal(false);
+                }}
                 className="text-zinc-500 hover:text-white"
               >
                 <X size={20} />
