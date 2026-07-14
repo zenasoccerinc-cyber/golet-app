@@ -59,6 +59,55 @@ const TelegramLoginWidget = ({ onAuth }) => {
   );
 };
 
+// CEO Builder Logic
+const variantGroups = {
+  "ልብስ (Clothes)": ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
+  "ጫማ (Shoes)": ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"],
+  "ቀለም (Color)": [
+    "Black",
+    "White",
+    "Red",
+    "Blue",
+    "Brown",
+    "Grey",
+    "Pink",
+    "Green",
+    "Yellow",
+  ],
+  "መጠን/ክብደት (Weight/Vol)": [
+    "100mg",
+    "500mg",
+    "100g",
+    "250g",
+    "500g",
+    "1kg",
+    "5kg",
+    "1L",
+    "5L",
+  ],
+};
+
+const parseVariants = (str) => {
+  const res = {};
+  if (!str) return res;
+  str.split("|").forEach((part) => {
+    const splitIndex = part.indexOf(":");
+    if (splitIndex > -1) {
+      const g = part.substring(0, splitIndex).trim();
+      const opts = part.substring(splitIndex + 1).trim();
+      res[g] = opts.split(",").map((o) => o.trim());
+    }
+  });
+  return res;
+};
+
+const serializeVariants = (obj) => {
+  return Object.entries(obj)
+    .filter(([g, opts]) => opts && opts.length > 0)
+    .map(([g, opts]) => `${g}: ${opts.join(", ")}`)
+    .join(" | ");
+};
+
 export default function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("goleth_user");
@@ -331,6 +380,21 @@ export default function App() {
     }
   };
 
+  const toggleAdminVariant = (groupName, option) => {
+    const currentVariants = parseVariants(formData.sizes || "");
+    if (!currentVariants[groupName]) currentVariants[groupName] = [];
+
+    if (currentVariants[groupName].includes(option)) {
+      currentVariants[groupName] = currentVariants[groupName].filter(
+        (o) => o !== option
+      );
+    } else {
+      currentVariants[groupName].push(option);
+    }
+
+    setFormData({ ...formData, sizes: serializeVariants(currentVariants) });
+  };
+
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -417,14 +481,14 @@ export default function App() {
         const res = await supabase
           .from(adminTab)
           .update(payload)
-          .eq("id", editingId);
+          .eq("id", editingId)
+          .select();
 
         if (res.error) {
           alert("Database Error: " + res.error.message);
           return;
         }
 
-        // Apply UI updates instantly
         if (adminTab === "news")
           setNews((prev) =>
             prev.map((n) => (n.id === editingId ? { ...n, ...payload } : n))
@@ -532,7 +596,7 @@ export default function App() {
   const handleBotOrderSubmit = async (e) => {
     e.preventDefault();
     if (!orderReceipt) {
-      alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ");
+      alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ (Upload receipt)");
       return;
     }
     setIsSubmittingOrder(true);
@@ -541,7 +605,6 @@ export default function App() {
 
     let shippingCost = 150;
     if (orderShipping === "express") shippingCost = 300;
-    if (orderShipping === "traveler") shippingCost = 500;
 
     if (orderDestination === "international") {
       shippingCost = user && user.isVIP ? 0 : 750;
@@ -630,7 +693,6 @@ export default function App() {
   const toggleReadMore = (id) =>
     setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  // Helper function to extract user selections based on the dynamically split string
   const getSelectedVariantsText = (itemId, sizesStr) => {
     if (!sizesStr || sizesStr.trim() === "") return "Default";
     const groups = sizesStr.split("|");
@@ -737,12 +799,15 @@ export default function App() {
       (sum, order) => sum + Number(order.total_price || 0),
       0
     );
+
+    const currentParsedVariants = parseVariants(formData.sizes || "");
+
     return (
       <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#09090b]/95 overflow-y-auto">
         <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
           <button
             onClick={closeAdmin}
-            className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+            className="absolute top-4 right-4 bg-zinc-800 text-zinc-400 hover:text-white p-2 rounded-full shadow-lg z-50 transition-colors"
           >
             <X size={24} />
           </button>
@@ -1028,21 +1093,37 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1">
-                  <div>
-                    <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">
-                      Sizes / Colors (E.g. Size: S, M, L | Color: Red, Blue)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Size: S, M | Color: Red, Blue"
-                      value={formData.sizes || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sizes: e.target.value })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 focus:border-amber-500 rounded-lg p-3 text-white text-sm outline-none"
-                    />
-                  </div>
+                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/60 mt-2 mb-2">
+                  <h4 className="text-[12px] font-black text-white uppercase tracking-widest mb-4">
+                    Variant Builder (Click to Add)
+                  </h4>
+                  {Object.entries(variantGroups).map(([groupName, options]) => (
+                    <div key={groupName} className="mb-4 last:mb-0">
+                      <span className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
+                        {groupName}
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {options.map((opt) => {
+                          const isSelected =
+                            currentParsedVariants[groupName]?.includes(opt);
+                          return (
+                            <button
+                              type="button"
+                              key={opt}
+                              onClick={() => toggleAdminVariant(groupName, opt)}
+                              className={`text-[10px] px-3 py-1.5 rounded-lg border font-black transition-all ${
+                                isSelected
+                                  ? "bg-amber-500 text-[#09090b] border-amber-600 shadow-md scale-105"
+                                  : "bg-[#09090b] text-zinc-400 border-zinc-700 hover:border-zinc-500"
+                              }`}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1860,7 +1941,6 @@ export default function App() {
           </div>
         )}
 
-        {/* CUSTOM SOURCING BANNER */}
         <div
           onClick={(e) => {
             e.preventDefault();
@@ -2178,7 +2258,7 @@ export default function App() {
           <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
               <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <ShoppingBag size={20} /> Checkout
+                <ShoppingBag size={20} /> ማዘዣ (Checkout)
               </h2>
               <button
                 onClick={() => {
@@ -2199,9 +2279,10 @@ export default function App() {
                 {selectedProduct.brand || "Goleth Official"}
               </p>
               {selectedSize && selectedSize !== "Default" && (
-                <div className="mt-3 inline-block bg-amber-500 text-zinc-950 px-3 py-1 rounded-full text-xs font-black">
-                  ተለዋጭ / መጠን (Selected Variant): {selectedSize}
-                </div>
+                <p className="text-zinc-500 text-xs mt-1 font-bold">
+                  ምርጫ (Choice):{" "}
+                  <span className="text-white">{selectedSize}</span>
+                </p>
               )}
             </div>
 
@@ -2254,11 +2335,11 @@ export default function App() {
 
             <div className="flex flex-col items-center mb-6 bg-[#09090b] p-4 rounded-xl border border-zinc-800">
               <span className="text-white font-black text-xl mb-1">
-                Price: {selectedProduct.price} ብር
+                ዋጋ (Price): {selectedProduct.price} ብር
               </span>
               <span className="text-amber-500 font-black text-sm bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                👑 VIP Member Price: {Math.round(selectedProduct.price * 0.9)}{" "}
-                ብር (10% Off)
+                👑 የቪአይፒ አባል ዋጋ: {Math.round(selectedProduct.price * 0.9)} ብር
+                (10% ቅናሽ)
               </span>
             </div>
 
@@ -2271,7 +2352,7 @@ export default function App() {
                     : "text-zinc-500"
                 }`}
               >
-                <MapPin size={14} /> Local Order
+                <MapPin size={14} /> የሀገር ውስጥ ትዕዛዝ
               </button>
               <button
                 onClick={() => setOrderDestination("international")}
@@ -2281,7 +2362,7 @@ export default function App() {
                     : "text-zinc-500"
                 }`}
               >
-                <Globe2 size={14} /> Diaspora Gift
+                <Globe2 size={14} /> የዲያስፖራ ስጦታ
               </button>
             </div>
 
@@ -2301,7 +2382,7 @@ export default function App() {
 
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                  Your Full Name
+                  ሙሉ ስምዎ (Your Full Name)
                 </label>
                 <input
                   required
@@ -2315,7 +2396,7 @@ export default function App() {
               {orderDestination === "local" ? (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                    Local Phone Number
+                    የሀገር ውስጥ ስልክ ቁጥር (Local Phone)
                   </label>
                   <input
                     required
@@ -2330,7 +2411,7 @@ export default function App() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                      Your International Phone
+                      የውጭ ሀገር ስልክ (International Phone)
                     </label>
                     <div className="flex gap-2">
                       <select
@@ -2356,7 +2437,7 @@ export default function App() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1 text-amber-500">
-                      Receiver's Phone (In Ethiopia)
+                      የተቀባይ ስልክ - ኢትዮጵያ ውስጥ (Receiver's Phone)
                     </label>
                     <input
                       required
@@ -2373,7 +2454,7 @@ export default function App() {
               {orderDestination === "local" && (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">
-                    Shipping Method
+                    የመላኪያ መንገድ (Shipping Method)
                   </label>
                   <div className="flex flex-col gap-2">
                     <label
@@ -2385,7 +2466,7 @@ export default function App() {
                       }`}
                     >
                       <span className="text-sm font-bold text-white">
-                        በ3-5 ቀናት ውስጥ - መደበኛ (3-5 Days)
+                        በ3-5 ቀናት ውስጥ (3-5 Days)
                       </span>
                       <span className="text-xs font-black text-amber-500">
                         +150 ETB
@@ -2400,25 +2481,10 @@ export default function App() {
                       }`}
                     >
                       <span className="text-sm font-bold text-white">
-                        ቀጣይ ቀን - ፈጣን (Next Day)
+                        ቀጣይ ቀን (Next Day)
                       </span>
                       <span className="text-xs font-black text-amber-500">
                         +300 ETB
-                      </span>
-                    </label>
-                    <label
-                      onClick={() => setOrderShipping("traveler")}
-                      className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
-                        orderShipping === "traveler"
-                          ? "border-amber-500 bg-amber-500/10"
-                          : "border-zinc-800 bg-[#09090b]"
-                      }`}
-                    >
-                      <span className="text-sm font-bold text-white">
-                        በመንገደኛ መላክ (Traveler)
-                      </span>
-                      <span className="text-xs font-black text-amber-500">
-                        +500 ETB
                       </span>
                     </label>
                   </div>
@@ -2427,7 +2493,7 @@ export default function App() {
 
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 mt-4">
                 <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
-                  Payment Instructions:
+                  የክፍያ መመሪያ (Payment Info):
                 </p>
                 {orderDestination === "local" ? (
                   <>
@@ -2449,15 +2515,12 @@ export default function App() {
                     <p className="text-sm font-black text-white">
                       • Sendwave / Remitly to Receiver
                     </p>
-                    <p className="text-[10px] text-zinc-400 mt-2 italic">
-                      * Upload screenshot of successful transfer below.
-                    </p>
                   </>
                 )}
               </div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                  Upload Receipt
+                  ደረሰኝ ያስገቡ (Upload Receipt)
                 </label>
                 <input
                   type="file"
@@ -2478,15 +2541,16 @@ export default function App() {
                   <CheckCircle2 size={18} />
                 )}
                 <span>
-                  {isSubmittingOrder ? "Processing..." : "Confirm & Send"}
+                  {isSubmittingOrder
+                    ? "በመካሄድ ላይ (Processing)..."
+                    : "አረጋግጠው ይላኩ (Confirm & Send)"}
                 </span>
               </button>
             </form>
 
-            {/* YOU MAY ALSO LIKE */}
             <div className="mt-8 pt-6 border-t border-zinc-800">
               <h3 className="text-sm font-black text-white mb-4">
-                ተመሳሳይ እቃዎች (You May Also Like)
+                ይህም ሊወዱት ይችላሉ (You May Also Like)
               </h3>
               <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
                 {products
