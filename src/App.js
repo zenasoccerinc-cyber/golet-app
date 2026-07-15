@@ -1,2662 +1,628 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Home,
   Trophy,
   Flame,
   Target,
   ShoppingBag,
+  User,
+  Share2,
   X,
-  Trash2,
-  Edit,
-  Loader2,
-  CheckCircle2,
-  LogOut,
-  Lock,
-  Crown,
-  Users,
   PlusCircle,
-  Image as ImageIcon,
-  AlertCircle,
-  TrendingUp,
-  Package,
-  MapPin,
-  Globe2,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
+  UploadCloud,
+  Trash2,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
-// SECURE CONNECTION
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
+// Supabase Connection
+const supabaseUrl = "https://cklchptjwcifydboozls.supabase.co";
+const supabaseKey = "sb_publishable_Eq6KwixhAMAO42Zp3SEJVg_ed9fsVj3";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// SECURE TELEGRAM CREDENTIALS
-const ORDERS_BOT_TOKEN = process.env.REACT_APP_ORDERS_BOT_TOKEN;
-const APP_BOT_TOKEN = process.env.REACT_APP_APP_BOT_TOKEN;
-const CHAT_ID = process.env.REACT_APP_CHAT_ID;
-
-const TelegramLoginWidget = ({ onAuth }) => {
-  const containerRef = useRef(null);
-  useEffect(() => {
-    window.onTelegramAuth = (user) => onAuth(user);
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", "goleth_app_bot");
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-onauth", "onTelegramAuth(user)");
-    script.setAttribute("data-request-access", "write");
-    script.async = true;
-    if (containerRef.current) containerRef.current.appendChild(script);
-    return () => {
-      delete window.onTelegramAuth;
-      if (containerRef.current) containerRef.current.innerHTML = "";
-    };
-  }, [onAuth]);
-  return (
-    <div ref={containerRef} className="flex justify-center mt-4 w-full"></div>
-  );
-};
-
-// CEO Builder Logic
-const variantGroups = {
-  "ልብስ (Clothes)": ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
-  "ጫማ (Shoes)": ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"],
-  "ቀለም (Color)": [
-    "Black",
-    "White",
-    "Red",
-    "Blue",
-    "Brown",
-    "Grey",
-    "Pink",
-    "Green",
-    "Yellow",
-  ],
-  "መጠን/ክብደት (Weight/Vol)": [
-    "100mg",
-    "500mg",
-    "100g",
-    "250g",
-    "500g",
-    "1kg",
-    "5kg",
-    "1L",
-    "5L",
-  ],
-};
-
-const parseVariants = (str) => {
-  const res = {};
-  if (!str) return res;
-  str.split("|").forEach((part) => {
-    const splitIndex = part.indexOf(":");
-    if (splitIndex > -1) {
-      const g = part.substring(0, splitIndex).trim();
-      const opts = part.substring(splitIndex + 1).trim();
-      res[g] = opts.split(",").map((o) => o.trim());
-    }
-  });
-  return res;
-};
-
-const serializeVariants = (obj) => {
-  return Object.entries(obj)
-    .filter(([g, opts]) => opts && opts.length > 0)
-    .map(([g, opts]) => `${g}: ${opts.join(", ")}`)
-    .join(" | ");
-};
-
 export default function App() {
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem("goleth_user");
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      if (parsedUser.vipUntil && new Date(parsedUser.vipUntil) < new Date()) {
-        parsedUser.isVIP = false;
-      }
-      return parsedUser;
-    }
-    return null;
-  });
-
   const [activeTab, setActiveTab] = useState("ዜና");
+  const [isVIP, setIsVIP] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [isCEO, setIsCEO] = useState(false);
+  const [isCEO, setIsCEO] = useState(false); // New state to show CEO controls
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
-  const [editingId, setEditingId] = useState(null);
+
+  // Read More State
   const [expandedPosts, setExpandedPosts] = useState({});
-  const [expandedProducts, setExpandedProducts] = useState({});
 
-  const [newsCategory, setNewsCategory] = useState("ዋና");
-  const [newsLimit, setNewsLimit] = useState(10);
-  const newsCategories = ["ዋና", "አስተያየት", "ማህበራዊ", "ያግኙን"];
-  const [sportCategory, setSportCategory] = useState("የዝውውር ዜና");
-  const sportCategories = ["የዝውውር ዜና"];
+  const toggleReadMore = (id) => {
+    setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  const [shopCategory, setShopCategory] = useState("ሁሉም");
-  const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
-  const shopCategories = ["ሁሉም", "ወንዶች", "ሴቶች", "ልጆች", "መድሃኒት", "ሌላ"];
-  const shopSubCategories = ["ሁሉም", "ልብሶች", "ጫማዎች", "ሌላ"];
-
-  const [showSourcingModal, setShowSourcingModal] = useState(false);
-  const [sourcingLink, setSourcingLink] = useState("");
-
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSize, setSelectedSize] = useState("");
-  const [productSelections, setProductSelections] = useState({});
-  const [activeProductImageIndex, setActiveProductImageIndex] = useState(0);
-
-  const [orderDestination, setOrderDestination] = useState("local");
-  const [orderName, setOrderName] = useState("");
-  const [countryCode, setCountryCode] = useState("+251");
-  const [orderPhone, setOrderPhone] = useState("");
-  const [receiverPhone, setReceiverPhone] = useState("");
-  const [orderShipping, setOrderShipping] = useState("standard");
-  const [orderReceipt, setOrderReceipt] = useState(null);
-  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
-
-  const [vipPhone, setVipPhone] = useState("");
-  const [vipReceipt, setVipReceipt] = useState(null);
-  const [isSubmittingVip, setIsSubmittingVip] = useState(false);
-
-  const [teamAScore, setTeamAScore] = useState("");
-  const [teamBScore, setTeamBScore] = useState("");
-  const [predictionStatus, setPredictionStatus] = useState("idle");
-  const [existingPrediction, setExistingPrediction] = useState(null);
-
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [totalPoints, setTotalPoints] = useState(0);
-
-  const [myOrders, setMyOrders] = useState([]);
-  const [userJoinedDate, setUserJoinedDate] = useState(null);
-
+  // Database States
   const [news, setNews] = useState([]);
   const [gossip, setGossip] = useState([]);
   const [products, setProducts] = useState([]);
+  const [results, setResults] = useState([]);
   const [predictions, setPredictions] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
-  const [orders, setOrders] = useState([]);
 
+  // Admin Form States
   const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
-  const [imageFiles, setImageFiles] = useState([]);
-  const [teamAImageFile, setTeamAImageFile] = useState(null);
-  const [teamBImageFile, setTeamBImageFile] = useState(null);
-
-  const tabs = [
-    { id: "ዜና", icon: Home },
-    { id: "ስፖርት", icon: Trophy },
-    { id: "ሹክሹክታ", icon: Flame },
-    { id: "ቪአይፒ", icon: Crown },
-    { id: "ሱቅ", icon: ShoppingBag },
-  ];
+  const [imageFile, setImageFile] = useState(null);
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    if (user && predictions.length > 0) {
-      checkExistingPrediction(predictions[0].id);
-      fetchUserPoints();
-    }
-  }, [user, predictions]);
-
-  useEffect(() => {
-    if (showProfile && user) {
-      fetchMyProfileData();
-    }
-  }, [showProfile, user]);
-
-  const resetShopFilters = (primaryCat) => {
-    setShopCategory(primaryCat);
-    setShopSubCategory("ሁሉም");
-  };
-
   const fetchData = async () => {
-    try {
-      const { data: nData } = await supabase
-        .from("news")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      const { data: gData } = await supabase
-        .from("gossip")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      const { data: pData } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
-      const { data: prData = [] } = await supabase
-        .from("predictions")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
-      const { data: oData } = await supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (nData) setNews(nData);
-      if (gData) setGossip(gData);
-      if (pData) setProducts(pData);
-      if (prData) setPredictions(prData);
-      if (oData) setOrders(oData);
-    } catch (e) {
-      console.error("Fetch error:", e);
-    }
-  };
-
-  const fetchMyProfileData = async () => {
-    const { data: myOrderData } = await supabase
-      .from("orders")
+    const { data: nData } = await supabase
+      .from("news")
       .select("*")
-      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    if (myOrderData) setMyOrders(myOrderData);
-    const { data: uData } = await supabase
-      .from("users")
-      .select("created_at")
-      .eq("id", user.id)
-      .single();
-    if (uData) setUserJoinedDate(uData.created_at);
-  };
-
-  const fetchUserPoints = async () => {
-    const { data } = await supabase
-      .from("users")
-      .select("total_points")
-      .eq("id", user.id)
-      .single();
-    if (data) setTotalPoints(data.total_points);
-  };
-
-  const checkExistingPrediction = async (matchId) => {
-    const { data } = await supabase
-      .from("user_predictions")
+    const { data: gData } = await supabase
+      .from("gossip")
       .select("*")
-      .eq("user_id", user.id)
-      .eq("match_id", matchId)
-      .single();
-    if (data) setExistingPrediction(data);
-  };
+      .order("created_at", { ascending: false });
+    const { data: pData } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data: rData } = await supabase
+      .from("results")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data: prData } = await supabase
+      .from("predictions")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
 
-  const navigateHome = () => {
-    setActiveTab("ዜና");
-    setNewsCategory("ዋና");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const fetchCEOUsers = async () => {
-    const { data } = await supabase.from("users").select("*");
-    if (data) setAllUsers(data);
+    if (nData) setNews(nData);
+    if (gData) setGossip(gData);
+    if (pData) setProducts(pData);
+    if (rData) setResults(rData);
+    if (prData) setPredictions(prData);
   };
 
   const handleLogoTap = () => {
-    navigateHome();
     const newCount = tapCount + 1;
     setTapCount(newCount);
     setTimeout(() => setTapCount(0), 3000);
+
     if (newCount >= 5) {
-      const password = window.prompt("CEO Password:");
+      const password = window.prompt("Enter CEO Password:");
       if (password === "admin123") {
         setIsCEO(true);
-        fetchCEOUsers();
-        alert("CEO Mode Activated");
+        setShowAdmin(true);
+      } else if (password !== null) {
+        alert("Access Denied");
       }
       setTapCount(0);
     }
   };
 
-  const handleNavClick = (tabId) => {
-    setActiveTab(tabId);
-    if (tabId === "ዜና") {
-      setNewsCategory("ዋና");
-    }
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleRealLogin = async (telegramUser) => {
-    const userIdString = telegramUser.id.toString();
-    const { data } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userIdString)
-      .single();
-    let currentUser;
-    if (data) {
-      let currentlyValidVIP = false;
-      if (data.is_vip && data.vip_until) {
-        currentlyValidVIP = new Date(data.vip_until) > new Date();
-        if (!currentlyValidVIP)
-          await supabase
-            .from("users")
-            .update({ is_vip: false })
-            .eq("id", userIdString);
-      }
-      currentUser = {
-        id: data.id,
-        name: data.name,
-        isVIP: currentlyValidVIP,
-        vipUntil: data.vip_until,
-      };
-    } else {
-      const newUser = {
-        id: userIdString,
-        name: telegramUser.first_name,
-        is_vip: false,
-        total_points: 0,
-      };
-      await supabase.from("users").insert([newUser]);
-      currentUser = {
-        id: newUser.id,
-        name: newUser.name,
-        isVIP: false,
-        vipUntil: null,
-      };
-    }
-    setUser(currentUser);
-    localStorage.setItem("goleth_user", JSON.stringify(currentUser));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem("goleth_user");
-    setShowProfile(false);
-    setIsCEO(false);
-    navigateHome();
-  };
-
   const handleDelete = async (table, id) => {
-    if (window.confirm("Are you sure you want to delete this?")) {
+    if (window.confirm("Are you sure you want to delete this? (እርግጠኛ ነዎት?)")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
     }
   };
 
-  const toggleAdminVariant = (groupName, option) => {
-    const currentVariants = parseVariants(formData.sizes || "");
-    if (!currentVariants[groupName]) currentVariants[groupName] = [];
-
-    if (currentVariants[groupName].includes(option)) {
-      currentVariants[groupName] = currentVariants[groupName].filter(
-        (o) => o !== option
-      );
-    } else {
-      currentVariants[groupName].push(option);
-    }
-
-    setFormData({ ...formData, sizes: serializeVariants(currentVariants) });
-  };
-
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
+    let finalImageUrl = null;
 
-    let finalImageUrl = formData.image_url || null;
-    let finalTeamALogo = formData.teamALogo;
-    let finalTeamBLogo = formData.teamBLogo;
-
-    if (imageFiles && imageFiles.length > 0) {
-      const uploadedUrls = [];
-      for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        const fileName = `${Date.now()}_${i}.${file.name.split(".").pop()}`;
-        const { error } = await supabase.storage
-          .from("images")
-          .upload(fileName, file);
-        if (!error)
-          uploadedUrls.push(
-            supabase.storage.from("images").getPublicUrl(fileName).data
-              .publicUrl
-          );
-      }
-      finalImageUrl = uploadedUrls.join(",");
-    }
-
-    if (teamAImageFile) {
-      const fileName = `${Date.now()}_teamA.${teamAImageFile.name
-        .split(".")
-        .pop()}`;
-      const { error } = await supabase.storage
+    if (imageFile) {
+      const fileExt = imageFile.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
         .from("images")
-        .upload(fileName, teamAImageFile);
-      if (!error)
-        finalTeamALogo = supabase.storage.from("images").getPublicUrl(fileName)
-          .data.publicUrl;
-    }
-    if (teamBImageFile) {
-      const fileName = `${Date.now()}_teamB.${teamBImageFile.name
-        .split(".")
-        .pop()}`;
-      const { error } = await supabase.storage
-        .from("images")
-        .upload(fileName, teamBImageFile);
-      if (!error)
-        finalTeamBLogo = supabase.storage.from("images").getPublicUrl(fileName)
-          .data.publicUrl;
-    }
-
-    const payload = {};
-    if (["news", "gossip"].includes(adminTab)) {
-      Object.assign(payload, {
-        title: formData.title || "Untitled",
-        subtitle: formData.subtitle || "",
-        author: formData.author || "Goleth",
-        body: formData.body || "",
-      });
-      if (finalImageUrl) payload.image_url = finalImageUrl;
-    } else if (adminTab === "products") {
-      Object.assign(payload, {
-        name: formData.title || "Untitled",
-        body: formData.body || "",
-        price: Number(formData.price) || 0,
-        category: formData.category || "ሌላ",
-        sub_category: formData.sub_category || "ሌላ",
-        is_vip_only: formData.is_vip_only || false,
-        brand: formData.brand || null,
-        sizes: formData.sizes || null,
-        stock_status: formData.stock_status || "In Stock",
-        highlight_tag: formData.highlight_tag || null,
-      });
-      if (finalImageUrl) payload.image_url = finalImageUrl;
-    } else if (adminTab === "predictions") {
-      Object.assign(payload, {
-        league_name: formData.league || "Unknown",
-        team_a_name: formData.teamA || "Team A",
-        team_b_name: formData.teamB || "Team B",
-        team_a_logo: finalTeamALogo,
-        team_b_logo: finalTeamBLogo,
-      });
-    }
-
-    try {
-      if (editingId) {
-        const res = await supabase
-          .from(adminTab)
-          .update(payload)
-          .eq("id", editingId)
-          .select();
-
-        if (res.error) {
-          alert("Database Error: " + res.error.message);
-          return;
-        }
-
-        if (adminTab === "news")
-          setNews((prev) =>
-            prev.map((n) => (n.id === editingId ? { ...n, ...payload } : n))
-          );
-        if (adminTab === "gossip")
-          setGossip((prev) =>
-            prev.map((g) => (g.id === editingId ? { ...g, ...payload } : g))
-          );
-        if (adminTab === "products")
-          setProducts((prev) =>
-            prev.map((p) => (p.id === editingId ? { ...p, ...payload } : p))
-          );
-
-        alert("✅ የተቀየረው በተሳካ ሁኔታ ተቀምጧል! (Update Saved Successfully!)");
-        closeAdmin();
-      } else {
-        if (adminTab === "predictions")
-          await supabase
-            .from("predictions")
-            .update({ is_active: false })
-            .neq("id", 0);
-        const res = await supabase.from(adminTab).insert([payload]);
-        if (res.error) {
-          alert("Database Error: " + res.error.message);
-        } else {
-          alert("✅ አዲስ ነገር ተጨምሯል! (Added Successfully!)");
-          closeAdmin();
-          await fetchData();
-        }
+        .upload(fileName, imageFile);
+      if (!uploadError) {
+        const { data } = supabase.storage.from("images").getPublicUrl(fileName);
+        finalImageUrl = data.publicUrl;
       }
-    } catch (err) {
-      alert("System Error: " + err.message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleUpdateOrderStatus = async (orderId, newStatus) => {
-    await supabase
-      .from("orders")
-      .update({ status: newStatus })
-      .eq("id", orderId);
-    fetchData();
-  };
-
-  const handleEdit = (item = null, table) => {
-    setAdminTab(table || "news");
-    if (item) {
-      setEditingId(item.id);
-      setFormData({
-        title: item.title || item.name || "",
-        subtitle: item.subtitle || "",
-        author: item.author || "",
-        body: item.body || "",
-        price: item.price || "",
-        category: item.category || "ዋና",
-        sub_category: item.sub_category || "ሌላ",
-        image_url: item.image_url || null,
-        is_vip_only: item.is_vip_only || false,
-        brand: item.brand || "",
-        sizes: item.sizes || "",
-        stock_status: item.stock_status || "In Stock",
-        highlight_tag: item.highlight_tag || "",
-        league: item.league_name || "",
-        teamA: item.team_a_name || "",
-        teamB: item.team_b_name || "",
-        teamALogo: item.team_a_logo || "",
-        teamBLogo: item.team_b_logo || "",
-      });
-    } else {
-      setEditingId(null);
-      setFormData({
-        title: "",
-        subtitle: "",
-        author: "Goleth",
-        body: "",
-        price: "",
-        category: "ዋና",
-        sub_category: "ሌላ",
-        image_url: null,
-        is_vip_only: false,
-        brand: "",
-        sizes: "",
-        stock_status: "In Stock",
-        highlight_tag: "",
-        league: "",
-        teamA: "",
-        teamB: "",
-        teamALogo: "",
-        teamBLogo: "",
-      });
-    }
-    setShowAdmin(true);
-  };
-
-  const closeAdmin = () => {
-    setShowAdmin(false);
-    setEditingId(null);
-    setFormData({});
-    setImageFiles([]);
-    setTeamAImageFile(null);
-    setTeamBImageFile(null);
-  };
-
-  const handleBotOrderSubmit = async (e) => {
-    e.preventDefault();
-    if (!orderReceipt) {
-      alert("እባክዎ የክፍያ ደረሰኝዎን ያስገቡ (Upload receipt)");
-      return;
-    }
-    setIsSubmittingOrder(true);
-    let basePrice = selectedProduct.price;
-    if (user && user.isVIP) basePrice = selectedProduct.price * 0.9;
-
-    let shippingCost = 150;
-    if (orderShipping === "express") shippingCost = 300;
-
-    if (orderDestination === "international") {
-      shippingCost = user && user.isVIP ? 0 : 750;
     }
 
-    const total = basePrice + shippingCost;
-    const finalPhone =
-      orderDestination === "local"
-        ? orderPhone
-        : `${countryCode} ${orderPhone} (Receiver: ${receiverPhone})`;
-
-    try {
-      const orderPayload = {
-        user_id: user ? user.id : null,
-        customer_name: orderName,
-        phone: finalPhone,
-        product_name: `${selectedProduct.name} (Choice: ${selectedSize})`,
-        total_price: total,
-        shipping_method:
-          orderDestination === "local" ? orderShipping : "Diaspora Delivery",
-        status: "Pending",
-      };
-      await supabase.from("orders").insert([orderPayload]);
-      alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order successfully sent!)");
-      setSelectedProduct(null);
-      setSelectedSize("");
-      fetchData();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setIsSubmittingOrder(false);
-    }
-  };
-
-  const handleSourcingSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) {
-      alert("እባክዎ የቴሌግራም ቁልፉን ተጠቅመው ይግቡ (Please log in first).");
-      setShowSourcingModal(false);
-      handleNavClick("ቪአይፒ");
-      return;
-    }
-    const adminMessage = `🌍 <b>New Custom Sourcing Request</b>\n\n👤 <b>Customer:</b> ${user.name}\n🔗 <b>Link:</b> ${sourcingLink}`;
-    try {
-      await fetch(
-        `https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`,
+    if (adminTab === "news" || adminTab === "gossip") {
+      await supabase.from(adminTab).insert([
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: CHAT_ID,
-            text: adminMessage,
-            parse_mode: "HTML",
-          }),
-        }
-      );
-      setShowSourcingModal(false);
-      setSourcingLink("");
-      alert("ጥያቄዎ ተልኳል! (Request sent!)");
-    } catch (error) {
-      alert("There was an error sending your link.");
+          title: formData.title,
+          subtitle: formData.subtitle,
+          author: formData.author || "ZenaSoccer",
+          body: formData.body,
+          image_url: finalImageUrl,
+        },
+      ]);
+    } else if (adminTab === "products") {
+      await supabase.from("products").insert([
+        {
+          name: formData.title,
+          price: Number(formData.price),
+          category: formData.category,
+          image_url: finalImageUrl,
+        },
+      ]);
+    } else if (adminTab === "results") {
+      await supabase.from("results").insert([
+        {
+          league_name: formData.league,
+          team_a_name: formData.teamA,
+          team_b_name: formData.teamB,
+          score: formData.score,
+          match_details: formData.details,
+        },
+      ]);
+    } else if (adminTab === "predictions") {
+      // Deactivate old predictions first
+      await supabase
+        .from("predictions")
+        .update({ is_active: false })
+        .neq("id", 0);
+      await supabase.from("predictions").insert([
+        {
+          league_name: formData.league,
+          team_a_name: formData.teamA,
+          team_b_name: formData.teamB,
+        },
+      ]);
     }
+
+    setFormData({});
+    setImageFile(null);
+    setUploading(false);
+    setShowAdmin(false);
+    fetchData();
+    alert("Published successfully!");
   };
 
-  const handleVipRegistrationSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmittingVip(true);
-    setTimeout(() => {
-      alert("የቪአይፒ ጥያቄዎ በተሳካ ሁኔታ ተልኳል! (VIP Request Sent!)");
-      setIsSubmittingVip(false);
-      setVipPhone("");
-      setVipReceipt(null);
-    }, 1500);
+  // Helper to format date
+  const formatDate = (dateString) => {
+    const options = { year: "numeric", month: "long", day: "numeric" };
+    return new Date(dateString).toLocaleDateString("am-ET", options);
   };
 
-  const handlePredictSubmit = async (matchId) => {
-    setPredictionStatus("loading");
-    setTimeout(() => {
-      alert("ግምትዎ በተሳካ ሁኔታ ተልኳል! (Prediction submitted!)");
-      setPredictionStatus("idle");
-    }, 1500);
-  };
+  // --- UI COMPONENTS ---
 
-  const toggleProductReadMore = (id) =>
-    setExpandedProducts((prev) => ({ ...prev, [id]: !prev[id] }));
-  const toggleReadMore = (id) =>
-    setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  const getSelectedVariantsText = (itemId, sizesStr) => {
-    if (!sizesStr || sizesStr.trim() === "") return "Default";
-    const groups = sizesStr.split("|");
-    const selections = [];
-    let allSelected = true;
-    groups.forEach((g, gIdx) => {
-      const picked = productSelections[`${itemId}-${gIdx}`];
-      if (!picked) allSelected = false;
-      else {
-        let label = g.includes(":") ? g.split(":")[0].trim() : "Option";
-        selections.push(`${label}: ${picked}`);
-      }
-    });
-    if (!allSelected) return null;
-    return selections.join(" | ");
-  };
-
-  const renderProfileDashboard = () => (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#09090b]/95 p-0 sm:p-4">
-      <div className="bg-zinc-950 w-full sm:max-w-2xl h-[90vh] sm:h-[80vh] rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-800 flex flex-col relative overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-        <div className="bg-zinc-900 border-b border-zinc-800 p-6 relative">
-          <button
-            onClick={() => setShowProfile(false)}
-            className="absolute top-6 right-6 text-zinc-500 hover:text-white bg-[#09090b] p-2 rounded-full border border-zinc-800"
-          >
-            <X size={20} />
-          </button>
-          <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center text-2xl font-black text-[#09090b] shadow-lg uppercase">
-              {user?.name?.charAt(0) || "U"}
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-white">
-                {user?.name || "User"}
-              </h2>
-              <span className="bg-amber-500/20 text-amber-500 text-xs font-black px-3 py-1 rounded-full border border-amber-500/30 mt-1 inline-block">
-                {user?.isVIP ? "VIP Active" : "Free Account"}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 bg-[#09090b]">
-          <h3 className="text-white font-black text-lg mb-4">
-            My Order Tracking
-          </h3>
-          {myOrders.length === 0 ? (
-            <p className="text-zinc-500 text-sm font-bold">
-              You haven't placed any orders yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {myOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex justify-between items-center"
-                >
-                  <div>
-                    <span className="text-white font-bold text-sm block">
-                      {order.product_name}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                      {order.shipping_method}
-                    </span>
-                  </div>
-                  <span
-                    className={`text-[10px] font-black px-2 py-1 rounded border uppercase tracking-wider ${getStatusColor(
-                      order.status || "Pending"
-                    )}`}
-                  >
-                    {order.status || "Pending"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="bg-zinc-900 border-t border-zinc-800 p-4">
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-900/10 border border-red-900/30 text-red-500 py-4 rounded-xl font-black flex items-center justify-center gap-2"
-          >
-            <LogOut size={18} /> Sign Out
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Processing":
-        return "text-orange-500 bg-orange-500/10 border-orange-500/30";
-      case "Out for Delivery":
-        return "text-blue-500 bg-blue-500/10 border-blue-500/30";
-      case "Completed":
-        return "text-green-500 bg-green-500/10 border-green-500/30";
-      default:
-        return "text-amber-500 bg-amber-500/10 border-amber-500/30";
-    }
-  };
-
-  const renderCEOStudio = () => {
-    const totalRevenue = orders.reduce(
-      (sum, order) => sum + Number(order.total_price || 0),
-      0
-    );
-
-    const currentParsedVariants = parseVariants(formData.sizes || "");
-
-    return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#09090b]/95 overflow-y-auto">
-        <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-800 p-6 shadow-2xl relative my-8">
-          <button
-            onClick={closeAdmin}
-            className="absolute top-4 right-4 bg-zinc-800 text-zinc-400 hover:text-white p-2 rounded-full shadow-lg z-50 transition-colors"
-          >
-            <X size={24} />
-          </button>
-          <h2 className="text-2xl font-black text-amber-500 mb-6">
-            {editingId ? "Edit" : "CEO Studio"}
-          </h2>
-          <form onSubmit={handleAdminSubmit} className="space-y-4">
-            {!editingId && (
-              <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
-                {["news", "gossip", "products", "predictions", "analytics"].map(
-                  (tab) => (
-                    <button
-                      type="button"
-                      key={tab}
-                      onClick={() => setAdminTab(tab)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
-                        adminTab === tab
-                          ? "bg-amber-500 text-[#09090b]"
-                          : "bg-zinc-800 text-zinc-400"
-                      }`}
-                    >
-                      {tab.toUpperCase()}
-                    </button>
-                  )
-                )}
-              </div>
-            )}
-
-            {adminTab === "analytics" && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#09090b] border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
-                    <TrendingUp size={24} className="text-green-500 mb-2" />
-                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
-                      Total Sales
-                    </span>
-                    <span className="text-2xl font-black text-white">
-                      {totalRevenue}{" "}
-                      <span className="text-sm text-zinc-500">ETB</span>
-                    </span>
-                  </div>
-                  <div className="bg-[#09090b] border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center">
-                    <Package size={24} className="text-blue-500 mb-2" />
-                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
-                      Orders
-                    </span>
-                    <span className="text-2xl font-black text-white">
-                      {orders.length}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <h3 className="text-sm font-bold text-zinc-400 mb-2 uppercase tracking-widest">
-                    Live Order Pipeline
-                  </h3>
-                  <div className="bg-[#09090b] border border-zinc-800 rounded-xl max-h-[60vh] overflow-y-auto p-2 space-y-2">
-                    {orders.length === 0 && (
-                      <p className="text-zinc-600 text-xs text-center py-4">
-                        No orders yet.
-                      </p>
-                    )}
-                    {orders.map((o) => (
-                      <div
-                        key={o.id}
-                        className="bg-zinc-900 p-4 rounded-lg border border-zinc-800/50"
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-white font-bold text-sm">
-                            {o.customer_name}
-                          </span>
-                          <span className="text-amber-500 font-black text-sm">
-                            {o.total_price} ETB
-                          </span>
-                        </div>
-                        <div className="text-zinc-400 text-xs mb-1 truncate">
-                          {o.product_name}
-                        </div>
-                        <div className="text-blue-400 text-xs mb-3">
-                          {o.phone}
-                        </div>
-                        <div className="flex justify-between items-center bg-[#09090b] p-2 rounded-lg border border-zinc-800">
-                          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
-                            Update Status:
-                          </span>
-                          <select
-                            value={o.status || "Pending"}
-                            onChange={(e) =>
-                              handleUpdateOrderStatus(o.id, e.target.value)
-                            }
-                            className={`text-xs font-bold bg-transparent outline-none cursor-pointer ${
-                              o.status === "Completed"
-                                ? "text-green-500"
-                                : o.status === "Out for Delivery"
-                                ? "text-blue-500"
-                                : o.status === "Processing"
-                                ? "text-orange-500"
-                                : "text-amber-500"
-                            }`}
-                          >
-                            <option
-                              value="Pending"
-                              className="bg-zinc-900 text-amber-500"
-                            >
-                              Pending
-                            </option>
-                            <option
-                              value="Processing"
-                              className="bg-zinc-900 text-orange-500"
-                            >
-                              Processing
-                            </option>
-                            <option
-                              value="Out for Delivery"
-                              className="bg-zinc-900 text-blue-500"
-                            >
-                              Out for Delivery
-                            </option>
-                            <option
-                              value="Completed"
-                              className="bg-zinc-900 text-green-500"
-                            >
-                              Completed
-                            </option>
-                          </select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {["news", "gossip"].includes(adminTab) && (
-              <>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Title
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.title || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Subtitle
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.subtitle || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, subtitle: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Author
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.author || "Goleth"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, author: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Body Text
-                  </label>
-                  <textarea
-                    required
-                    rows="6"
-                    value={formData.body || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, body: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white placeholder-zinc-700"
-                  ></textarea>
-                </div>
-              </>
-            )}
-
-            {adminTab === "products" && (
-              <>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Product Name
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.title || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Brand / Origin
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Gillette, Nike"
-                      value={formData.brand || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, brand: e.target.value })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Highlight Tag
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Free Delivery"
-                      value={formData.highlight_tag || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          highlight_tag: e.target.value,
-                        })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Main Category
-                    </label>
-                    <select
-                      value={formData.category || "ወንዶች"}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
-                    >
-                      <option value="ወንዶች">ወንዶች (Men)</option>
-                      <option value="ሴቶች">ሴቶች (Women)</option>
-                      <option value="ልጆች">ልጆች (Kids)</option>
-                      <option value="መድሃኒት">መድሃኒት (Pharmacy)</option>
-                      <option value="ሌላ">ሌላ (Other)</option>
-                    </select>
-                  </div>
-                  {["ወንዶች", "ሴቶች", "ልጆች"].includes(
-                    formData.category || "ወንዶች"
-                  ) && (
-                    <div>
-                      <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                        Sub-Category
-                      </label>
-                      <select
-                        value={formData.sub_category || "ሌላ"}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            sub_category: e.target.value,
-                          })
-                        }
-                        className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
-                      >
-                        <option value="ልብሶች">ልብሶች (Clothes)</option>
-                        <option value="ጫማዎች">ጫማዎች (Shoes)</option>
-                        <option value="ሌላ">ሌላ (Other)</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/60 mt-2 mb-2">
-                  <h4 className="text-[12px] font-black text-white uppercase tracking-widest mb-4">
-                    Variant Builder (Click to Add)
-                  </h4>
-                  {Object.entries(variantGroups).map(([groupName, options]) => (
-                    <div key={groupName} className="mb-4 last:mb-0">
-                      <span className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
-                        {groupName}
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {options.map((opt) => {
-                          const isSelected =
-                            currentParsedVariants[groupName]?.includes(opt);
-                          return (
-                            <button
-                              type="button"
-                              key={opt}
-                              onClick={() => toggleAdminVariant(groupName, opt)}
-                              className={`text-[10px] px-3 py-1.5 rounded-lg border font-black transition-all ${
-                                isSelected
-                                  ? "bg-amber-500 text-[#09090b] border-amber-600 shadow-md scale-105"
-                                  : "bg-[#09090b] text-zinc-400 border-zinc-700 hover:border-zinc-500"
-                              }`}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Stock Status
-                    </label>
-                    <select
-                      value={formData.stock_status || "In Stock"}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          stock_status: e.target.value,
-                        })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white text-sm"
-                    >
-                      <option value="In Stock">In Stock</option>
-                      <option value="Low Stock (Hurry!)">
-                        Low Stock (Hurry!)
-                      </option>
-                      <option value="Pre-Order / Sourcing">
-                        Pre-Order / Sourcing
-                      </option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Price (ETB)
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      value={formData.price || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, price: e.target.value })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    Detailed Description
-                  </label>
-                  <textarea
-                    rows="3"
-                    value={formData.body || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, body: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                  ></textarea>
-                </div>
-                <div className="mt-2">
-                  <label className="flex items-center space-x-2 text-zinc-300 bg-[#09090b] p-3 border border-zinc-800 rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_vip_only || false}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          is_vip_only: e.target.checked,
-                        })
-                      }
-                      className="w-4 h-4 rounded text-amber-500 bg-[#09090b] border-zinc-800"
-                    />
-                    <span className="text-sm font-bold text-amber-500">
-                      VIP Only
-                    </span>
-                  </label>
-                </div>
-              </>
-            )}
-
-            {adminTab === "predictions" && (
-              <>
-                <div>
-                  <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                    League
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.league || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, league: e.target.value })
-                    }
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-2">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Home Team
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      value={formData.teamA || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, teamA: e.target.value })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 uppercase block mb-1">
-                      Away Team
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      value={formData.teamB || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, teamB: e.target.value })
-                      }
-                      className="w-full bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-white"
-                    />
-                  </div>
-                </div>
-                <div className="bg-[#09090b] p-3 border border-zinc-800 rounded-lg">
-                  <label className="text-[10px] text-amber-500 uppercase block mb-2 font-bold">
-                    Team Logos (Upload)
-                  </label>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-[10px] text-zinc-500 block mb-1">
-                        Home Logo:
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setTeamAImageFile(e.target.files[0])}
-                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-zinc-500 block mb-1">
-                        Away Logo:
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setTeamBImageFile(e.target.files[0])}
-                        className="text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-800 file:text-white w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {["news", "gossip", "products"].includes(adminTab) && (
-              <div className="mt-4">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">
-                  Select Images
-                </label>
-                <div className="flex items-center space-x-4 bg-[#09090b] border border-zinc-800 rounded-lg p-3">
-                  <ImageIcon size={20} className="text-amber-500" />
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => setImageFiles(Array.from(e.target.files))}
-                    className="text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500"
-                  />
-                </div>
-              </div>
-            )}
-            {adminTab !== "analytics" && (
-              <button
-                type="submit"
-                disabled={uploading}
-                className="w-full bg-amber-500 text-[#09090b] font-black py-4 rounded-xl mt-4"
-              >
-                {uploading ? "Publishing..." : "Publish"}
-              </button>
-            )}
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  const renderArticle = (item, isHero, table) => {
-    if (!item) return null;
+  const renderArticle = (item, table) => {
     const isExpanded = expandedPosts[item.id];
-    const shouldTruncate =
-      item.body && typeof item.body === "string" && item.body.length > 150;
-    const isBreaking = (item.category || "") === "ሰበር ዜና";
-    const imagesArray =
-      item.image_url && typeof item.image_url === "string"
-        ? item.image_url.split(",")
-        : [];
-    const mainImage = imagesArray[0];
-
-    const formatDateStr = (dateString) => {
-      try {
-        return dateString
-          ? new Date(dateString).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })
-          : "Recent";
-      } catch (e) {
-        return "Recent";
-      }
-    };
-
-    const getMaskedAuthorStr = (dbAuthor) => {
-      if (!dbAuthor) return "Goleth";
-      return String(dbAuthor).toLowerCase().includes("zenasoccer")
-        ? "Goleth"
-        : String(dbAuthor);
-    };
-
-    if (isHero || isExpanded) {
-      return (
-        <div
-          key={item.id}
-          className={`bg-zinc-900 rounded-xl overflow-hidden shadow-lg relative mb-4 border ${
-            isBreaking ? "border-red-600" : "border-zinc-800"
-          }`}
-        >
-          {isCEO && (
-            <div className="absolute top-2 right-2 flex space-x-2 z-10">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEdit(item, table);
-                }}
-                className="bg-blue-600 p-2 rounded-full"
-              >
-                <Edit size={16} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(table, item.id);
-                }}
-                className="bg-red-600 p-2 rounded-full"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
-          {mainImage && (
-            <img
-              src={mainImage}
-              alt=""
-              className="w-full aspect-[1.91/1] object-cover"
-            />
-          )}
-          <div className="p-5">
-            <h3
-              className={`font-black text-2xl leading-tight mb-2 ${
-                isBreaking ? "text-red-500" : "text-amber-500"
-              }`}
-            >
-              {item.title || "Untitled"}
-            </h3>
-            <div className="text-zinc-500 text-[10px] uppercase mb-2">
-              {getMaskedAuthorStr(item.author)} •{" "}
-              {formatDateStr(item.created_at)}
-            </div>
-            {renderSmartBody(item.body, imagesArray, isExpanded, item.id)}
-            {shouldTruncate && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleReadMore(item.id);
-                }}
-                className="text-amber-500 text-xs font-bold mt-3"
-              >
-                {isExpanded ? "አሳጥር (Show Less)" : "ሙሉውን ያንብቡ (Read More)"}
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
+    const shouldTruncate = item.body && item.body.length > 150;
+    const displayBody =
+      shouldTruncate && !isExpanded
+        ? item.body.substring(0, 150) + "..."
+        : item.body;
 
     return (
       <div
         key={item.id}
-        onClick={() => toggleReadMore(item.id)}
-        className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mb-3 flex h-32 relative cursor-pointer hover:border-zinc-600 transition-colors"
+        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative"
       >
         {isCEO && (
-          <div className="absolute top-2 right-2 flex space-x-2 z-10 bg-black/50 p-1 rounded">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEdit(item, table);
-              }}
-            >
-              <Edit size={14} className="text-blue-400" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(table, item.id);
-              }}
-            >
-              <Trash2 size={14} className="text-red-400" />
-            </button>
-          </div>
+          <button
+            onClick={() => handleDelete(table, item.id)}
+            className="absolute top-2 right-2 bg-red-600 p-2 rounded-full z-10 hover:bg-red-700"
+          >
+            <Trash2 size={16} className="text-white" />
+          </button>
         )}
-        {mainImage ? (
-          <img src={mainImage} className="w-1/3 h-full object-cover" alt="" />
-        ) : (
-          <div className="w-1/3 bg-[#09090b] flex items-center justify-center text-xs text-zinc-800">
-            GOLETH
-          </div>
+        {item.image_url && (
+          <img
+            src={item.image_url}
+            alt={item.title}
+            className="w-full h-56 object-cover"
+          />
         )}
-        <div className="w-2/3 p-3 flex flex-col justify-center">
-          <h3 className="text-white font-bold text-sm line-clamp-2">
-            {item.title || "Untitled"}
+        <div className="p-5">
+          <h3 className="text-amber-500 font-black text-xl mb-1 leading-tight">
+            {item.title}
           </h3>
-          <span className="text-zinc-500 text-[10px] mt-1">
-            {formatDateStr(item.created_at)}
-          </span>
-        </div>
-      </div>
-    );
-  };
+          {item.subtitle && (
+            <h4 className="text-white text-md font-bold mb-3">
+              {item.subtitle}
+            </h4>
+          )}
 
-  const renderNewsFeed = (
-    feedData,
-    currentCategory,
-    setCategoryFunc,
-    categoriesList
-  ) => {
-    const safeFeedData = Array.isArray(feedData) ? feedData : [];
-    const filteredData =
-      currentCategory === "ዋና" || currentCategory === "ሁሉም"
-        ? safeFeedData
-        : safeFeedData.filter((n) => (n.category || "") === currentCategory);
-    const visibleData = filteredData.slice(0, newsLimit);
+          <div className="flex items-center text-zinc-500 text-xs font-bold uppercase tracking-wider mb-4 border-b border-zinc-800 pb-3">
+            <span>{item.author || "ZenaSoccer"}</span>
+            <span className="mx-2">•</span>
+            <span>{formatDate(item.created_at)}</span>
+          </div>
 
-    return (
-      <div className="pb-24 pt-2">
-        <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide">
-          {categoriesList.map((cat) => (
+          <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+            {displayBody}
+          </p>
+
+          {shouldTruncate && (
             <button
-              key={cat}
-              onClick={() => {
-                if (cat === "ያግኙን") {
-                  window.location.href = "mailto:contactgoleth@gmail.com";
-                  return;
-                }
-                setCategoryFunc(cat);
-              }}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold ${
-                currentCategory === cat
-                  ? "bg-amber-500 text-[#09090b]"
-                  : "bg-zinc-800 text-white"
-              }`}
+              onClick={() => toggleReadMore(item.id)}
+              className="text-amber-500 text-xs font-bold mt-2 hover:underline focus:outline-none"
             >
-              {cat}
+              {isExpanded ? "Show Less (አሳጥር)" : "Read More (ሙሉውን አንብብ)"}
             </button>
-          ))}
+          )}
+
+          <div className="flex justify-end mt-4">
+            <button className="bg-zinc-800 p-2 rounded-full text-zinc-400 hover:text-amber-500">
+              <Share2 size={18} />
+            </button>
+          </div>
         </div>
-        {visibleData.length === 0 ? (
-          <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
-            <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
-              <AlertCircle className="text-zinc-600" size={24} />
-            </div>
-            <p className="text-zinc-400 font-bold text-sm">
-              ምንም አልተገኘም (Empty)
-            </p>
-            <p className="text-zinc-600 text-xs mt-1">
-              Check back later for updates.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {visibleData.map((item, index) =>
-              renderArticle(item, index === 0, "news")
-            )}
-          </div>
-        )}
       </div>
     );
   };
 
-  const renderSmartBody = (text, imagesArray, isExpanded, articleId) => {
-    if (!text || typeof text !== "string") return null;
-    if (!isExpanded) {
-      let truncated = text.substring(0, 150) + "...";
-      truncated = truncated.replace(/\[IMAGE\d+\]/g, "");
-      return (
-        <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
-          {truncated}
+  const renderResults = () => (
+    <div className="space-y-4 pb-24">
+      {results.length === 0 && (
+        <p className="text-zinc-500 text-center mt-10">
+          ምንም ውጤት የለም (No Results)
         </p>
-      );
-    }
-    const parts = text.split(/(\[IMAGE\d+\])/g);
-    return (
-      <div
-        className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap cursor-pointer"
-        onClick={() => toggleReadMore(articleId)}
-      >
-        {parts.map((part, i) => {
-          const match = part.match(/\[IMAGE(\d+)\]/);
-          if (match) {
-            const imgIndex = parseInt(match[1], 10);
-            if (imagesArray[imgIndex])
-              return (
-                <img
-                  key={i}
-                  src={imagesArray[imgIndex]}
-                  alt=""
-                  className="w-full my-4 rounded-lg object-cover"
-                />
-              );
-            return null;
-          }
-          return <span key={i}>{part}</span>;
-        })}
-      </div>
-    );
-  };
-
-  const renderVIP = () => {
-    if (!user && !isCEO) {
-      return (
-        <div className="pb-24 flex flex-col items-center justify-center pt-10">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl">
-            <Users size={30} className="text-[#229ED9] mx-auto mb-4" />
-            <h2 className="text-2xl font-black text-white mb-2">
-              እንኳን በደህና መጡ!
-            </h2>
-            <p className="text-zinc-400 text-sm mb-6">
-              አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ።
-            </p>
-            <TelegramLoginWidget onAuth={handleRealLogin} />
-          </div>
-        </div>
-      );
-    }
-
-    if (user && !user.isVIP && !isCEO) {
-      return (
-        <div className="pb-24 flex flex-col items-center pt-6 px-2">
-          <div className="text-center mb-8">
-            <Crown
-              size={40}
-              className="text-amber-500 mx-auto mb-2 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]"
-            />
-            <h2 className="text-3xl font-black text-white tracking-wider mb-1">
-              GOLETH VIP
-            </h2>
-            <p className="text-zinc-400 text-xs px-4">
-              Unlock exclusive matches, local discounts, and{" "}
-              <b>$0 International Fees</b> for just <b>50 ETB/month</b>.
-            </p>
-          </div>
-
-          {predictions.length > 0 && (
-            <div className="w-full max-w-sm mb-6">
-              <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-2 pl-2">
-                Sneak Peek: Today's Match
-              </h3>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden flex items-center justify-between">
-                <div className="absolute inset-0 backdrop-blur-[3px] bg-[#09090b]/40 z-10 flex items-center justify-center">
-                  <div className="bg-amber-500 text-[#09090b] px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow-xl">
-                    <Lock size={12} /> የቪአይፒ አባላት ብቻ (VIP ONLY)
-                  </div>
-                </div>
-                <span className="text-white font-bold opacity-30">
-                  {predictions[0].team_a_name}
-                </span>
-                <span className="text-zinc-600 font-black text-xs opacity-50">
-                  VS
-                </span>
-                <span className="text-white font-bold opacity-30">
-                  {predictions[0].team_b_name}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {products.filter((p) => p.is_vip_only).length > 0 && (
-            <div className="w-full max-w-sm mb-8">
-              <h3 className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest mb-2 pl-2">
-                Sneak Peek: VIP Shop
-              </h3>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                {products
-                  .filter((p) => p.is_vip_only)
-                  .slice(0, 3)
-                  .map((p) => {
-                    const mainImg =
-                      p.image_url && typeof p.image_url === "string"
-                        ? p.image_url.split(",")[0]
-                        : null;
-                    return (
-                      <div
-                        key={p.id}
-                        className="min-w-[120px] bg-zinc-900 rounded-xl border border-zinc-800 p-2 relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 backdrop-blur-[2px] bg-[#09090b]/40 z-10 flex items-center justify-center">
-                          <Lock
-                            size={20}
-                            className="text-amber-500 drop-shadow-lg"
-                          />
-                        </div>
-                        {mainImg ? (
-                          <img
-                            src={mainImg}
-                            className="w-full aspect-square object-cover rounded-lg opacity-40 mb-2"
-                            alt=""
-                          />
-                        ) : (
-                          <div className="w-full aspect-square bg-[#09090b] rounded-lg mb-2"></div>
-                        )}
-                        <p className="text-white font-bold text-[10px] truncate opacity-50">
-                          {p.name}
-                        </p>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-[#09090b] border border-amber-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(245,158,11,0.05)] text-center relative">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-[#09090b] text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">
-              Upgrade Now
-            </div>
-            <div className="bg-zinc-900 p-4 rounded-xl text-left border border-zinc-800 mt-4 mb-6">
-              <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
-                የክፍያ መመሪያ (Payment Info):
-              </p>
-              <p className="text-sm font-black text-white">
-                • CBE: <span className="text-amber-500">1000XXXXXXXXX</span>
-              </p>
-              <p className="text-sm font-black text-white">
-                • Telebirr: <span className="text-amber-500">09XXXXXXXX</span>
-              </p>
-            </div>
-            <form
-              onSubmit={handleVipRegistrationSubmit}
-              className="space-y-4 text-left border-t border-zinc-800/50 pt-6"
-            >
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                  ስልክ ቁጥር (Phone Number)
-                </label>
-                <input
-                  required
-                  type="tel"
-                  value={vipPhone}
-                  onChange={(e) => setVipPhone(e.target.value)}
-                  placeholder="09..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                  የክፍያ ደረሰኝ (Upload Receipt)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setVipReceipt(e.target.files[0])}
-                  className="w-full text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 p-2 rounded-xl"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubmittingVip}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-[#09090b] font-black py-4 rounded-xl flex justify-center items-center space-x-2 transition-colors mt-2"
-              >
-                {isSubmittingVip ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <CheckCircle2 size={18} />
-                )}
-                <span>{isSubmittingVip ? "በመላክ ላይ..." : "Upgrade to VIP"}</span>
-              </button>
-            </form>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="pb-24 pt-6 flex flex-col items-center">
-        <div className="text-center text-amber-500 font-black mb-6 border border-amber-500/50 bg-amber-500/10 px-6 py-2 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center space-x-2">
-          <Crown size={20} />
-          <span>የቪአይፒ አባል (VIP Member)</span>
-        </div>
-        {predictions.length > 0 ? (
-          <div className="w-full max-w-sm">
-            <h3 className="text-white font-black text-xl mb-4 text-center">
-              ዛሬ ግምት (Today's Match)
-            </h3>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-              {isCEO && (
-                <button
-                  onClick={() => handleDelete("predictions", predictions[0].id)}
-                  className="absolute top-3 right-3 p-2 bg-red-900/50 rounded-full text-red-500 z-10"
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-              <div className="text-center text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-6">
-                {predictions[0].league_name}
-              </div>
-              <div className="flex justify-between items-center relative z-10">
-                <div className="flex flex-col items-center w-1/3">
-                  <div className="w-16 h-16 bg-[#09090b] border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
-                    {predictions[0].team_a_logo ? (
-                      <img
-                        src={predictions[0].team_a_logo}
-                        className="max-w-full max-h-full object-contain"
-                        alt=""
-                      />
-                    ) : (
-                      <span className="text-[10px] text-zinc-500">Logo</span>
-                    )}
-                  </div>
-                  <span className="text-white font-bold text-center text-sm">
-                    {predictions[0].team_a_name}
-                  </span>
-                </div>
-                <div className="w-1/3 flex flex-col items-center">
-                  <div className="bg-zinc-800 text-zinc-400 font-black text-xs px-3 py-1 rounded-full mb-2">
-                    VS
-                  </div>
-                </div>
-                <div className="flex flex-col items-center w-1/3">
-                  <div className="w-16 h-16 bg-[#09090b] border border-zinc-800 rounded-full flex items-center justify-center p-2 shadow-lg mb-3">
-                    {predictions[0].team_b_logo ? (
-                      <img
-                        src={predictions[0].team_b_logo}
-                        className="max-w-full max-h-full object-contain"
-                        alt=""
-                      />
-                    ) : (
-                      <span className="text-[10px] text-zinc-500">Logo</span>
-                    )}
-                  </div>
-                  <span className="text-white font-bold text-center text-sm">
-                    {predictions[0].team_b_name}
-                  </span>
-                </div>
-              </div>
-              {existingPrediction ? (
-                <div className="mt-8 bg-green-900/20 border border-green-500/30 rounded-xl p-4 text-center">
-                  <p className="text-green-500 text-xs font-bold uppercase mb-2 flex items-center justify-center gap-1">
-                    <CheckCircle2 size={14} /> ግምትዎ ተልኳል
-                  </p>
-                  <div className="flex justify-center items-center space-x-4">
-                    <span className="text-2xl font-black text-white">
-                      {existingPrediction.team_a_score}
-                    </span>
-                    <span className="text-zinc-500">-</span>
-                    <span className="text-2xl font-black text-white">
-                      {existingPrediction.team_b_score}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-8 border-t border-zinc-800 pt-6">
-                  <p className="text-center text-xs text-zinc-400 font-bold mb-4">
-                    ግምትዎን ያስገቡ (Enter Prediction)
-                  </p>
-                  <div className="flex justify-center items-center space-x-4 mb-6">
-                    <input
-                      type="number"
-                      min="0"
-                      value={teamAScore}
-                      onChange={(e) => setTeamAScore(e.target.value)}
-                      className="w-16 h-16 bg-[#09090b] border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
-                    />
-                    <span className="text-zinc-600 font-black">-</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={teamBScore}
-                      onChange={(e) => setTeamBScore(e.target.value)}
-                      className="w-16 h-16 bg-[#09090b] border-2 border-zinc-800 focus:border-amber-500 rounded-xl text-center text-2xl font-black text-white outline-none"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handlePredictSubmit(predictions[0].id)}
-                    disabled={
-                      predictionStatus === "loading" ||
-                      teamAScore === "" ||
-                      teamBScore === ""
-                    }
-                    className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#09090b] font-black py-4 rounded-xl flex justify-center items-center space-x-2"
-                  >
-                    {predictionStatus === "loading" ? (
-                      <Loader2 className="animate-spin" size={20} />
-                    ) : (
-                      <Target size={20} />
-                    )}
-                    <span>አስገባ (Submit)</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center text-zinc-500 font-bold mt-10">
-            <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-800">
-              <Trophy size={24} className="text-zinc-700" />
-            </div>
-            ምንም ጨዋታ የለም (No active match)
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderShop = () => {
-    const safeProducts = Array.isArray(products) ? products : [];
-
-    let initialFiltered = safeProducts;
-    if (shopCategory !== "ሁሉም") {
-      initialFiltered = safeProducts.filter((p) => {
-        if (!p) return false;
-        const cat = (p.category || "").toLowerCase();
-        if (shopCategory === "ወንዶች")
-          return cat.includes("ወንድ") || cat === "men" || cat === "men's";
-        if (shopCategory === "ሴቶች")
-          return cat.includes("ሴት") || cat === "women" || cat === "women's";
-        if (shopCategory === "ልጆች")
-          return cat.includes("ልጅ") || cat === "kids" || cat === "children";
-        if (shopCategory === "መድሃኒት")
-          return (
-            cat.includes("መድሃኒት") ||
-            cat.includes("med") ||
-            cat.includes("pharm")
-          );
-        return p.category === shopCategory;
-      });
-    }
-
-    const finalFiltered =
-      shopSubCategory === "ሁሉም"
-        ? initialFiltered
-        : initialFiltered.filter((p) => {
-            if (!p) return false;
-            if (p.sub_category === shopSubCategory) return true;
-            const bodyText = (p.body || "").toLowerCase();
-            const nameText = (p.name || "").toLowerCase();
-            if (shopSubCategory === "ልብሶች")
-              return (
-                bodyText.includes("cloth") ||
-                bodyText.includes("jersey") ||
-                bodyText.includes("t-shirt") ||
-                bodyText.includes("ልብስ") ||
-                bodyText.includes("ቀሚስ") ||
-                nameText.includes("shirt") ||
-                nameText.includes("ልብስ")
-              );
-            if (shopSubCategory === "ጫማዎች")
-              return (
-                bodyText.includes("shoe") ||
-                bodyText.includes("sneaker") ||
-                bodyText.includes("ጫማ") ||
-                bodyText.includes("ቦቲ") ||
-                nameText.includes("shoe") ||
-                nameText.includes("ጫማ")
-              );
-            return false;
-          });
-
-    return (
-      <div className="pb-24 pt-2">
-        <div className="flex overflow-x-auto space-x-2 mb-3 pb-2 scrollbar-hide">
-          {shopCategories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => resetShopFilters(cat)}
-              className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all ${
-                shopCategory === cat
-                  ? "bg-amber-500 text-[#09090b] shadow-lg"
-                  : "bg-zinc-900 text-zinc-400 border border-zinc-800/60"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {(shopCategory === "ወንዶች" ||
-          shopCategory === "ሴቶች" ||
-          shopCategory === "ልጆች") && (
-          <div className="flex overflow-x-auto space-x-2 mb-4 pb-2 scrollbar-hide bg-zinc-900/50 p-2 border border-zinc-800/80 rounded-xl shadow-inner">
-            <span className="text-[10px] text-zinc-500 font-bold my-auto mr-1 uppercase">
-              Filter:
-            </span>
-            {shopSubCategories.map((sub) => (
-              <button
-                key={sub}
-                onClick={() => setShopSubCategory(sub)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  shopSubCategory === sub
-                    ? "bg-amber-500 text-[#09090b] shadow-md scale-105"
-                    : "bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-white"
-                }`}
-              >
-                {sub}
-              </button>
-            ))}
-          </div>
-        )}
-
+      )}
+      {results.map((item) => (
         <div
-          onClick={(e) => {
-            e.preventDefault();
-            setShowSourcingModal(true);
-          }}
-          className="w-full mb-4 bg-gradient-to-r from-[#0d3b66] to-[#1d5b99] p-3 rounded-lg flex items-center justify-between cursor-pointer shadow-md hover:opacity-90 transition-opacity border border-[#2a75c3]"
+          key={item.id}
+          className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center shadow-lg relative"
         >
-          <div>
-            <h3 className="text-white font-black text-[13px] tracking-wide">
-              ልዩ ዕቃ ማዘዝ ይፈልጋሉ?
-            </h3>
-            <p className="text-blue-100 text-[10px] font-black tracking-wider mt-0.5">
-              ከአማዞን (AMAZON) ወይም ከየትኛውም ሱቅ፣ እኛ እናመጣሎታለን!
-            </p>
-          </div>
-          <PlusCircle className="text-blue-300 shrink-0 ml-2" size={20} />
-        </div>
-
-        {finalFiltered.length === 0 && (
-          <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed">
-            <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
-              <ShoppingBag size={24} className="text-zinc-600" />
+          {isCEO && (
+            <button
+              onClick={() => handleDelete("results", item.id)}
+              className="absolute top-2 right-2 text-red-500"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          <p className="text-zinc-400 text-sm mb-4 font-bold tracking-wide">
+            {item.league_name}
+          </p>
+          <div className="flex justify-between items-center mb-6 px-4">
+            <div className="flex flex-col items-center w-1/3">
+              <span className="text-white font-bold">{item.team_a_name}</span>
             </div>
-            <p className="text-zinc-400 font-bold text-sm">ምንም እቃ አልተገኘም</p>
+            <div className="text-3xl font-black text-amber-500 bg-black px-4 py-2 rounded-lg border border-zinc-800">
+              {item.score}
+            </div>
+            <div className="flex flex-col items-center w-1/3">
+              <span className="text-white font-bold">{item.team_b_name}</span>
+            </div>
+          </div>
+          {item.match_details && (
+            <div className="text-sm text-zinc-400 bg-black p-3 rounded-lg border border-zinc-800">
+              <p>{item.match_details}</p>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderPredict = () => {
+    const activeMatch = predictions[0];
+
+    return (
+      <div className="pb-24 flex flex-col items-center justify-center pt-10">
+        {!isVIP ? (
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
+            <h2 className="text-2xl font-black text-white mb-3 mt-4">
+              የቪአይፒ አባልነት ያስፈልጋል
+            </h2>
+            <p className="text-zinc-400 text-sm mb-8">
+              በወር 50 ብር በመክፈል የቪአይፒ አባል ይሁኑ እና በየሳምንቱ ግምት በማስቀመጥ የገንዘብ ሽልማቶችን
+              ያሸንፉ!
+            </p>
+            <button className="w-full bg-amber-500 text-black font-black py-4 rounded-xl">
+              በቴሌብር ክፈሉ
+            </button>
+          </div>
+        ) : !activeMatch ? (
+          <p className="text-zinc-500">ምንም ጨዋታ የለም (No active match)</p>
+        ) : (
+          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl relative">
+            {isCEO && (
+              <button
+                onClick={() => handleDelete("predictions", activeMatch.id)}
+                className="absolute top-2 right-2 text-red-500"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            <p className="text-zinc-400 text-xs font-bold tracking-wide mb-2">
+              {activeMatch.league_name}
+            </p>
+            <h2 className="text-amber-500 font-black text-xl mb-6">
+              የሳምንቱ ጨዋታ ግምት
+            </h2>
+            <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
+              <span className="text-white font-bold w-1/3">
+                {activeMatch.team_a_name}
+              </span>
+              <div className="flex space-x-2 items-center">
+                <input
+                  type="number"
+                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg text-lg font-bold"
+                  defaultValue="0"
+                />
+                <span className="text-zinc-600">-</span>
+                <input
+                  type="number"
+                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg text-lg font-bold"
+                  defaultValue="0"
+                />
+              </div>
+              <span className="text-white font-bold w-1/3">
+                {activeMatch.team_b_name}
+              </span>
+            </div>
+            <button className="w-full bg-amber-500 text-black font-black py-3 rounded-xl">
+              አስገባ (Submit)
+            </button>
           </div>
         )}
-
-        <div className="grid grid-cols-2 gap-3">
-          {finalFiltered.map((item) => {
-            if (!item) return null;
-            const productImages =
-              item.image_url && typeof item.image_url === "string"
-                ? item.image_url.split(",")
-                : [];
-            const mainImg = productImages[0];
-            const isVipOnly = item.is_vip_only;
-            const canBuy = !isVipOnly || (user && user.isVIP) || isCEO;
-
-            return (
-              <div
-                key={item.id}
-                className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl flex flex-col overflow-hidden shadow-sm relative h-full pt-[2px]"
-              >
-                {item.highlight_tag && (
-                  <div className="w-full bg-red-600 text-white text-[10px] font-black px-2 py-1.5 text-center uppercase tracking-widest shadow-sm border-b border-red-700">
-                    {item.highlight_tag}
-                  </div>
-                )}
-
-                {isCEO && (
-                  <div className="absolute top-8 right-2 flex space-x-1 z-20 bg-[#09090b]/70 p-1 rounded-md">
-                    <button
-                      onClick={() => handleEdit(item, "products")}
-                      className="p-0.5"
-                    >
-                      <Edit size={12} className="text-blue-400" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete("products", item.id)}
-                      className="p-0.5"
-                    >
-                      <Trash2 size={12} className="text-red-400" />
-                    </button>
-                  </div>
-                )}
-
-                <div
-                  className={`px-3 pb-2 flex flex-col flex-grow ${
-                    item.highlight_tag ? "pt-1" : "pt-4"
-                  }`}
-                >
-                  <div className="bg-[#09090b]/40 aspect-square w-full flex items-center justify-center p-2 relative group rounded-xl overflow-hidden mb-2">
-                    {mainImg ? (
-                      <img
-                        src={mainImg}
-                        className="max-w-full max-h-full object-contain mix-blend-screen"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-zinc-950 rounded-lg"></div>
-                    )}
-
-                    {productImages.length > 1 && (
-                      <div className="absolute bottom-2 left-2 bg-[#09090b]/80 text-zinc-300 text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm border border-zinc-700/50 flex items-center gap-1">
-                        1 / {productImages.length} <ImageIcon size={8} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-white font-black text-[15px]">
-                      {item.price || 0} ብር
-                    </span>
-                  </div>
-
-                  <div className="flex items-baseline mb-2">
-                    <span className="text-amber-500 text-[10px] font-black tracking-wide bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                      👑 VIP: {Math.round((item.price || 0) * 0.9)} ብር
-                    </span>
-                  </div>
-
-                  <h3 className="text-white font-bold text-[13px] leading-snug line-clamp-2 mb-1">
-                    {item.name || "Product"}
-                    {isVipOnly && (
-                      <span className="inline-block ml-2 text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-black shrink-0">
-                        VIP
-                      </span>
-                    )}
-                  </h3>
-
-                  <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-widest break-words leading-tight w-full mb-3">
-                    {item.brand || "Goleth"}
-                  </p>
-
-                  {item.sizes &&
-                    typeof item.sizes === "string" &&
-                    item.sizes.trim() !== "" && (
-                      <div className="mb-4 bg-zinc-950/60 p-2 rounded-xl border border-zinc-800/40 space-y-2">
-                        {item.sizes.split("|").map((group, gIdx) => {
-                          let groupLabel = "አማራጭ ይምረጡ (Option):";
-                          let optionsStr = group;
-                          if (group.includes(":")) {
-                            const parts = group.split(":");
-                            groupLabel = parts[0].trim();
-                            optionsStr = parts[1];
-                          }
-
-                          return (
-                            <div key={gIdx} className="flex flex-col">
-                              <span className="text-[9px] text-zinc-500 font-bold mb-1 block uppercase tracking-wider">
-                                {groupLabel}
-                              </span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {optionsStr.split(",").map((s, idx) => {
-                                  const cleanedSize = s.trim();
-                                  if (!cleanedSize) return null;
-                                  const selectionKey = `${item.id}-${gIdx}`;
-                                  const isSelected =
-                                    productSelections[selectionKey] ===
-                                    cleanedSize;
-                                  return (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      onClick={() => {
-                                        setProductSelections((prev) => ({
-                                          ...prev,
-                                          [selectionKey]: cleanedSize,
-                                        }));
-                                      }}
-                                      className={`text-[10px] font-black px-2 py-1 rounded transition-all border ${
-                                        isSelected
-                                          ? "bg-amber-500 text-zinc-950 border-amber-600 scale-105 shadow-md"
-                                          : "bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500"
-                                      }`}
-                                    >
-                                      {cleanedSize}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  <div className="mt-auto">
-                    {canBuy ? (
-                      <button
-                        onClick={() => {
-                          let variantsText = "Default";
-                          if (item.sizes && item.sizes.trim() !== "") {
-                            variantsText = getSelectedVariantsText(
-                              item.id,
-                              item.sizes
-                            );
-                            if (!variantsText) {
-                              alert(
-                                "እባክዎ ሁሉንም አማራጮች ይምረጡ! (Please select all sizes/colors first!)"
-                              );
-                              return;
-                            }
-                          }
-                          setSelectedSize(variantsText);
-                          setSelectedProduct(item);
-                          setActiveProductImageIndex(0);
-                          setOrderDestination("local");
-                        }}
-                        className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-bold py-2.5 rounded-lg text-[13px] transition-all duration-150 transform active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <ShoppingBag size={14} /> ይግዙ
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleNavClick("ቪአይፒ")}
-                        className="w-full bg-zinc-900 text-amber-500/70 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1"
-                      >
-                        <Lock size={12} /> የቪአይፒ ብቻ
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     );
   };
 
-  let vipDaysLeft = 0;
-  let showVipWarning = false;
-  if (user && user.isVIP && user.vipUntil) {
-    vipDaysLeft = Math.ceil(
-      (new Date(user.vipUntil) - new Date()) / (1000 * 60 * 60 * 24)
-    );
-    if (vipDaysLeft <= 7 && vipDaysLeft > 0) showVipWarning = true;
-  }
+  const renderShop = () => (
+    <div className="pb-24 grid grid-cols-2 gap-4">
+      {products.map((item) => (
+        <div
+          key={item.id}
+          className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex flex-col relative"
+        >
+          {isCEO && (
+            <button
+              onClick={() => handleDelete("products", item.id)}
+              className="absolute top-2 right-2 bg-red-600 p-1.5 rounded-full z-10"
+            >
+              <Trash2 size={14} className="text-white" />
+            </button>
+          )}
+          {item.image_url ? (
+            <img
+              src={item.image_url}
+              alt={item.name}
+              className="w-full h-40 object-cover"
+            />
+          ) : (
+            <div className="w-full h-40 bg-black" />
+          )}
+          <div className="p-4 flex flex-col flex-grow">
+            <span className="text-xs text-zinc-500 mb-1 font-bold uppercase">
+              {item.category}
+            </span>
+            <h3 className="text-white font-bold text-sm mb-2">{item.name}</h3>
+            <p className="text-amber-500 font-black text-lg mb-4">
+              {item.price} ብር
+            </p>
+            <button className="mt-auto w-full bg-amber-500 text-black font-black py-2 rounded-lg text-sm">
+              እዘዝ (Order)
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
-  const currentOrderImages =
-    selectedProduct &&
-    selectedProduct.image_url &&
-    typeof selectedProduct.image_url === "string"
-      ? selectedProduct.image_url.split(",")
-      : [];
+  const renderAdmin = () => (
+    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
+      <div className="flex justify-between items-center mb-6 mt-4">
+        <h2 className="text-amber-500 font-black text-2xl tracking-wide">
+          CEO Dashboard
+        </h2>
+        <button
+          onClick={() => setShowAdmin(false)}
+          className="bg-zinc-900 p-2 rounded-full"
+        >
+          <X className="text-white w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+        {["news", "gossip", "products", "results", "predictions"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setAdminTab(tab)}
+            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${
+              adminTab === tab
+                ? "bg-amber-500 text-black"
+                : "bg-zinc-900 text-zinc-400"
+            }`}
+          >
+            {tab.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleAdminSubmit} className="space-y-4">
+        {(adminTab === "news" || adminTab === "gossip") && (
+          <>
+            <input
+              required
+              placeholder="Main Title (ርዕስ)"
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <input
+              placeholder="Subtitle (ንዑስ ርዕስ)"
+              onChange={(e) =>
+                setFormData({ ...formData, subtitle: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <input
+              placeholder="Author (ደራሲ - Default: ZenaSoccer)"
+              onChange={(e) =>
+                setFormData({ ...formData, author: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <textarea
+              required
+              rows="4"
+              placeholder="Body (ጽሑፍ)"
+              onChange={(e) =>
+                setFormData({ ...formData, body: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            ></textarea>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files[0])}
+              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white"
+            />
+          </>
+        )}
+
+        {(adminTab === "results" || adminTab === "predictions") && (
+          <>
+            <input
+              required
+              placeholder="League (የሊግ ስም)"
+              onChange={(e) =>
+                setFormData({ ...formData, league: e.target.value })
+              }
+              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                required
+                placeholder="Team A (ቡድን 1)"
+                onChange={(e) =>
+                  setFormData({ ...formData, teamA: e.target.value })
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+              />
+              <input
+                required
+                placeholder="Team B (ቡድን 2)"
+                onChange={(e) =>
+                  setFormData({ ...formData, teamB: e.target.value })
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+              />
+            </div>
+            {adminTab === "results" && (
+              <>
+                <input
+                  required
+                  placeholder="Score (ምሳሌ: 2 - 1)"
+                  onChange={(e) =>
+                    setFormData({ ...formData, score: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+                />
+                <input
+                  placeholder="Scorers (ሳካ 12', ኦዴጋርድ 45')"
+                  onChange={(e) =>
+                    setFormData({ ...formData, details: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
+                />
+              </>
+            )}
+          </>
+        )}
+
+        <button
+          disabled={uploading}
+          type="submit"
+          className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4 flex justify-center"
+        >
+          {uploading ? "Uploading..." : "Publish (አትም)"}
+        </button>
+      </form>
+    </div>
+  );
+
+  const tabs = [
+    { id: "ዜና", icon: Home },
+    { id: "ውጤቶች", icon: Trophy },
+    { id: "ሹክሹክታ", icon: Flame },
+    { id: "ግምት", icon: Target },
+    { id: "ሱቅ", icon: ShoppingBag },
+  ];
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-[#09090b] font-sans text-white">
-      {showVipWarning && (
-        <div
-          className="bg-amber-500 text-[#09090b] px-4 py-2 text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg"
-          onClick={() => handleNavClick("ቪአይፒ")}
-        >
-          <AlertTriangle size={16} /> Your VIP expires in {vipDaysLeft} days!
-          Renew now to keep benefits.
-        </div>
-      )}
-
+    <div className="min-h-screen bg-black font-sans text-white">
       <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center shadow-md">
         <div
-          className="flex items-center space-x-3 cursor-pointer"
+          className="flex items-center space-x-3 cursor-pointer select-none"
           onClick={handleLogoTap}
         >
+          <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center shadow-lg">
+            <span className="text-black font-black text-xs">GOL</span>
+          </div>
           <h1 className="text-white font-black text-2xl tracking-widest">
-            GOL<span className="text-amber-500">ETH</span>
+            GOL<span className="text-amber-500">ET</span>
           </h1>
         </div>
-        <div>
-          {user ? (
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 bg-black rounded-full px-3 py-1.5 border border-zinc-800">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase">
+              {isVIP ? "VIP" : "Free"}
+            </span>
             <div
-              onClick={() => setShowProfile(true)}
-              className="bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-800 cursor-pointer text-xs font-bold flex items-center gap-2"
+              className={`w-9 h-5 rounded-full flex items-center p-0.5 cursor-pointer ${
+                isVIP ? "bg-amber-500" : "bg-zinc-800"
+              }`}
+              onClick={() => setIsVIP(!isVIP)}
             >
-              <div className="w-5 h-5 bg-amber-500 rounded-full text-[#09090b] flex items-center justify-center font-black uppercase">
-                {user?.name?.charAt(0) || "U"}
-              </div>
-              {user?.name || "User"}
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                  isVIP ? "translate-x-4" : "translate-x-0"
+                }`}
+              ></div>
             </div>
-          ) : (
+          </div>
+          {isCEO && (
             <button
-              onClick={() => handleNavClick("ቪአይፒ")}
-              className="text-xs font-bold bg-[#229ED9] px-4 py-2 rounded-full text-white shadow-sm"
+              onClick={() => setShowAdmin(true)}
+              className="bg-amber-500/20 text-amber-500 p-2 rounded-full font-bold text-xs"
             >
-              ይግቡ / ይመዝገቡ
+              CEO
             </button>
           )}
         </div>
       </header>
 
-      {showProfile && renderProfileDashboard()}
-      {showAdmin && renderCEOStudio()}
-
-      {showSourcingModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#09090b]/95 px-4">
-          <div className="bg-zinc-900 border border-blue-500 p-6 rounded-2xl w-full max-w-md shadow-[0_0_20px_rgba(0,82,212,0.3)] relative">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-black text-blue-500">የግል እቃ ይዘዙ</h2>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  setShowSourcingModal(false);
-                }}
-                className="text-zinc-500 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-zinc-400 mb-6 text-sm leading-relaxed font-bold">
-              ከአማዞን (Amazon)፣ ቤስትባይ (BestBuy) ወይም ከየትኛውም የውጪ ሱቅ እቃ መግዛት ይፈልጋሉ?
-              ሊንኩን ከታች ያስገቡ። እቃውን እና መጓጓዣውን አጠቃልለን ዋጋውን እናሳውቅዎታለን።
-            </p>
-            <form onSubmit={handleSourcingSubmit}>
-              <input
-                type="url"
-                required
-                placeholder="https://www.amazon.com/item..."
-                className="w-full p-3 rounded-xl bg-[#09090b] border border-zinc-800 focus:border-blue-500 text-white mb-4 outline-none transition-colors"
-                value={sourcingLink}
-                onChange={(e) => setSourcingLink(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-colors text-lg"
-              >
-                ሊንክ ላክ (Send Link)
-              </button>
-            </form>
+      <main className="p-4 max-w-lg mx-auto">
+        {activeTab === "ዜና" && (
+          <div className="space-y-4 pb-24">
+            {news.map((n) => renderArticle(n, "news"))}
           </div>
-        </div>
-      )}
-
-      {selectedProduct && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#09090b]/95 px-4">
-          <div className="bg-zinc-900 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 p-6 relative">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
-              <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <ShoppingBag size={20} /> ማዘዣ (Checkout)
-              </h2>
-              <button
-                onClick={() => {
-                  setSelectedProduct(null);
-                  setSelectedSize("");
-                }}
-                className="bg-zinc-800 p-2 rounded-full"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="mb-4 text-center">
-              <h2 className="text-2xl font-black text-white mb-1">
-                {selectedProduct.name}
-              </h2>
-              <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">
-                {selectedProduct.brand || "Goleth Official"}
-              </p>
-              {selectedSize && selectedSize !== "Default" && (
-                <p className="text-zinc-500 text-xs mt-1 font-bold">
-                  ምርጫ (Choice):{" "}
-                  <span className="text-white">{selectedSize}</span>
-                </p>
-              )}
-            </div>
-
-            <div className="relative w-full h-56 bg-zinc-950 flex items-center justify-center rounded-xl border border-zinc-800 mb-4 overflow-hidden p-2 group">
-              <img
-                src={currentOrderImages[activeProductImageIndex]}
-                className="max-w-full max-h-full object-contain transition-opacity duration-300"
-                alt=""
-              />
-              {currentOrderImages.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setActiveProductImageIndex((prev) =>
-                        prev === 0 ? currentOrderImages.length - 1 : prev - 1
-                      )
-                    }
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setActiveProductImageIndex((prev) =>
-                        prev === currentOrderImages.length - 1 ? 0 : prev + 1
-                      )
-                    }
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#09090b]/60 p-1.5 rounded-full text-white backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                  <div className="absolute bottom-3 flex gap-1.5 justify-center w-full">
-                    {currentOrderImages.map((_, i) => (
-                      <div
-                        key={i}
-                        className={`w-2 h-2 rounded-full cursor-pointer transition-colors ${
-                          i === activeProductImageIndex
-                            ? "bg-amber-500 scale-110"
-                            : "bg-zinc-600"
-                        }`}
-                        onClick={() => setActiveProductImageIndex(i)}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-col items-center mb-6 bg-[#09090b] p-4 rounded-xl border border-zinc-800">
-              <span className="text-white font-black text-xl mb-1">
-                ዋጋ (Price): {selectedProduct.price} ብር
-              </span>
-              <span className="text-amber-500 font-black text-sm bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                👑 የቪአይፒ አባል ዋጋ: {Math.round(selectedProduct.price * 0.9)} ብር
-                (10% ቅናሽ)
-              </span>
-            </div>
-
-            <div className="flex space-x-2 mb-6 bg-[#09090b] p-1 rounded-xl border border-zinc-800">
-              <button
-                onClick={() => setOrderDestination("local")}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
-                  orderDestination === "local"
-                    ? "bg-amber-500 text-[#09090b]"
-                    : "text-zinc-500"
-                }`}
-              >
-                <MapPin size={14} /> የሀገር ውስጥ ትዕዛዝ
-              </button>
-              <button
-                onClick={() => setOrderDestination("international")}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
-                  orderDestination === "international"
-                    ? "bg-amber-500 text-[#09090b]"
-                    : "text-zinc-500"
-                }`}
-              >
-                <Globe2 size={14} /> የዲያስፖራ ስጦታ
-              </button>
-            </div>
-
-            <form onSubmit={handleBotOrderSubmit} className="space-y-4">
-              {!user?.isVIP && (
-                <div className="bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/30 p-4 rounded-xl mb-4">
-                  <p className="text-amber-500 text-xs font-black uppercase mb-1 flex items-center gap-1">
-                    <AlertCircle size={14} /> ቆም ይበሉ! (Wait!)
-                  </p>
-                  <p className="text-zinc-300 text-sm leading-relaxed font-bold">
-                    {orderDestination === "local"
-                      ? "ሙሉ ዋጋ እየከፈሉ ነው። የቪአይፒ አባላት የ10% ቅናሽ ያገኛሉ። ይህን መስኮት ዘግተው መጀመሪያ የቪአይፒ አባል ይሁኑ!"
-                      : "የዲያስፖራ ቪአይፒ ጥቅም፡ አሁን ቪአይፒ ይሁኑ እና ለዚህ ትዕዛዝ የአለም አቀፍ አገልግሎት ክፍያ (Service Fee) አይከፍሉም!"}
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                  ሙሉ ስምዎ (Your Full Name)
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={orderName}
-                  onChange={(e) => setOrderName(e.target.value)}
-                  className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
-                />
-              </div>
-
-              {orderDestination === "local" ? (
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                    የሀገር ውስጥ ስልክ ቁጥር (Local Phone)
-                  </label>
-                  <input
-                    required
-                    type="tel"
-                    value={orderPhone}
-                    onChange={(e) => setOrderPhone(e.target.value)}
-                    placeholder="09..."
-                    className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                      የውጭ ሀገር ስልክ (International Phone)
-                    </label>
-                    <div className="flex gap-2">
-                      <select
-                        value={countryCode}
-                        onChange={(e) => setCountryCode(e.target.value)}
-                        className="bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none w-24"
-                      >
-                        <option value="+1">US/CA (+1)</option>
-                        <option value="+44">UK (+44)</option>
-                        <option value="+971">UAE (+971)</option>
-                        <option value="+49">GER (+49)</option>
-                        <option value="+251">ETH (+251)</option>
-                      </select>
-                      <input
-                        required
-                        type="tel"
-                        value={orderPhone}
-                        onChange={(e) => setOrderPhone(e.target.value)}
-                        placeholder="Phone Number"
-                        className="w-full bg-[#09090b] border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-amber-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1 text-amber-500">
-                      የተቀባይ ስልክ - ኢትዮጵያ ውስጥ (Receiver's Phone)
-                    </label>
-                    <input
-                      required
-                      type="tel"
-                      value={receiverPhone}
-                      onChange={(e) => setReceiverPhone(e.target.value)}
-                      placeholder="09..."
-                      className="w-full bg-amber-500/5 border border-amber-500/30 rounded-xl p-3 text-white outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {orderDestination === "local" && (
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">
-                    የመላኪያ መንገድ (Shipping Method)
-                  </label>
-                  <div className="flex flex-col gap-2">
-                    <label
-                      onClick={() => setOrderShipping("standard")}
-                      className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
-                        orderShipping === "standard"
-                          ? "border-amber-500 bg-amber-500/10"
-                          : "border-zinc-800 bg-[#09090b]"
-                      }`}
-                    >
-                      <span className="text-sm font-bold text-white">
-                        በ3-5 ቀናት ውስጥ (3-5 Days)
-                      </span>
-                      <span className="text-xs font-black text-amber-500">
-                        +150 ETB
-                      </span>
-                    </label>
-                    <label
-                      onClick={() => setOrderShipping("express")}
-                      className={`p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all border ${
-                        orderShipping === "express"
-                          ? "border-amber-500 bg-amber-500/10"
-                          : "border-zinc-800 bg-[#09090b]"
-                      }`}
-                    >
-                      <span className="text-sm font-bold text-white">
-                        ቀጣይ ቀን (Next Day)
-                      </span>
-                      <span className="text-xs font-black text-amber-500">
-                        +300 ETB
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 mt-4">
-                <p className="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">
-                  የክፍያ መመሪያ (Payment Info):
-                </p>
-                {orderDestination === "local" ? (
-                  <>
-                    <p className="text-sm font-black text-white">
-                      • CBE:{" "}
-                      <span className="text-amber-500">1000XXXXXXXXX</span>
-                    </p>
-                    <p className="text-sm font-black text-white">
-                      • Telebirr:{" "}
-                      <span className="text-amber-500">09XXXXXXXX</span>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-black text-white mb-2">
-                      • PayPal:{" "}
-                      <span className="text-blue-400">paypal.me/goleth</span>
-                    </p>
-                    <p className="text-sm font-black text-white">
-                      • Sendwave / Remitly to Receiver
-                    </p>
-                  </>
-                )}
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">
-                  ደረሰኝ ያስገቡ (Upload Receipt)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setOrderReceipt(e.target.files[0])}
-                  className="w-full text-xs text-zinc-400 bg-[#09090b] border border-zinc-800 p-2 rounded-xl focus:border-amber-500"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubmittingOrder}
-                className="w-full bg-[#1e40af] hover:bg-[#1d4ed8] text-white font-black py-4 rounded-xl mt-4 flex justify-center items-center gap-2 transition-colors shadow-lg"
-              >
-                {isSubmittingOrder ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <CheckCircle2 size={18} />
-                )}
-                <span>
-                  {isSubmittingOrder
-                    ? "በመካሄድ ላይ (Processing)..."
-                    : "አረጋግጠው ይላኩ (Confirm & Send)"}
-                </span>
-              </button>
-            </form>
-
-            <div className="mt-8 pt-6 border-t border-zinc-800">
-              <h3 className="text-sm font-black text-white mb-4">
-                ይህም ሊወዱት ይችላሉ (You May Also Like)
-              </h3>
-              <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
-                {products
-                  .filter(
-                    (p) =>
-                      p.id !== selectedProduct.id &&
-                      p.category === selectedProduct.category
-                  )
-                  .slice(0, 3)
-                  .map((recommended) => (
-                    <div
-                      key={recommended.id}
-                      className="min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl p-2 shrink-0 cursor-pointer"
-                      onClick={() => {
-                        setSelectedProduct(recommended);
-                        setSelectedSize("");
-                        setActiveProductImageIndex(0);
-                      }}
-                    >
-                      <div className="w-full aspect-square bg-[#09090b] rounded-lg mb-2 flex items-center justify-center overflow-hidden">
-                        {recommended.image_url ? (
-                          <img
-                            src={recommended.image_url.split(",")[0]}
-                            className="w-full h-full object-cover opacity-80"
-                            alt=""
-                          />
-                        ) : (
-                          <ShoppingBag className="text-zinc-800" />
-                        )}
-                      </div>
-                      <p className="text-xs text-white font-bold line-clamp-2 leading-tight mb-1">
-                        {recommended.name}
-                      </p>
-                      <p className="text-[10px] text-amber-500 font-bold">
-                        {recommended.price} ብር
-                      </p>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <main className="p-4 max-w-lg mx-auto pb-32 relative">
-        {activeTab === "ዜና" &&
-          renderNewsFeed(news, newsCategory, setNewsCategory, newsCategories)}
-        {activeTab === "ስፖርት" &&
-          renderNewsFeed(
-            news,
-            sportCategory,
-            setSportCategory,
-            sportCategories
-          )}
+        )}
+        {activeTab === "ውጤቶች" && renderResults()}
         {activeTab === "ሹክሹክታ" && (
-          <div className="space-y-4">
-            {gossip && gossip.length > 0 ? (
-              gossip.map((g, index) => renderArticle(g, index === 0, "gossip"))
-            ) : (
-              <div className="py-10 flex flex-col items-center justify-center text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl border-dashed mt-4">
-                <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mb-3">
-                  <Flame className="text-zinc-600" size={24} />
-                </div>
-                <p className="text-zinc-400 font-bold text-sm">
-                  ምንም አልተገኘም (Empty)
-                </p>
-                <p className="text-zinc-600 text-xs mt-1">
-                  Check back later for updates.
-                </p>
-              </div>
-            )}
+          <div className="space-y-4 pb-24">
+            {gossip.map((g) => renderArticle(g, "gossip"))}
           </div>
         )}
-        {activeTab === "ቪአይፒ" && renderVIP()}
+        {activeTab === "ግምት" && renderPredict()}
         {activeTab === "ሱቅ" && renderShop()}
-
-        {isCEO && !showAdmin && (
-          <button
-            onClick={() => {
-              let defaultTab = "news";
-              if (activeTab === "ሱቅ") defaultTab = "products";
-              if (activeTab === "ሹክሹክታ") defaultTab = "gossip";
-              if (activeTab === "ቪአይፒ") defaultTab = "predictions";
-              handleEdit(null, defaultTab);
-            }}
-            className="fixed bottom-24 right-4 bg-amber-500 text-[#09090b] p-4 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)] z-30 flex items-center justify-center"
-          >
-            <PlusCircle size={28} />
-          </button>
-        )}
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-zinc-950/95 border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
+      {showAdmin && renderAdmin()}
+
+      <nav className="fixed bottom-0 w-full bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => handleNavClick(tab.id)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center p-2 ${
-                isActive ? "text-amber-500" : "text-white/90"
+                isActive ? "text-amber-500" : "text-zinc-600"
               }`}
             >
-              <Icon size={24} className="mb-1.5" />
-              <span className="text-[11px] font-bold">{tab.id}</span>
+              <Icon
+                size={isActive ? 26 : 24}
+                strokeWidth={isActive ? 2.5 : 2}
+                className="mb-1.5"
+              />
+              <span className="text-[11px] font-bold tracking-wide">
+                {tab.id}
+              </span>
             </button>
           );
         })}
