@@ -10,7 +10,6 @@ import {
   Trash2,
   Edit2,
   ChevronLeft,
-  MessageCircle,
   PlusCircle,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
@@ -35,7 +34,12 @@ export default function App() {
   
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [] });
-  const [imageFiles, setImageFiles] = useState([]);
+  
+  // Split Image States
+  const [mainImageFile, setMainImageFile] = useState(null);
+  const [inlineImageFiles, setInlineImageFiles] = useState([]);
+  const [productImageFiles, setProductImageFiles] = useState([]);
+  
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
 
   const [posts, setPosts] = useState([]);
@@ -113,7 +117,9 @@ export default function App() {
       });
     }
     
-    setImageFiles([]);
+    setMainImageFile(null);
+    setInlineImageFiles([]);
+    setProductImageFiles([]);
     setShowAdmin(true);
   };
 
@@ -121,7 +127,9 @@ export default function App() {
     setAdminTab(type);
     setEditId(null);
     setFormData({ options: [] });
-    setImageFiles([]);
+    setMainImageFile(null);
+    setInlineImageFiles([]);
+    setProductImageFiles([]);
   };
 
   const handleSizeChange = (e) => {
@@ -133,24 +141,37 @@ export default function App() {
     });
   };
 
+  const uploadFileToSupabase = async (file) => {
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
+    if (!uploadError) {
+      const { data } = supabase.storage.from("images").getPublicUrl(fileName);
+      return data.publicUrl;
+    }
+    return null;
+  };
+
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
     let uploadedUrls = [];
 
-    if (imageFiles.length > 0) {
-      for (const file of imageFiles) {
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
-        if (!uploadError) {
-          const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-          uploadedUrls.push(data.publicUrl);
+    if (adminTab === "posts") {
+      // 1. Upload Main Image First
+      if (mainImageFile) {
+        const mainUrl = await uploadFileToSupabase(mainImageFile);
+        if (mainUrl) uploadedUrls.push(mainUrl);
+      }
+      
+      // 2. Upload Inline Images Second
+      if (inlineImageFiles.length > 0) {
+        for (const file of inlineImageFiles) {
+          const inlineUrl = await uploadFileToSupabase(file);
+          if (inlineUrl) uploadedUrls.push(inlineUrl);
         }
       }
-    }
 
-    if (adminTab === "posts") {
       const payload = {
         category: formData.postCategory || "ዋና",
         title: formData.title,
@@ -159,6 +180,7 @@ export default function App() {
         body: formData.body,
         author: "GOLETH",
       };
+      
       if (uploadedUrls.length > 0) payload.image_urls = uploadedUrls;
 
       if (editId) {
@@ -167,6 +189,13 @@ export default function App() {
         await supabase.from("posts").insert([payload]);
       }
     } else if (adminTab === "products") {
+      if (productImageFiles.length > 0) {
+        for (const file of productImageFiles) {
+          const prodUrl = await uploadFileToSupabase(file);
+          if (prodUrl) uploadedUrls.push(prodUrl);
+        }
+      }
+
       const payload = {
         name: formData.title,
         brand: formData.brand,
@@ -186,7 +215,9 @@ export default function App() {
     }
 
     setFormData({ options: [] });
-    setImageFiles([]);
+    setMainImageFile(null);
+    setInlineImageFiles([]);
+    setProductImageFiles([]);
     setEditId(null);
     setUploading(false);
     setShowAdmin(false);
@@ -200,14 +231,8 @@ export default function App() {
     return new Date(dateString).toLocaleDateString("am-ET", { year: "numeric", month: "long", day: "numeric" }).toUpperCase();
   };
 
-  const renderContactBanner = () => (
-    <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="block bg-emerald-600 hover:bg-emerald-500 rounded-xl p-3 flex justify-center items-center text-white font-bold text-sm shadow-lg border border-emerald-500">
-      <MessageCircle size={18} className="mr-2" /> ያግኙን (Contact Us)
-    </a>
-  );
-
   const renderOrderBanner = () => (
-    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
+    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600 mb-6 mt-2">
       <div>
         <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
         <p className="text-blue-200 text-xs mt-1">ከአማዞን ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
@@ -216,39 +241,23 @@ export default function App() {
     </a>
   );
 
-  const renderBanners = (isShop = false) => (
-    <div className="mb-6 space-y-3">
-      {isShop && renderContactBanner()}
-      {renderOrderBanner()}
-      {!isShop && renderContactBanner()}
-    </div>
-  );
-
-  const renderImageGallery = (urls) => {
-    if (!urls || urls.length === 0) return null;
-    return (
-      <div className="flex overflow-x-auto space-x-2 pb-2 no-scrollbar snap-x">
-        {urls.map((url, i) => (
-          <img key={i} src={url} alt="Gallery" className="w-full h-64 object-cover rounded-xl shadow-lg flex-shrink-0 snap-center" />
-        ))}
-      </div>
-    );
-  };
-
   // Smart Body Renderer for Inline Images
   const renderBodyWithImages = (text, urls) => {
-    if (!urls || urls.length === 0 || !text.includes('[IMAGE]')) {
+    if (!urls || urls.length <= 1 || !text.includes('[IMAGE]')) {
        return <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{text}</div>;
     }
     
+    // urls[0] is the main feed image. Inline images start at urls[1].
+    const inlineUrls = urls.slice(1);
     const parts = text.split('[IMAGE]');
+    
     return (
       <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
         {parts.map((part, i) => (
           <React.Fragment key={i}>
             {part}
-            {i < parts.length - 1 && urls[i] && (
-              <img src={urls[i]} alt="Inline content" className="w-full h-auto rounded-xl my-4 shadow-lg object-cover" />
+            {i < parts.length - 1 && inlineUrls[i] && (
+              <img src={inlineUrls[i]} alt="Inline content" className="w-full h-auto rounded-xl my-4 shadow-lg object-cover" />
             )}
           </React.Fragment>
         ))}
@@ -273,12 +282,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Only show top gallery if [IMAGE] tags aren't used in the text */}
-      {(!activePost.body || !activePost.body.includes('[IMAGE]')) && (
-        <div className="mb-6">{renderImageGallery(activePost.image_urls)}</div>
+      {/* Main Image for Reading View */}
+      {(!activePost.body || !activePost.body.includes('[IMAGE]')) && activePost.image_urls && activePost.image_urls[0] && (
+        <img src={activePost.image_urls[0]} alt={activePost.title} className="w-full aspect-[1.91/1] object-cover rounded-xl mb-6 shadow-lg" />
       )}
       
-      <h1 className="text-3xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
+      <h1 className="text-2xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
       {activePost.subtitle && <h2 className="text-xl text-zinc-300 font-bold mb-4">{activePost.subtitle}</h2>}
       
       <div className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-6">
@@ -287,7 +296,6 @@ export default function App() {
 
       {activePost.excerpt && <p className="text-lg text-white font-medium mb-6 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
       
-      {/* Smart body render handles [IMAGE] tags */}
       {renderBodyWithImages(activePost.body, activePost.image_urls)}
     </div>
   );
@@ -307,40 +315,47 @@ export default function App() {
 
     return (
       <div className="space-y-6 pb-24">
-        {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderBanners(false)}
+        {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderOrderBanner()}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
 
+            // 1. Hero Layout (Top 1)
             if (index === 0) {
               return (
                 <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
-                  {firstImg && <img src={firstImg} alt={post.title} className="w-full h-60 object-cover" />}
-                  <div className="p-5">
-                    <h2 className="text-2xl font-black text-amber-500 mb-2 leading-tight">{post.title}</h2>
-                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-3">{post.author} • {formatDate(post.created_at)}</div>
-                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body.replace(/\[IMAGE\]/g, '')}</p>
+                  {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
+                  <div className="p-4">
+                    <h2 className="text-xl font-black text-amber-500 mb-2 leading-tight">{post.title}</h2>
+                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-2">{post.author} • {formatDate(post.created_at)}</div>
+                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt}</p>
                   </div>
                 </div>
               );
             }
+            
+            // 2. Grid Layout (Next 4 posts)
             if (index > 0 && index <= 4) {
               return (
                 <div key={post.id} onClick={() => setActivePost(post)} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
-                  {firstImg && <img src={firstImg} alt={post.title} className="w-full h-36 object-cover" />}
-                  <div className="p-4 flex flex-col flex-grow">
-                    <h3 className="text-md font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
-                    <div className="mt-auto text-zinc-500 text-[10px] font-bold">{formatDate(post.created_at)}</div>
+                  {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
+                  <div className="p-3 flex flex-col flex-grow">
+                    <h3 className="text-sm font-bold text-white mb-1 line-clamp-2 leading-snug">{post.title}</h3>
+                    <div className="text-zinc-500 text-[10px] font-bold mb-2">{post.author} • {formatDate(post.created_at)}</div>
+                    <p className="text-zinc-400 text-xs line-clamp-2 mt-auto">{post.excerpt}</p>
                   </div>
                 </div>
               );
             }
+            
+            // 3. List Layout (Rest of the posts)
             return (
-              <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-2">
-                {firstImg && <img src={firstImg} alt={post.title} className="w-24 h-24 object-cover rounded-lg" />}
-                <div className="pl-4 pr-2 flex flex-col justify-center py-1">
+              <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 flex items-start bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3">
+                {firstImg && <img src={firstImg} alt={post.title} className="w-32 shrink-0 aspect-[1.91/1] object-cover rounded-lg" />}
+                <div className="pl-4 flex flex-col flex-grow py-1">
                   <h3 className="text-sm font-bold text-white mb-1 line-clamp-2">{post.title}</h3>
-                  <div className="text-zinc-500 text-[10px] font-bold">{formatDate(post.created_at)}</div>
+                  <div className="text-zinc-500 text-[9px] font-bold uppercase mb-1">{post.author} • {formatDate(post.created_at)}</div>
+                  <p className="text-zinc-400 text-xs line-clamp-2">{post.excerpt}</p>
                 </div>
               </div>
             );
@@ -371,7 +386,7 @@ export default function App() {
           ))}
         </div>
 
-        {renderBanners(true)}
+        {renderOrderBanner()}
 
         {shopCategory !== "ሁሉም" && shopCategory !== "መድሀኒት" && (
            <div className="flex space-x-2 overflow-x-auto pb-6 mb-2 no-scrollbar">
@@ -437,7 +452,7 @@ export default function App() {
 
   const renderVIP = () => (
     <div className="pb-24">
-      {renderBanners(false)}
+      {renderOrderBanner()}
       <div className="flex flex-col items-center justify-center pt-10">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center max-w-sm w-full shadow-2xl">
           <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-full flex items-center justify-center mb-6 border border-zinc-700">
@@ -446,7 +461,7 @@ export default function App() {
           <h2 className="text-2xl font-black text-white mb-2">እንኳን በደህና መጡ!</h2>
           <p className="text-zinc-400 text-sm mb-8 leading-relaxed">አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ::</p>
           <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="w-full bg-[#2AABEE] text-white font-bold py-3.5 rounded-xl flex items-center justify-center shadow-lg hover:bg-blue-500 transition-colors">
-             <MessageCircle size={20} className="mr-2 fill-current" /> በቴሌግራም ይግቡ
+             በቴሌግራም ይግቡ
           </a>
         </div>
       </div>
@@ -489,6 +504,19 @@ export default function App() {
             <div className="relative">
               <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body). Type [IMAGE] wherever you want an uploaded picture to appear!" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
               <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[IMAGE]</b> inside the text to insert a picture there.</p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-4">
+               <div>
+                 <label className="block text-white font-bold text-sm mb-2">1. ዋና ምስል (Main Feed Image)</label>
+                 <input type="file" accept="image/*" onChange={(e) => setMainImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:bg-amber-500 file:text-black file:font-bold file:border-0" />
+               </div>
+               <div className="border-t border-zinc-800 pt-4">
+                 <label className="block text-white font-bold text-sm mb-2">2. የጽሑፍ ውስጥ ምስሎች (Inline Images)</label>
+                 <p className="text-xs text-zinc-400 mb-2">እነዚህ ምስሎች ጽሑፉ ውስጥ <b>[IMAGE]</b> ባሉበት ቦታ ይገባሉ። ብዙ መምረጥ ይቻላል።</p>
+                 <input type="file" multiple accept="image/*" onChange={(e) => setInlineImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:bg-zinc-700 file:text-white file:border-0" />
+               </div>
+               {editId && <p className="text-xs text-amber-500 mt-2">ማስታወሻ፡ አዲስ ምስል ከመረጡ የድሮው ምስል ይቀየራል።</p>}
             </div>
           </>
         )}
@@ -539,14 +567,13 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+               <label className="block text-zinc-400 text-sm mb-2">የእቃው ምስሎች (Product Images - ብዙ መምረጥ ይቻላል):</label>
+               <input type="file" multiple accept="image/*" onChange={(e) => setProductImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0" />
+            </div>
           </>
         )}
-        
-        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-           <label className="block text-zinc-400 text-sm mb-2">ምስሎች (ብዙ መምረጥ ይቻላል / Select Multiple Images):</label>
-           <input type="file" multiple accept="image/*" onChange={(e) => setImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0" />
-           {editId && <p className="text-xs text-amber-500 mt-2">ማስታወሻ፡ አዲስ ምስል ከመረጡ የድሮው ምስል ይቀየራል። (Note: Selecting new files will replace the old images).</p>}
-        </div>
         
         <button disabled={uploading} type="submit" className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4">
           {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል (Update)" : "አትም (Publish)")}
@@ -573,6 +600,9 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center space-x-3">
+          <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="text-emerald-500 font-bold text-sm hover:text-emerald-400 px-2 border-r border-zinc-800">
+            ያግኙን
+          </a>
           {isCEO && (
             <button onClick={() => { openNewPost("posts"); setShowAdmin(true); }} className="bg-amber-500/20 text-amber-500 px-3 py-1.5 rounded-full font-bold text-xs">
               CEO
