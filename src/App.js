@@ -21,24 +21,23 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("ዋና");
-  const [activePost, setActivePost] = useState(null); // Controls Single Post View
+  const [activePost, setActivePost] = useState(null);
   
-  // Shop States
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
 
-  // CEO States
   const [isCEO, setIsCEO] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
-  const [formData, setFormData] = useState({});
-  const [imageFile, setImageFile] = useState(null);
+  const [formData, setFormData] = useState({ options: [] });
+  const [imageFiles, setImageFiles] = useState([]);
 
-  // Data States
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
+
+  const availableSizes = ["S", "M", "L", "XL", "XXL", "38", "39", "40", "41", "42", "43", "44", "45", "100g", "250g", "500g"];
 
   useEffect(() => {
     fetchData();
@@ -46,16 +45,8 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const { data: postsData } = await supabase
-        .from("posts")
-        .select("*")
-        .order("created_at", { ascending: false });
-      
-      const { data: productsData } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
-
+      const { data: postsData } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
+      const { data: productsData } = await supabase.from("products").select("*").order("created_at", { ascending: false });
       setPosts(postsData || []);
       setProducts(productsData || []);
     } catch (error) {
@@ -75,33 +66,42 @@ export default function App() {
       if (password === "admin123") {
         setIsCEO(true);
         setShowAdmin(true);
-      } else if (password !== null) {
-        alert("Access Denied");
       }
       setTapCount(0);
     }
   };
 
   const handleDelete = async (table, id) => {
-    if (window.confirm("Are you sure? (እርግጠኛ ነዎት?)")) {
+    if (window.confirm("እርግጠኛ ነዎት?")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
       setActivePost(null);
     }
   };
 
+  const handleSizeChange = (e) => {
+    const value = e.target.value;
+    setFormData((prev) => {
+      const options = prev.options || [];
+      if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) };
+      return { ...prev, options: [...options, value] };
+    });
+  };
+
   const handleAdminSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
-    let finalImageUrl = null;
+    let uploadedUrls = [];
 
-    if (imageFile) {
-      const fileExt = imageFile.name.split(".").pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from("images").upload(fileName, imageFile);
-      if (!uploadError) {
-        const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-        finalImageUrl = data.publicUrl;
+    if (imageFiles.length > 0) {
+      for (const file of imageFiles) {
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
+        if (!uploadError) {
+          const { data } = supabase.storage.from("images").getPublicUrl(fileName);
+          uploadedUrls.push(data.publicUrl);
+        }
       }
     }
 
@@ -113,69 +113,77 @@ export default function App() {
           subtitle: formData.subtitle,
           excerpt: formData.excerpt,
           body: formData.body,
-          image_url: finalImageUrl,
+          image_urls: uploadedUrls,
           author: "GOLETH",
         },
       ]);
     } else if (adminTab === "products") {
-      const optionsArray = formData.options ? formData.options.split(",").map(opt => opt.trim()) : [];
       await supabase.from("products").insert([
         {
           name: formData.title,
           brand: formData.brand,
           price: Number(formData.price),
-          vip_price: Number(formData.vipPrice),
+          vip_price: formData.vipPrice ? Number(formData.vipPrice) : null,
           category: formData.shopCat,
-          options: optionsArray,
-          image_url: finalImageUrl,
+          subcategory: formData.shopSubCat,
+          options: formData.options,
+          image_urls: uploadedUrls,
         },
       ]);
     }
 
-    setFormData({});
-    setImageFile(null);
+    setFormData({ options: [] });
+    setImageFiles([]);
     setUploading(false);
     setShowAdmin(false);
     fetchData();
-    alert("Published successfully!");
+    alert("በተሳካ ሁኔታ ታትሟል!");
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const options = { year: "numeric", month: "long", day: "numeric" };
-    return new Date(dateString).toLocaleDateString("am-ET", options).toUpperCase();
+    return new Date(dateString).toLocaleDateString("am-ET", { year: "numeric", month: "long", day: "numeric" }).toUpperCase();
   };
-
-  // --- UI COMPONENTS ---
 
   const renderBanners = () => (
     <div className="mb-6 space-y-3">
       <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
         <div>
           <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-          <p className="text-blue-200 text-xs mt-1">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+          <p className="text-blue-200 text-xs mt-1">ከአማዞን ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
         </div>
         <PlusCircle className="text-blue-300" size={24} />
       </a>
       <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="block bg-zinc-900 rounded-xl p-3 flex justify-center items-center border border-zinc-800 text-amber-500 font-bold text-sm">
-        <MessageCircle size={18} className="mr-2" /> ያግኙን (Contact Us)
+        <MessageCircle size={18} className="mr-2" /> ያግኙን
       </a>
     </div>
   );
 
+  const renderImageGallery = (urls) => {
+    if (!urls || urls.length === 0) return null;
+    return (
+      <div className="flex overflow-x-auto space-x-2 pb-2 no-scrollbar snap-x">
+        {urls.map((url, i) => (
+          <img key={i} src={url} alt="Gallery" className="w-full h-64 object-cover rounded-xl shadow-lg flex-shrink-0 snap-center" />
+        ))}
+      </div>
+    );
+  };
+
   const renderSinglePost = () => (
     <div className="pb-24 animate-in fade-in zoom-in-95 duration-200">
       <button onClick={() => setActivePost(null)} className="flex items-center text-zinc-400 mb-4 hover:text-white">
-        <ChevronLeft size={20} className="mr-1" /> ወደ ኋላ ተመለስ (Back)
+        <ChevronLeft size={20} className="mr-1" /> ወደ ኋላ ተመለስ
       </button>
       
       {isCEO && (
         <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-600 text-white p-2 rounded-lg text-xs font-bold mb-4 w-full">
-          Delete Post
+          ሰርዝ (Delete)
         </button>
       )}
 
-      {activePost.image_url && <img src={activePost.image_url} alt={activePost.title} className="w-full h-64 object-cover rounded-xl mb-6 shadow-lg" />}
+      <div className="mb-6">{renderImageGallery(activePost.image_urls)}</div>
       
       <h1 className="text-3xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
       {activePost.subtitle && <h2 className="text-xl text-zinc-300 font-bold mb-4">{activePost.subtitle}</h2>}
@@ -185,10 +193,7 @@ export default function App() {
       </div>
 
       {activePost.excerpt && <p className="text-lg text-white font-medium mb-6 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
-      
-      <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-        {activePost.body}
-      </div>
+      <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{activePost.body}</div>
     </div>
   );
 
@@ -199,8 +204,8 @@ export default function App() {
       return (
         <div className="flex flex-col items-center justify-center mt-20 text-zinc-500">
           <div className="w-12 h-12 rounded-full border border-zinc-800 flex items-center justify-center mb-4">!</div>
-          <p>ምንም አልተገኘም (Empty)</p>
-          <p className="text-xs mt-1">Check back later for updates.</p>
+          <p>ምንም አልተገኘም</p>
+          <p className="text-xs mt-1">እባክዎትን ትንሽ ቆይተው እንደገና ይሞክሩ።</p>
         </div>
       );
     }
@@ -208,46 +213,39 @@ export default function App() {
     return (
       <div className="space-y-6 pb-24">
         {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderBanners()}
-        
-        {/* Layout Engine */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredPosts.map((post, index) => {
-            // Hero Layout (Index 0)
+            const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
+
             if (index === 0) {
               return (
                 <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
-                  {post.image_url && <img src={post.image_url} alt={post.title} className="w-full h-60 object-cover" />}
+                  {firstImg && <img src={firstImg} alt={post.title} className="w-full h-60 object-cover" />}
                   <div className="p-5">
                     <h2 className="text-2xl font-black text-amber-500 mb-2 leading-tight">{post.title}</h2>
-                    <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-3">
-                      {post.author} • {formatDate(post.created_at)}
-                    </div>
+                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-3">{post.author} • {formatDate(post.created_at)}</div>
                     <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body}</p>
                   </div>
                 </div>
               );
             }
-            
-            // Grid Layout (Index 1 to 4)
             if (index > 0 && index <= 4) {
               return (
                 <div key={post.id} onClick={() => setActivePost(post)} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
-                  {post.image_url && <img src={post.image_url} alt={post.title} className="w-full h-36 object-cover" />}
+                  {firstImg && <img src={firstImg} alt={post.title} className="w-full h-36 object-cover" />}
                   <div className="p-4 flex flex-col flex-grow">
                     <h3 className="text-md font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
-                    <div className="mt-auto text-zinc-500 text-[10px] font-bold uppercase">{formatDate(post.created_at)}</div>
+                    <div className="mt-auto text-zinc-500 text-[10px] font-bold">{formatDate(post.created_at)}</div>
                   </div>
                 </div>
               );
             }
-
-            // List Layout (Index 5+)
             return (
               <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-2">
-                {post.image_url && <img src={post.image_url} alt={post.title} className="w-24 h-24 object-cover rounded-lg" />}
+                {firstImg && <img src={firstImg} alt={post.title} className="w-24 h-24 object-cover rounded-lg" />}
                 <div className="pl-4 pr-2 flex flex-col justify-center py-1">
                   <h3 className="text-sm font-bold text-white mb-1 line-clamp-2">{post.title}</h3>
-                  <div className="text-zinc-500 text-[10px] font-bold uppercase">{formatDate(post.created_at)}</div>
+                  <div className="text-zinc-500 text-[10px] font-bold">{formatDate(post.created_at)}</div>
                 </div>
               </div>
             );
@@ -263,16 +261,12 @@ export default function App() {
 
     let filtered = products;
     if (shopCategory !== "ሁሉም") filtered = filtered.filter(p => p.category === shopCategory);
-    
-    // Quick frontend filter logic for subcategories if implemented by keyword in category or options
-    // For now, if secondary category is selected, we filter by seeing if the keyword exists in options or brand
     if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") {
-       filtered = filtered.filter(p => (p.options && p.options.includes(shopSubCategory)) || (p.brand && p.brand.includes(shopSubCategory)));
+       filtered = filtered.filter(p => p.subcategory === shopSubCategory);
     }
 
     return (
       <div className="pb-24">
-        {/* Primary Categories */}
         <div className="flex space-x-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
           {primaryCats.map(cat => (
             <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
@@ -282,18 +276,8 @@ export default function App() {
           ))}
         </div>
 
-        {/* Banner */}
-        <div className="mb-6">
-          <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
-            <div>
-              <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-              <p className="text-blue-200 text-xs mt-1">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
-            </div>
-            <PlusCircle className="text-blue-300" size={24} />
-          </a>
-        </div>
+        {renderBanners()}
 
-        {/* Secondary Categories (Only show if a primary category is selected) */}
         {shopCategory !== "ሁሉም" && shopCategory !== "መድሀኒት" && (
            <div className="flex space-x-2 overflow-x-auto pb-6 mb-2 no-scrollbar">
            {secondaryCats.map(cat => (
@@ -313,26 +297,24 @@ export default function App() {
                   <Trash2 size={14} className="text-white" />
                 </button>
               )}
-              {item.category && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-br-lg z-10 uppercase tracking-widest">FREE DELIVERY</div>}
+              {item.category && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-br-lg z-10 tracking-widest">ነፃ ትራንስፖርት</div>}
               
-              <div className="bg-white pt-8 pb-4 px-2 flex justify-center">
-                 {item.image_url ? <img src={item.image_url} alt={item.name} className="h-28 object-contain" /> : <div className="h-28" />}
+              <div className="bg-white pt-8 pb-4 px-2 flex overflow-x-auto snap-x no-scrollbar">
+                 {item.image_urls && item.image_urls.length > 0 ? (
+                   item.image_urls.map((img, i) => <img key={i} src={img} alt={item.name} className="h-28 object-contain flex-shrink-0 snap-center mr-2" />)
+                 ) : <div className="h-28" />}
               </div>
 
               <div className="p-4 flex flex-col flex-grow">
                 <p className="text-white font-black text-lg">{item.price} ብር</p>
-                {item.vip_price && (
-                  <p className="text-amber-500 font-bold text-xs mt-1 mb-3 flex items-center">
-                    👑 VIP: {item.vip_price} ብር
-                  </p>
-                )}
+                {item.vip_price && <p className="text-amber-500 font-bold text-xs mt-1 mb-3">👑 VIP: {item.vip_price} ብር</p>}
                 
                 <h3 className="text-zinc-300 font-bold text-sm mb-1 leading-tight">{item.name}</h3>
                 {item.brand && <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-4">{item.brand}</p>}
                 
                 {item.options && item.options.length > 0 && (
                   <div className="mb-4">
-                     <p className="text-zinc-500 text-[10px] mb-2">አማራጭ ይምረጡ (OPTION):</p>
+                     <p className="text-zinc-500 text-[10px] mb-2">አማራጭ ይምረጡ፡</p>
                      <div className="flex flex-wrap gap-2">
                         {item.options.map(opt => (
                           <span key={opt} className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs px-2 py-1 rounded-md">{opt}</span>
@@ -361,11 +343,9 @@ export default function App() {
             <Users className="text-blue-400" size={32} />
           </div>
           <h2 className="text-2xl font-black text-white mb-2">እንኳን በደህና መጡ!</h2>
-          <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
-            አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ::
-          </p>
+          <p className="text-zinc-400 text-sm mb-8 leading-relaxed">አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ::</p>
           <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="w-full bg-[#2AABEE] text-white font-bold py-3.5 rounded-xl flex items-center justify-center shadow-lg hover:bg-blue-500 transition-colors">
-             <MessageCircle size={20} className="mr-2 fill-current" /> Log in with Telegram
+             <MessageCircle size={20} className="mr-2 fill-current" /> በቴሌግራም ይግቡ
           </a>
         </div>
       </div>
@@ -383,7 +363,7 @@ export default function App() {
 
       <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4">
         {["posts", "products"].map((tab) => (
-          <button key={tab} onClick={() => setAdminTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-bold ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400"}`}>
+          <button key={tab} onClick={() => { setAdminTab(tab); setFormData({ options: [] }); }} className={`px-4 py-2 rounded-xl text-sm font-bold ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400"}`}>
             {tab.toUpperCase()}
           </button>
         ))}
@@ -393,45 +373,63 @@ export default function App() {
         {adminTab === "posts" && (
           <>
             <select required onChange={(e) => setFormData({ ...formData, postCategory: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
-              <option value="">Select Category (ምድብ)</option>
-              <option value="ዋና">ዋና (Main)</option>
-              <option value="ስፖርት">ስፖርት (Sport)</option>
-              <option value="ሹክሹክታ">ሹክሹክታ (Gossip)</option>
-              <option value="ማህበራዊ">ማህበራዊ (Social)</option>
+              <option value="">ምድብ ይምረጡ</option>
+              <option value="ዋና">ዋና</option>
+              <option value="ስፖርት">ስፖርት</option>
+              <option value="ሹክሹክታ">ሹክሹክታ</option>
+              <option value="ማህበራዊ">ማህበራዊ</option>
             </select>
-            <input required placeholder="Title (ርዕስ)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <input placeholder="Subtitle (ንዑስ ርዕስ)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <textarea rows="2" placeholder="Excerpt (አጭር ማብራሪያ)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
-            <textarea required rows="6" placeholder="Full Body (ሙሉ ጽሑፍ)" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
-            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white" />
+            <input required placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <textarea rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+            <textarea required rows="6" placeholder="ሙሉ ጽሑፍ (Body)" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
           </>
         )}
 
         {adminTab === "products" && (
           <>
-            <input required placeholder="Product Name (የእቃው ስም)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <input placeholder="Brand Name (ምልክት - e.g. COLE HAAN)" onChange={(e) => setFormData({ ...formData, brand: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input required placeholder="የእቃው ስም (Product Name)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input placeholder="ምልክት (Brand - e.g. NIKE)" onChange={(e) => setFormData({ ...formData, brand: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
             
             <div className="grid grid-cols-2 gap-4">
-              <input required type="number" placeholder="Regular Price" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
-              <input type="number" placeholder="VIP Price (Optional)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
+              <input required type="number" placeholder="ዋጋ (Price)" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
+              <input type="number" placeholder="የ VIP ዋጋ (Optional)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
             </div>
 
-            <select required onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
-              <option value="">Primary Category (ዋና ምድብ)</option>
-              <option value="ወንድ">ወንድ</option>
-              <option value="ሴት">ሴት</option>
-              <option value="ልጅ">ልጅ</option>
-              <option value="መድሀኒት">መድሀኒት</option>
-            </select>
+            <div className="grid grid-cols-2 gap-4">
+              <select required onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+                <option value="">ዋና ምድብ</option>
+                <option value="ወንድ">ወንድ</option>
+                <option value="ሴት">ሴት</option>
+                <option value="ልጅ">ልጅ</option>
+                <option value="መድሀኒት">መድሀኒት</option>
+              </select>
+              <select onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+                <option value="">ንዑስ ምድብ</option>
+                <option value="ልብስ">ልብስ</option>
+                <option value="ጫማ">ጫማ</option>
+                <option value="ሌሎች">ሌሎች</option>
+              </select>
+            </div>
             
-            <input placeholder="Sizes/Options (Comma separated: 42, 43, 44 OR ልብስ, ጫማ)" onChange={(e) => setFormData({ ...formData, options: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white" />
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+              <p className="text-zinc-400 text-sm mb-3">መጠኖች ይምረጡ (Sizes):</p>
+              <div className="flex flex-wrap gap-3">
+                {availableSizes.map(size => (
+                  <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-800 px-3 py-1 rounded-lg hover:bg-zinc-700">
+                    <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500" />
+                    <span>{size}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </>
         )}
         
+        <input type="file" multiple accept="image/*" onChange={(e) => setImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white" />
+        
         <button disabled={uploading} type="submit" className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4">
-          {uploading ? "Uploading..." : "Publish (አትም)"}
+          {uploading ? "በመጫን ላይ..." : "አትም (Publish)"}
         </button>
       </form>
     </div>
