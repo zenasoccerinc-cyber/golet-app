@@ -11,6 +11,7 @@ import {
   Edit2,
   ChevronLeft,
   PlusCircle,
+  Send
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -18,6 +19,10 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Your Specific Telegram Bot Token
+const TELEGRAM_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU"; 
+const TELEGRAM_CHAT_ID = "PUT_YOUR_CHAT_ID_HERE"; // <-- Put your Telegram Chat ID here!
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("ዋና");
@@ -28,12 +33,14 @@ export default function App() {
 
   const [isCEO, setIsCEO] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({ options: [] });
+  const [formData, setFormData] = useState({ options: [], relatedLinks: [] });
   
   const [mainImageFile, setMainImageFile] = useState(null);
   const [inlineImageFiles, setInlineImageFiles] = useState([]);
@@ -44,6 +51,9 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
 
+  // Easily add your new writers here:
+  const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
+  
   const availableSizes = [
     "XS", "S", "M", "L", "XL", "XXL", 
     "38", "39", "40", "41", "42", "43", "44", "45",
@@ -54,11 +64,7 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    
-    // Hardware Back Button Support
-    const handlePopState = () => {
-      setActivePost(null);
-    };
+    const handlePopState = () => setActivePost(null);
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -76,7 +82,7 @@ export default function App() {
 
   const handleLogoTap = () => {
     setActiveTab("ዋና");
-    if (activePost) window.history.back(); // safely exit post
+    if (activePost) window.history.back(); 
     
     const newCount = tapCount + 1;
     setTapCount(newCount);
@@ -92,7 +98,6 @@ export default function App() {
     }
   };
 
-  // Safely open an article and update browser history
   const openPost = (post) => {
     window.history.pushState({ postId: post.id }, "", `#article-${post.id}`);
     setActivePost(post);
@@ -117,6 +122,8 @@ export default function App() {
         subtitle: item.subtitle || "",
         excerpt: item.excerpt || "",
         body: item.body || "",
+        author: item.author || "GOLETH",
+        relatedLinks: item.related_links || []
       });
     } else {
       setFormData({
@@ -139,7 +146,7 @@ export default function App() {
   const openNewPost = (type) => {
     setAdminTab(type);
     setEditId(null);
-    setFormData({ options: [] });
+    setFormData({ options: [], relatedLinks: [], author: "GOLETH" });
     setMainImageFile(null);
     setInlineImageFiles([]);
     setProductImageFiles([]);
@@ -152,6 +159,25 @@ export default function App() {
       if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) };
       return { ...prev, options: [...options, value] };
     });
+  };
+
+  const handleAddRelated = (e) => {
+    const value = e.target.value;
+    if (!value) return;
+    
+    if (!formData.relatedLinks?.includes(value)) {
+      setFormData(prev => ({
+        ...prev,
+        relatedLinks: [...(prev.relatedLinks || []), value]
+      }));
+    }
+  };
+
+  const removeRelated = (linkToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      relatedLinks: prev.relatedLinks.filter(l => l !== linkToRemove)
+    }));
   };
 
   const uploadFileToSupabase = async (file) => {
@@ -189,7 +215,8 @@ export default function App() {
         subtitle: formData.subtitle,
         excerpt: formData.excerpt,
         body: formData.body,
-        author: "GOLETH",
+        author: formData.author || "GOLETH",
+        related_links: formData.relatedLinks || []
       };
       
       if (uploadedUrls.length > 0) payload.image_urls = uploadedUrls;
@@ -225,7 +252,7 @@ export default function App() {
       }
     }
 
-    setFormData({ options: [] });
+    setFormData({ options: [], relatedLinks: [] });
     setMainImageFile(null);
     setInlineImageFiles([]);
     setProductImageFiles([]);
@@ -237,9 +264,54 @@ export default function App() {
     alert("በተሳካ ሁኔታ ተጠናቋል! (Success!)");
   };
 
+  const submitOrderForm = async (e) => {
+    e.preventDefault();
+    const name = e.target.name.value;
+    const phone = e.target.phone.value;
+    const item = e.target.item.value;
+    
+    const message = `🛍️ *New Sourcing Order!*\n\n👤 *Name:* ${name}\n📞 *Phone:* ${phone}\n📦 *Item:* ${item}`;
+    
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "Markdown" })
+      });
+    } catch (err) {
+      console.log("Telegram Error", err);
+    }
+
+    alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order Sent Successfully!)");
+    setShowOrderForm(false);
+    if(activePost) window.history.back(); // Leave article if they ordered from there
+    setActiveTab("ሱቅ"); // Redirect to Shop!
+  };
+
+  const renderOrderForm = () => (
+    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in zoom-in duration-200 justify-center">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative shadow-2xl">
+        <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full">
+          <X className="text-white w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ (Order Form)</h2>
+        <p className="text-zinc-400 text-xs mb-6">ምን ማምጣት እንድንልዎት ይፈልጋሉ? መረጃዎን ይሙሉና አሁኑኑ እናረጋግጥልዎታለን።</p>
+        
+        <form onSubmit={submitOrderForm} className="space-y-4">
+          <input required name="name" placeholder="ሙሉ ስም (Full Name)" className="w-full bg-zinc-800 border border-zinc-700 text-white p-4 rounded-xl focus:border-blue-500 outline-none" />
+          <input required name="phone" type="tel" placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-zinc-800 border border-zinc-700 text-white p-4 rounded-xl focus:border-blue-500 outline-none" />
+          <textarea required name="item" rows="4" placeholder="የእቃው ስም ወይም የአማዞን ሊንክ (Item Name or Amazon Link)" className="w-full bg-zinc-800 border border-zinc-700 text-white p-4 rounded-xl focus:border-blue-500 outline-none"></textarea>
+          
+          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl mt-2 flex items-center justify-center">
+            <Send size={18} className="mr-2" /> ትዕዛዙን ላክ (Send Order)
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
   const renderOrderBanner = () => (
-    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" 
-       className="col-span-2 block bg-gradient-to-b from-blue-600 to-blue-800 rounded-xl p-3 flex justify-between items-center shadow-[0_6px_0_#1e3a8a,0_10px_20px_rgba(0,0,0,0.4)] border border-blue-400/20 mb-6 mt-2 active:shadow-[0_2px_0_#1e3a8a] active:translate-y-1 transition-all">
+    <button onClick={() => setShowOrderForm(true)} className="col-span-2 w-full text-left bg-gradient-to-b from-blue-600 to-blue-800 rounded-xl p-3 flex justify-between items-center shadow-[0_6px_0_#1e3a8a,0_10px_20px_rgba(0,0,0,0.4)] border border-blue-400/20 mb-6 mt-2 active:shadow-[0_2px_0_#1e3a8a] active:translate-y-1 transition-all">
       <div className="relative z-10">
         <h3 className="text-white font-black text-sm tracking-wide mb-0.5 drop-shadow-md">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
         <p className="text-blue-100 text-[10px] font-bold drop-shadow-md">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
@@ -247,14 +319,12 @@ export default function App() {
       <div className="bg-blue-500/30 p-1.5 rounded-full shadow-inner border border-blue-400/30">
          <PlusCircle className="text-white drop-shadow-lg" size={20} />
       </div>
-    </a>
+    </button>
   );
 
-  // Smart Regex Renderer for [image1], [image2], etc.
   const renderBodyWithImages = (text, urls) => {
     if (!text) return null;
     
-    // Regex finds [image1], [IMAGE 1], [image2], etc.
     const regex = /\[image\s*(\d+)\]/gi;
     const parts = [];
     let lastIndex = 0;
@@ -266,7 +336,6 @@ export default function App() {
       }
       
       const imgNumber = parseInt(match[1], 10);
-      // Because urls[0] is the main feed cover, urls[1] is inline image 1.
       if (urls && urls[imgNumber]) {
          parts.push(<img key={match.index} src={urls[imgNumber]} alt="Article Content" className="w-full h-auto rounded-xl my-5 shadow-lg object-cover" />);
       }
@@ -281,6 +350,51 @@ export default function App() {
     return (
       <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
         {parts.length > 0 ? parts : text}
+      </div>
+    );
+  };
+
+  const renderRelatedItems = () => {
+    if (!activePost || !activePost.related_links || activePost.related_links.length === 0) return null;
+
+    const relatedCards = activePost.related_links.map(link => {
+      const [type, idStr] = link.split('_');
+      const id = parseInt(idStr, 10);
+
+      if (type === 'post') {
+        const p = posts.find(post => post.id === id);
+        if (!p) return null;
+        const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
+        return (
+          <div key={`post_${p.id}`} onClick={() => { setActiveTab(p.category); openPost(p); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
+            {img && <img src={img} alt={p.title} className="w-full aspect-[1.91/1] object-cover" />}
+            <div className="p-3">
+              <h4 className="text-white text-xs font-bold line-clamp-2">{p.title}</h4>
+            </div>
+          </div>
+        );
+      } else if (type === 'product') {
+        const p = products.find(prod => prod.id === id);
+        if (!p) return null;
+        const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
+        return (
+          <div key={`prod_${p.id}`} onClick={() => { setActivePost(null); setActiveTab('ሱቅ'); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-amber-500 cursor-pointer flex flex-col items-center p-3 relative">
+             <span className="absolute top-0 right-0 bg-amber-500 text-black text-[9px] font-black px-2 py-0.5 rounded-bl-lg z-10">ወደ ሱቅ</span>
+             {img && <img src={img} alt={p.name} className="h-20 object-contain mb-2" />}
+             <h4 className="text-white text-xs font-bold line-clamp-1 text-center w-full">{p.name}</h4>
+             <p className="text-amber-500 text-xs font-black mt-1">{p.price} ብር</p>
+          </div>
+        );
+      }
+      return null;
+    });
+
+    return (
+      <div className="mt-8 border-t border-zinc-800 pt-6">
+        <h3 className="text-amber-500 font-black text-sm mb-4">ተያያዥ (Related)</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {relatedCards}
+        </div>
       </div>
     );
   };
@@ -302,7 +416,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Image for Reading View */}
       {(!activePost.body || !/\[image\s*\d+\]/i.test(activePost.body)) && activePost.image_urls && activePost.image_urls[0] && (
         <img src={activePost.image_urls[0]} alt={activePost.title} className="w-full aspect-[1.91/1] object-cover rounded-xl mb-6 shadow-lg" />
       )}
@@ -318,8 +431,10 @@ export default function App() {
       
       {renderBodyWithImages(activePost.body, activePost.image_urls)}
 
-      {/* Added Sourcing Banner to the bottom of the article */}
-      <div className="mt-10 border-t border-zinc-800 pt-6">
+      {/* Manual Related Items render here */}
+      {renderRelatedItems()}
+
+      <div className="mt-8">
         {renderOrderBanner()}
       </div>
     </div>
@@ -345,7 +460,6 @@ export default function App() {
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
 
-            // 1. Hero Layout
             if (index === 0) {
               return (
                 <div key={post.id} onClick={() => openPost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
@@ -359,7 +473,6 @@ export default function App() {
               );
             }
             
-            // 2. Grid Layout
             if (index > 0 && index <= 4) {
               return (
                 <div key={post.id} onClick={() => openPost(post)} className="col-span-1 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
@@ -372,7 +485,6 @@ export default function App() {
               );
             }
             
-            // 3. List Layout
             return (
               <div key={post.id} onClick={() => openPost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3 mb-1">
                 {firstImg && <img src={firstImg} alt={post.title} className="w-36 shrink-0 aspect-[1.91/1] object-cover rounded-lg" />}
@@ -522,13 +634,19 @@ export default function App() {
               <option value="ሹክሹክታ">ሹክሹክታ</option>
               <option value="ማህበራዊ">ማህበራዊ</option>
             </select>
+
+            <select required value={formData.author || ""} onChange={(e) => setFormData({ ...formData, author: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-amber-500 font-bold p-4 rounded-xl focus:border-amber-500">
+              <option value="">ጸሐፊ (Author) ይምረጡ</option>
+              {authorList.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+
             <input required value={formData.title || ""} placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
             <input value={formData.subtitle || ""} placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
             <textarea value={formData.excerpt || ""} rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
             
             <div className="relative">
-              <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body). Type [image1] wherever you want an uploaded picture to appear!" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
-              <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[image1]</b>, <b>[image2]</b> inside the text to insert numbered pictures.</p>
+              <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body)." onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+              <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[image1]</b> and <b>[image2]</b> inside the text for inline images.</p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-4">
@@ -538,10 +656,43 @@ export default function App() {
                </div>
                <div className="border-t border-zinc-800 pt-4">
                  <label className="block text-white font-bold text-sm mb-2">2. የጽሑፍ ውስጥ ምስሎች (Inline Images)</label>
-                 <p className="text-xs text-zinc-400 mb-2">ጽሑፉ ውስጥ <b>[image1]</b> እና <b>[image2]</b> ባሉበት ቦታ ይገባሉ።</p>
                  <input type="file" multiple accept="image/*" onChange={(e) => setInlineImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:bg-zinc-700 file:text-white file:border-0" />
                </div>
-               {editId && <p className="text-xs text-amber-500 mt-2">ማስታወሻ፡ አዲስ ምስል ከመረጡ የድሮው ምስል ይቀየራል።</p>}
+            </div>
+
+            {/* NEW: Related Items Selector */}
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+               <label className="block text-white font-bold text-sm mb-2">3. ተያያዥ ጽሑፎች/እቃዎች (Related Items)</label>
+               <p className="text-xs text-zinc-400 mb-3">እነዚህ ጽሑፉ መጨረሻ ላይ ይታያሉ (እስከ 2 መምረጥ ይመከራል)።</p>
+               
+               <select onChange={handleAddRelated} className="w-full bg-zinc-800 border border-zinc-700 text-white p-3 rounded-lg mb-3">
+                  <option value="">+ ምረጥ (Select Related...)</option>
+                  <optgroup label="Articles (ዜናዎች)">
+                    {posts.filter(p => p.id !== editId).map(p => (
+                      <option key={`post_${p.id}`} value={`post_${p.id}`}>{p.title}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Shop Items (ሱቅ)">
+                    {products.map(p => (
+                      <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.name}</option>
+                    ))}
+                  </optgroup>
+               </select>
+
+               {formData.relatedLinks && formData.relatedLinks.length > 0 && (
+                 <div className="space-y-2 mt-2">
+                   {formData.relatedLinks.map(link => {
+                     const [type, id] = link.split('_');
+                     const item = type === 'post' ? posts.find(p => p.id === parseInt(id)) : products.find(p => p.id === parseInt(id));
+                     return (
+                       <div key={link} className="flex justify-between items-center bg-zinc-800 p-2 rounded-lg text-xs border border-zinc-700">
+                         <span className="text-zinc-300 truncate w-64">{item ? (item.title || item.name) : "Loading..."}</span>
+                         <button type="button" onClick={() => removeRelated(link)} className="text-red-500 font-bold ml-2">X</button>
+                       </div>
+                     );
+                   })}
+                 </div>
+               )}
             </div>
           </>
         )}
@@ -651,6 +802,7 @@ export default function App() {
         )}
       </main>
 
+      {showOrderForm && renderOrderForm()}
       {showAdmin && renderAdmin()}
 
       <nav className="fixed bottom-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 flex justify-around pb-6 pt-3 px-1 z-40">
