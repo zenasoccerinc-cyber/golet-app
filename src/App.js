@@ -55,7 +55,7 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
 
-  const authorList = ["GOLETH", "አማን", "ዳኒ"];
+  const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
   const availableSizes = [
     "XS", "S", "M", "L", "XL", "XXL", 
