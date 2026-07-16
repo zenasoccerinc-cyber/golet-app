@@ -33,7 +33,6 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   
-  // Edit & Form States
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [] });
   const [imageFiles, setImageFiles] = useState([]);
@@ -139,7 +138,6 @@ export default function App() {
     setUploading(true);
     let uploadedUrls = [];
 
-    // Only upload if new files were selected
     if (imageFiles.length > 0) {
       for (const file of imageFiles) {
         const fileExt = file.name.split(".").pop();
@@ -161,7 +159,6 @@ export default function App() {
         body: formData.body,
         author: "GOLETH",
       };
-      // Only update image field if new ones were added
       if (uploadedUrls.length > 0) payload.image_urls = uploadedUrls;
 
       if (editId) {
@@ -203,7 +200,6 @@ export default function App() {
     return new Date(dateString).toLocaleDateString("am-ET", { year: "numeric", month: "long", day: "numeric" }).toUpperCase();
   };
 
-  // --- UI BANNERS ---
   const renderContactBanner = () => (
     <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="block bg-emerald-600 hover:bg-emerald-500 rounded-xl p-3 flex justify-center items-center text-white font-bold text-sm shadow-lg border border-emerald-500">
       <MessageCircle size={18} className="mr-2" /> ያግኙን (Contact Us)
@@ -239,6 +235,27 @@ export default function App() {
     );
   };
 
+  // Smart Body Renderer for Inline Images
+  const renderBodyWithImages = (text, urls) => {
+    if (!urls || urls.length === 0 || !text.includes('[IMAGE]')) {
+       return <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{text}</div>;
+    }
+    
+    const parts = text.split('[IMAGE]');
+    return (
+      <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+        {parts.map((part, i) => (
+          <React.Fragment key={i}>
+            {part}
+            {i < parts.length - 1 && urls[i] && (
+              <img src={urls[i]} alt="Inline content" className="w-full h-auto rounded-xl my-4 shadow-lg object-cover" />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
   const renderSinglePost = () => (
     <div className="pb-24 animate-in fade-in zoom-in-95 duration-200">
       <button onClick={() => setActivePost(null)} className="flex items-center text-zinc-400 mb-4 hover:text-white">
@@ -256,7 +273,10 @@ export default function App() {
         </div>
       )}
 
-      <div className="mb-6">{renderImageGallery(activePost.image_urls)}</div>
+      {/* Only show top gallery if [IMAGE] tags aren't used in the text */}
+      {(!activePost.body || !activePost.body.includes('[IMAGE]')) && (
+        <div className="mb-6">{renderImageGallery(activePost.image_urls)}</div>
+      )}
       
       <h1 className="text-3xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
       {activePost.subtitle && <h2 className="text-xl text-zinc-300 font-bold mb-4">{activePost.subtitle}</h2>}
@@ -266,7 +286,9 @@ export default function App() {
       </div>
 
       {activePost.excerpt && <p className="text-lg text-white font-medium mb-6 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
-      <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{activePost.body}</div>
+      
+      {/* Smart body render handles [IMAGE] tags */}
+      {renderBodyWithImages(activePost.body, activePost.image_urls)}
     </div>
   );
 
@@ -297,7 +319,7 @@ export default function App() {
                   <div className="p-5">
                     <h2 className="text-2xl font-black text-amber-500 mb-2 leading-tight">{post.title}</h2>
                     <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-3">{post.author} • {formatDate(post.created_at)}</div>
-                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body}</p>
+                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body.replace(/\[IMAGE\]/g, '')}</p>
                   </div>
                 </div>
               );
@@ -463,7 +485,11 @@ export default function App() {
             <input required value={formData.title || ""} placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
             <input value={formData.subtitle || ""} placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
             <textarea value={formData.excerpt || ""} rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
-            <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body)" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+            
+            <div className="relative">
+              <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body). Type [IMAGE] wherever you want an uploaded picture to appear!" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+              <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[IMAGE]</b> inside the text to insert a picture there.</p>
+            </div>
           </>
         )}
 
