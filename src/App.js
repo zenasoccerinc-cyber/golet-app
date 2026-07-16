@@ -8,6 +8,7 @@ import {
   ShoppingBag,
   X,
   Trash2,
+  Edit2,
   ChevronLeft,
   MessageCircle,
   PlusCircle,
@@ -31,13 +32,23 @@ export default function App() {
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
+  
+  // Edit & Form States
+  const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [] });
   const [imageFiles, setImageFiles] = useState([]);
+  const [showSizeDropdown, setShowSizeDropdown] = useState(false);
 
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
 
-  const availableSizes = ["S", "M", "L", "XL", "XXL", "38", "39", "40", "41", "42", "43", "44", "45", "100g", "250g", "500g"];
+  const availableSizes = [
+    "XS", "S", "M", "L", "XL", "XXL", 
+    "38", "39", "40", "41", "42", "43", "44", "45",
+    "Kids 0-3m", "Kids 3-6m", "Kids 6-12m", "Kids 1-2Y", "Kids 2-4Y", "Kids 4-6Y", "Kids 6-8Y", "Kids 8-10Y", "Kids 10-12Y",
+    "Kids Shoe 20-25", "Kids Shoe 26-30", "Kids Shoe 31-35",
+    "50g", "100g", "250g", "500g", "1kg"
+  ];
 
   useEffect(() => {
     fetchData();
@@ -72,11 +83,46 @@ export default function App() {
   };
 
   const handleDelete = async (table, id) => {
-    if (window.confirm("እርግጠኛ ነዎት?")) {
+    if (window.confirm("እርግጠኛ ነዎት? (Are you sure you want to delete this?)")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
       setActivePost(null);
     }
+  };
+
+  const handleEdit = (type, item) => {
+    setAdminTab(type);
+    setEditId(item.id);
+    
+    if (type === "posts") {
+      setFormData({
+        postCategory: item.category,
+        title: item.title,
+        subtitle: item.subtitle || "",
+        excerpt: item.excerpt || "",
+        body: item.body || "",
+      });
+    } else {
+      setFormData({
+        title: item.name,
+        brand: item.brand || "",
+        price: item.price,
+        vipPrice: item.vip_price || "",
+        shopCat: item.category,
+        shopSubCat: item.subcategory || "",
+        options: item.options || [],
+      });
+    }
+    
+    setImageFiles([]);
+    setShowAdmin(true);
+  };
+
+  const openNewPost = (type) => {
+    setAdminTab(type);
+    setEditId(null);
+    setFormData({ options: [] });
+    setImageFiles([]);
   };
 
   const handleSizeChange = (e) => {
@@ -93,6 +139,7 @@ export default function App() {
     setUploading(true);
     let uploadedUrls = [];
 
+    // Only upload if new files were selected
     if (imageFiles.length > 0) {
       for (const file of imageFiles) {
         const fileExt = file.name.split(".").pop();
@@ -106,38 +153,49 @@ export default function App() {
     }
 
     if (adminTab === "posts") {
-      await supabase.from("posts").insert([
-        {
-          category: formData.postCategory || "ዋና",
-          title: formData.title,
-          subtitle: formData.subtitle,
-          excerpt: formData.excerpt,
-          body: formData.body,
-          image_urls: uploadedUrls,
-          author: "GOLETH",
-        },
-      ]);
+      const payload = {
+        category: formData.postCategory || "ዋና",
+        title: formData.title,
+        subtitle: formData.subtitle,
+        excerpt: formData.excerpt,
+        body: formData.body,
+        author: "GOLETH",
+      };
+      // Only update image field if new ones were added
+      if (uploadedUrls.length > 0) payload.image_urls = uploadedUrls;
+
+      if (editId) {
+        await supabase.from("posts").update(payload).eq("id", editId);
+      } else {
+        await supabase.from("posts").insert([payload]);
+      }
     } else if (adminTab === "products") {
-      await supabase.from("products").insert([
-        {
-          name: formData.title,
-          brand: formData.brand,
-          price: Number(formData.price),
-          vip_price: formData.vipPrice ? Number(formData.vipPrice) : null,
-          category: formData.shopCat,
-          subcategory: formData.shopSubCat,
-          options: formData.options,
-          image_urls: uploadedUrls,
-        },
-      ]);
+      const payload = {
+        name: formData.title,
+        brand: formData.brand,
+        price: Number(formData.price),
+        vip_price: formData.vipPrice ? Number(formData.vipPrice) : null,
+        category: formData.shopCat,
+        subcategory: formData.shopSubCat,
+        options: formData.options,
+      };
+      if (uploadedUrls.length > 0) payload.image_urls = uploadedUrls;
+
+      if (editId) {
+        await supabase.from("products").update(payload).eq("id", editId);
+      } else {
+        await supabase.from("products").insert([payload]);
+      }
     }
 
     setFormData({ options: [] });
     setImageFiles([]);
+    setEditId(null);
     setUploading(false);
     setShowAdmin(false);
+    setShowSizeDropdown(false);
     fetchData();
-    alert("በተሳካ ሁኔታ ታትሟል!");
+    alert("በተሳካ ሁኔታ ተጠናቋል! (Success!)");
   };
 
   const formatDate = (dateString) => {
@@ -145,18 +203,28 @@ export default function App() {
     return new Date(dateString).toLocaleDateString("am-ET", { year: "numeric", month: "long", day: "numeric" }).toUpperCase();
   };
 
-  const renderBanners = () => (
+  // --- UI BANNERS ---
+  const renderContactBanner = () => (
+    <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="block bg-emerald-600 hover:bg-emerald-500 rounded-xl p-3 flex justify-center items-center text-white font-bold text-sm shadow-lg border border-emerald-500">
+      <MessageCircle size={18} className="mr-2" /> ያግኙን (Contact Us)
+    </a>
+  );
+
+  const renderOrderBanner = () => (
+    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
+      <div>
+        <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
+        <p className="text-blue-200 text-xs mt-1">ከአማዞን ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+      </div>
+      <PlusCircle className="text-blue-300" size={24} />
+    </a>
+  );
+
+  const renderBanners = (isShop = false) => (
     <div className="mb-6 space-y-3">
-      <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
-        <div>
-          <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-          <p className="text-blue-200 text-xs mt-1">ከአማዞን ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
-        </div>
-        <PlusCircle className="text-blue-300" size={24} />
-      </a>
-      <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="block bg-zinc-900 rounded-xl p-3 flex justify-center items-center border border-zinc-800 text-amber-500 font-bold text-sm">
-        <MessageCircle size={18} className="mr-2" /> ያግኙን
-      </a>
+      {isShop && renderContactBanner()}
+      {renderOrderBanner()}
+      {!isShop && renderContactBanner()}
     </div>
   );
 
@@ -178,9 +246,14 @@ export default function App() {
       </button>
       
       {isCEO && (
-        <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-600 text-white p-2 rounded-lg text-xs font-bold mb-4 w-full">
-          ሰርዝ (Delete)
-        </button>
+        <div className="flex space-x-2 mb-4 w-full">
+          <button onClick={() => handleEdit("posts", activePost)} className="bg-blue-600 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center">
+            <Edit2 size={14} className="mr-1" /> አስተካክል (Edit)
+          </button>
+          <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-600 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center">
+            <Trash2 size={14} className="mr-1" /> ሰርዝ (Delete)
+          </button>
+        </div>
       )}
 
       <div className="mb-6">{renderImageGallery(activePost.image_urls)}</div>
@@ -212,7 +285,7 @@ export default function App() {
 
     return (
       <div className="space-y-6 pb-24">
-        {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderBanners()}
+        {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderBanners(false)}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
@@ -276,7 +349,7 @@ export default function App() {
           ))}
         </div>
 
-        {renderBanners()}
+        {renderBanners(true)}
 
         {shopCategory !== "ሁሉም" && shopCategory !== "መድሀኒት" && (
            <div className="flex space-x-2 overflow-x-auto pb-6 mb-2 no-scrollbar">
@@ -292,10 +365,16 @@ export default function App() {
         <div className="grid grid-cols-2 gap-4">
           {filtered.map((item) => (
             <div key={item.id} className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex flex-col relative">
+              
               {isCEO && (
-                <button onClick={() => handleDelete("products", item.id)} className="absolute top-2 right-2 bg-red-600 p-1.5 rounded-full z-10">
-                  <Trash2 size={14} className="text-white" />
-                </button>
+                <div className="absolute top-2 right-2 flex space-x-1 z-10">
+                  <button onClick={() => handleEdit("products", item)} className="bg-blue-600 p-1.5 rounded-full shadow">
+                    <Edit2 size={14} className="text-white" />
+                  </button>
+                  <button onClick={() => handleDelete("products", item.id)} className="bg-red-600 p-1.5 rounded-full shadow">
+                    <Trash2 size={14} className="text-white" />
+                  </button>
+                </div>
               )}
               {item.category && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-br-lg z-10 tracking-widest">ነፃ ትራንስፖርት</div>}
               
@@ -336,7 +415,7 @@ export default function App() {
 
   const renderVIP = () => (
     <div className="pb-24">
-      {renderBanners()}
+      {renderBanners(false)}
       <div className="flex flex-col items-center justify-center pt-10">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center max-w-sm w-full shadow-2xl">
           <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-full flex items-center justify-center mb-6 border border-zinc-700">
@@ -355,56 +434,58 @@ export default function App() {
   const renderAdmin = () => (
     <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
       <div className="flex justify-between items-center mb-6 mt-4">
-        <h2 className="text-amber-500 font-black text-2xl tracking-wide">CEO Dashboard</h2>
-        <button onClick={() => setShowAdmin(false)} className="bg-zinc-900 p-2 rounded-full">
+        <h2 className="text-amber-500 font-black text-2xl tracking-wide">{editId ? "Edit Listing" : "CEO Dashboard"}</h2>
+        <button onClick={() => { setShowAdmin(false); setEditId(null); }} className="bg-zinc-900 p-2 rounded-full">
           <X className="text-white w-6 h-6" />
         </button>
       </div>
 
-      <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4">
-        {["posts", "products"].map((tab) => (
-          <button key={tab} onClick={() => { setAdminTab(tab); setFormData({ options: [] }); }} className={`px-4 py-2 rounded-xl text-sm font-bold ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400"}`}>
-            {tab.toUpperCase()}
-          </button>
-        ))}
-      </div>
+      {!editId && (
+        <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4">
+          {["posts", "products"].map((tab) => (
+            <button key={tab} onClick={() => openNewPost(tab)} className={`px-4 py-2 rounded-xl text-sm font-bold ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400"}`}>
+              {tab.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
 
       <form onSubmit={handleAdminSubmit} className="space-y-4">
         {adminTab === "posts" && (
           <>
-            <select required onChange={(e) => setFormData({ ...formData, postCategory: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+            <select required value={formData.postCategory || ""} onChange={(e) => setFormData({ ...formData, postCategory: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
               <option value="">ምድብ ይምረጡ</option>
               <option value="ዋና">ዋና</option>
               <option value="ስፖርት">ስፖርት</option>
               <option value="ሹክሹክታ">ሹክሹክታ</option>
               <option value="ማህበራዊ">ማህበራዊ</option>
             </select>
-            <input required placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <input placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <textarea rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
-            <textarea required rows="6" placeholder="ሙሉ ጽሑፍ (Body)" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+            <input required value={formData.title || ""} placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input value={formData.subtitle || ""} placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <textarea value={formData.excerpt || ""} rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+            <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body)" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
           </>
         )}
 
         {adminTab === "products" && (
           <>
-            <input required placeholder="የእቃው ስም (Product Name)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
-            <input placeholder="ምልክት (Brand - e.g. NIKE)" onChange={(e) => setFormData({ ...formData, brand: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input required value={formData.title || ""} placeholder="የእቃው ስም (Product Name)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input value={formData.brand || ""} placeholder="ምልክት (Brand - e.g. NIKE)" onChange={(e) => setFormData({ ...formData, brand: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
             
             <div className="grid grid-cols-2 gap-4">
-              <input required type="number" placeholder="ዋጋ (Price)" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
-              <input type="number" placeholder="የ VIP ዋጋ (Optional)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
+              <input required value={formData.price || ""} type="number" placeholder="ዋጋ (Price)" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
+              <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ (Optional)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <select required onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+              <select required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
                 <option value="">ዋና ምድብ</option>
                 <option value="ወንድ">ወንድ</option>
                 <option value="ሴት">ሴት</option>
                 <option value="ልጅ">ልጅ</option>
                 <option value="መድሀኒት">መድሀኒት</option>
               </select>
-              <select onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+              <select value={formData.shopSubCat || ""} onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
                 <option value="">ንዑስ ምድብ</option>
                 <option value="ልብስ">ልብስ</option>
                 <option value="ጫማ">ጫማ</option>
@@ -412,24 +493,37 @@ export default function App() {
               </select>
             </div>
             
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-              <p className="text-zinc-400 text-sm mb-3">መጠኖች ይምረጡ (Sizes):</p>
-              <div className="flex flex-wrap gap-3">
-                {availableSizes.map(size => (
-                  <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-800 px-3 py-1 rounded-lg hover:bg-zinc-700">
-                    <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500" />
-                    <span>{size}</span>
-                  </label>
-                ))}
-              </div>
+            <div className="relative">
+              <button type="button" onClick={() => setShowSizeDropdown(!showSizeDropdown)} className="w-full bg-zinc-900 border border-zinc-800 text-left p-4 rounded-xl focus:border-amber-500 text-zinc-400 flex justify-between items-center">
+                <span>መጠኖች ይምረጡ (Sizes) {formData.options?.length > 0 && `(${formData.options.length} selected)`}</span>
+                <span>{showSizeDropdown ? "▲" : "▼"}</span>
+              </button>
+              
+              {showSizeDropdown && (
+                <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-60 overflow-y-auto p-4 shadow-2xl">
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableSizes.map(size => (
+                      <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-700">
+                        <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500 w-4 h-4" />
+                        <span className="text-sm">{size}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 text-black font-bold py-2 rounded-lg">Done (ጨርስ)</button>
+                </div>
+              )}
             </div>
           </>
         )}
         
-        <input type="file" multiple accept="image/*" onChange={(e) => setImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white" />
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+           <label className="block text-zinc-400 text-sm mb-2">ምስሎች (ብዙ መምረጥ ይቻላል / Select Multiple Images):</label>
+           <input type="file" multiple accept="image/*" onChange={(e) => setImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0" />
+           {editId && <p className="text-xs text-amber-500 mt-2">ማስታወሻ፡ አዲስ ምስል ከመረጡ የድሮው ምስል ይቀየራል። (Note: Selecting new files will replace the old images).</p>}
+        </div>
         
         <button disabled={uploading} type="submit" className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4">
-          {uploading ? "በመጫን ላይ..." : "አትም (Publish)"}
+          {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል (Update)" : "አትም (Publish)")}
         </button>
       </form>
     </div>
@@ -454,7 +548,7 @@ export default function App() {
         </div>
         <div className="flex items-center space-x-3">
           {isCEO && (
-            <button onClick={() => setShowAdmin(true)} className="bg-amber-500/20 text-amber-500 px-3 py-1.5 rounded-full font-bold text-xs">
+            <button onClick={() => { openNewPost("posts"); setShowAdmin(true); }} className="bg-amber-500/20 text-amber-500 px-3 py-1.5 rounded-full font-bold text-xs">
               CEO
             </button>
           )}
