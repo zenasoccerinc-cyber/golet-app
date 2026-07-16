@@ -35,7 +35,6 @@ export default function App() {
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [] });
   
-  // Split Image States
   const [mainImageFile, setMainImageFile] = useState(null);
   const [inlineImageFiles, setInlineImageFiles] = useState([]);
   const [productImageFiles, setProductImageFiles] = useState([]);
@@ -55,6 +54,13 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+    
+    // Hardware Back Button Support
+    const handlePopState = () => {
+      setActivePost(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   const fetchData = async () => {
@@ -70,7 +76,8 @@ export default function App() {
 
   const handleLogoTap = () => {
     setActiveTab("ዋና");
-    setActivePost(null);
+    if (activePost) window.history.back(); // safely exit post
+    
     const newCount = tapCount + 1;
     setTapCount(newCount);
     setTimeout(() => setTapCount(0), 3000);
@@ -85,11 +92,17 @@ export default function App() {
     }
   };
 
+  // Safely open an article and update browser history
+  const openPost = (post) => {
+    window.history.pushState({ postId: post.id }, "", `#article-${post.id}`);
+    setActivePost(post);
+  };
+
   const handleDelete = async (table, id) => {
     if (window.confirm("እርግጠኛ ነዎት? (Are you sure you want to delete this?)")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
-      setActivePost(null);
+      if (activePost) window.history.back();
     }
   };
 
@@ -224,48 +237,57 @@ export default function App() {
     alert("በተሳካ ሁኔታ ተጠናቋል! (Success!)");
   };
 
-  // Date is strictly formatted in English
-  const formatDate = (dateString) => {
-    if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }).toUpperCase();
-  };
-
   const renderOrderBanner = () => (
-    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="col-span-2 block bg-gradient-to-r from-blue-900 to-blue-700 rounded-2xl p-5 flex justify-between items-center shadow-[0_4px_20px_rgba(37,99,235,0.2)] border border-blue-500/30 mb-6 mt-2 relative overflow-hidden">
+    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" 
+       className="col-span-2 block bg-gradient-to-b from-blue-600 to-blue-800 rounded-xl p-3 flex justify-between items-center shadow-[0_6px_0_#1e3a8a,0_10px_20px_rgba(0,0,0,0.4)] border border-blue-400/20 mb-6 mt-2 active:shadow-[0_2px_0_#1e3a8a] active:translate-y-1 transition-all">
       <div className="relative z-10">
-        <h3 className="text-white font-black text-base tracking-wide mb-1">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-        <p className="text-blue-200 text-xs font-medium">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+        <h3 className="text-white font-black text-sm tracking-wide mb-0.5 drop-shadow-md">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
+        <p className="text-blue-100 text-[10px] font-bold drop-shadow-md">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
       </div>
-      <PlusCircle className="text-blue-400 relative z-10" size={28} />
-      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
+      <div className="bg-blue-500/30 p-1.5 rounded-full shadow-inner border border-blue-400/30">
+         <PlusCircle className="text-white drop-shadow-lg" size={20} />
+      </div>
     </a>
   );
 
+  // Smart Regex Renderer for [image1], [image2], etc.
   const renderBodyWithImages = (text, urls) => {
-    if (!urls || urls.length <= 1 || !text.includes('[IMAGE]')) {
-       return <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{text}</div>;
+    if (!text) return null;
+    
+    // Regex finds [image1], [IMAGE 1], [image2], etc.
+    const regex = /\[image\s*(\d+)\]/gi;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      
+      const imgNumber = parseInt(match[1], 10);
+      // Because urls[0] is the main feed cover, urls[1] is inline image 1.
+      if (urls && urls[imgNumber]) {
+         parts.push(<img key={match.index} src={urls[imgNumber]} alt="Article Content" className="w-full h-auto rounded-xl my-5 shadow-lg object-cover" />);
+      }
+      
+      lastIndex = regex.lastIndex;
     }
-    
-    const inlineUrls = urls.slice(1);
-    const parts = text.split('[IMAGE]');
-    
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
     return (
       <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-        {parts.map((part, i) => (
-          <React.Fragment key={i}>
-            {part}
-            {i < parts.length - 1 && inlineUrls[i] && (
-              <img src={inlineUrls[i]} alt="Inline content" className="w-full h-auto rounded-xl my-4 shadow-lg object-cover" />
-            )}
-          </React.Fragment>
-        ))}
+        {parts.length > 0 ? parts : text}
       </div>
     );
   };
 
   const renderSinglePost = () => (
     <div className="pb-24 animate-in fade-in zoom-in-95 duration-200">
-      <button onClick={() => setActivePost(null)} className="flex items-center text-zinc-400 mb-4 hover:text-white">
+      <button onClick={() => window.history.back()} className="flex items-center text-zinc-400 mb-4 hover:text-white">
         <ChevronLeft size={20} className="mr-1" /> ወደ ኋላ ተመለስ
       </button>
       
@@ -280,20 +302,26 @@ export default function App() {
         </div>
       )}
 
-      {(!activePost.body || !activePost.body.includes('[IMAGE]')) && activePost.image_urls && activePost.image_urls[0] && (
+      {/* Main Image for Reading View */}
+      {(!activePost.body || !/\[image\s*\d+\]/i.test(activePost.body)) && activePost.image_urls && activePost.image_urls[0] && (
         <img src={activePost.image_urls[0]} alt={activePost.title} className="w-full aspect-[1.91/1] object-cover rounded-xl mb-6 shadow-lg" />
       )}
       
-      <h1 className="text-2xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
-      {activePost.subtitle && <h2 className="text-xl text-zinc-300 font-bold mb-4">{activePost.subtitle}</h2>}
+      <h1 className="text-xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
+      {activePost.subtitle && <h2 className="text-base text-zinc-300 font-bold mb-3">{activePost.subtitle}</h2>}
       
-      <div className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-6">
-        {activePost.author} • {formatDate(activePost.created_at)}
+      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-6">
+        {activePost.author}
       </div>
 
-      {activePost.excerpt && <p className="text-lg text-white font-medium mb-6 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
+      {activePost.excerpt && <p className="text-sm text-white font-medium mb-6 italic border-l-2 border-amber-500 pl-3">{activePost.excerpt}</p>}
       
       {renderBodyWithImages(activePost.body, activePost.image_urls)}
+
+      {/* Added Sourcing Banner to the bottom of the article */}
+      <div className="mt-10 border-t border-zinc-800 pt-6">
+        {renderOrderBanner()}
+      </div>
     </div>
   );
 
@@ -305,7 +333,6 @@ export default function App() {
         <div className="flex flex-col items-center justify-center mt-20 text-zinc-500">
           <div className="w-12 h-12 rounded-full border border-zinc-800 flex items-center justify-center mb-4">!</div>
           <p>ምንም አልተገኘም</p>
-          <p className="text-xs mt-1">እባክዎትን ትንሽ ቆይተው እንደገና ይሞክሩ።</p>
         </div>
       );
     }
@@ -318,40 +345,40 @@ export default function App() {
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
 
-            // 1. Hero Layout (Top 1)
+            // 1. Hero Layout
             if (index === 0) {
               return (
-                <div key={post.id} onClick={() => setActivePost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
+                <div key={post.id} onClick={() => openPost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
                   {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
-                  <div className="p-5">
-                    <h2 className="text-xl font-black text-amber-500 mb-2 leading-snug line-clamp-3">{post.title}</h2>
-                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-3 uppercase">{post.author} • {formatDate(post.created_at)}</div>
-                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body.replace(/\[IMAGE\]/g, '')}</p>
+                  <div className="p-4">
+                    <h2 className="text-lg font-black text-amber-500 mb-2 leading-tight line-clamp-2">{post.title}</h2>
+                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-2 uppercase">{post.author}</div>
+                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body.replace(/\[image\s*\d+\]/gi, '')}</p>
                   </div>
                 </div>
               );
             }
             
-            // 2. Grid Layout (Next 4 posts) - Excerpt Removed
+            // 2. Grid Layout
             if (index > 0 && index <= 4) {
               return (
-                <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
+                <div key={post.id} onClick={() => openPost(post)} className="col-span-1 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
                   {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
                   <div className="p-3 flex flex-col flex-grow justify-between">
-                    <h3 className="text-sm font-bold text-white mb-2 line-clamp-3 leading-snug">{post.title}</h3>
-                    <div className="text-zinc-500 text-[9px] font-bold uppercase mt-auto">{post.author} • {formatDate(post.created_at)}</div>
+                    <h3 className="text-xs font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
+                    <div className="text-zinc-500 text-[9px] font-bold uppercase mt-auto">{post.author}</div>
                   </div>
                 </div>
               );
             }
             
-            // 3. List Layout (Rest of the posts) - Image Increased, Excerpt Removed
+            // 3. List Layout
             return (
-              <div key={post.id} onClick={() => setActivePost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3 mb-1">
+              <div key={post.id} onClick={() => openPost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3 mb-1">
                 {firstImg && <img src={firstImg} alt={post.title} className="w-36 shrink-0 aspect-[1.91/1] object-cover rounded-lg" />}
                 <div className="pl-4 flex flex-col flex-grow">
-                  <h3 className="text-sm font-bold text-white mb-2 line-clamp-3 leading-snug">{post.title}</h3>
-                  <div className="text-zinc-500 text-[9px] font-bold uppercase">{post.author} • {formatDate(post.created_at)}</div>
+                  <h3 className="text-xs font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
+                  <div className="text-zinc-500 text-[9px] font-bold uppercase">{post.author}</div>
                 </div>
               </div>
             );
@@ -500,8 +527,8 @@ export default function App() {
             <textarea value={formData.excerpt || ""} rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
             
             <div className="relative">
-              <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body). Type [IMAGE] wherever you want an uploaded picture to appear!" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
-              <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[IMAGE]</b> inside the text to insert a picture there.</p>
+              <textarea required value={formData.body || ""} rows="6" placeholder="ሙሉ ጽሑፍ (Body). Type [image1] wherever you want an uploaded picture to appear!" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+              <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[image1]</b>, <b>[image2]</b> inside the text to insert numbered pictures.</p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-4">
@@ -511,7 +538,7 @@ export default function App() {
                </div>
                <div className="border-t border-zinc-800 pt-4">
                  <label className="block text-white font-bold text-sm mb-2">2. የጽሑፍ ውስጥ ምስሎች (Inline Images)</label>
-                 <p className="text-xs text-zinc-400 mb-2">እነዚህ ምስሎች ጽሑፉ ውስጥ <b>[IMAGE]</b> ባሉበት ቦታ ይገባሉ። ብዙ መምረጥ ይቻላል።</p>
+                 <p className="text-xs text-zinc-400 mb-2">ጽሑፉ ውስጥ <b>[image1]</b> እና <b>[image2]</b> ባሉበት ቦታ ይገባሉ።</p>
                  <input type="file" multiple accept="image/*" onChange={(e) => setInlineImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:bg-zinc-700 file:text-white file:border-0" />
                </div>
                {editId && <p className="text-xs text-amber-500 mt-2">ማስታወሻ፡ አዲስ ምስል ከመረጡ የድሮው ምስል ይቀየራል።</p>}
@@ -633,7 +660,7 @@ export default function App() {
           return (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setActivePost(null); }}
+              onClick={() => { setActiveTab(tab.id); if(activePost) window.history.back(); }}
               className={`flex flex-col items-center p-2 ${isActive ? "text-amber-500" : "text-zinc-500"}`}
             >
               <Icon size={24} strokeWidth={isActive ? 2.5 : 2} className="mb-1" />
