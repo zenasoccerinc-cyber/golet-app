@@ -3,84 +3,69 @@ import {
   Home,
   Trophy,
   Flame,
+  Users,
   Target,
   ShoppingBag,
-  User,
-  Share2,
   X,
-  PlusCircle,
-  UploadCloud,
   Trash2,
+  ChevronLeft,
+  MessageCircle,
+  PlusCircle,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase Connection
+// Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("ዜና");
-  const [isVIP, setIsVIP] = useState(false);
+  const [activeTab, setActiveTab] = useState("ዋና");
+  const [activePost, setActivePost] = useState(null); // Controls Single Post View
+  
+  // Shop States
+  const [shopCategory, setShopCategory] = useState("ሁሉም");
+  const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
+
+  // CEO States
+  const [isCEO, setIsCEO] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [isCEO, setIsCEO] = useState(false); // New state to show CEO controls
+  const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
-
-  // Read More State
-  const [expandedPosts, setExpandedPosts] = useState({});
-
-  const toggleReadMore = (id) => {
-    setExpandedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  // Database States
-  const [news, setNews] = useState([]);
-  const [gossip, setGossip] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [results, setResults] = useState([]);
-  const [predictions, setPredictions] = useState([]);
-
-  // Admin Form States
-  const [adminTab, setAdminTab] = useState("news");
   const [formData, setFormData] = useState({});
   const [imageFile, setImageFile] = useState(null);
+
+  // Data States
+  const [posts, setPosts] = useState([]);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const { data: nData } = await supabase
-      .from("news")
-      .select("*")
-      .order("created_at", { ascending: false });
-    const { data: gData } = await supabase
-      .from("gossip")
-      .select("*")
-      .order("created_at", { ascending: false });
-    const { data: pData } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-    const { data: rData } = await supabase
-      .from("results")
-      .select("*")
-      .order("created_at", { ascending: false });
-    const { data: prData } = await supabase
-      .from("predictions")
-      .select("*")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
+    try {
+      const { data: postsData } = await supabase
+        .from("posts")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      const { data: productsData } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    if (nData) setNews(nData);
-    if (gData) setGossip(gData);
-    if (pData) setProducts(pData);
-    if (rData) setResults(rData);
-    if (prData) setPredictions(prData);
+      setPosts(postsData || []);
+      setProducts(productsData || []);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    }
   };
 
   const handleLogoTap = () => {
+    setActiveTab("ዋና");
+    setActivePost(null);
     const newCount = tapCount + 1;
     setTapCount(newCount);
     setTimeout(() => setTapCount(0), 3000);
@@ -98,9 +83,10 @@ export default function App() {
   };
 
   const handleDelete = async (table, id) => {
-    if (window.confirm("Are you sure you want to delete this? (እርግጠኛ ነዎት?)")) {
+    if (window.confirm("Are you sure? (እርግጠኛ ነዎት?)")) {
       await supabase.from(table).delete().eq("id", id);
       fetchData();
+      setActivePost(null);
     }
   };
 
@@ -112,55 +98,36 @@ export default function App() {
     if (imageFile) {
       const fileExt = imageFile.name.split(".").pop();
       const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("images")
-        .upload(fileName, imageFile);
+      const { error: uploadError } = await supabase.storage.from("images").upload(fileName, imageFile);
       if (!uploadError) {
         const { data } = supabase.storage.from("images").getPublicUrl(fileName);
         finalImageUrl = data.publicUrl;
       }
     }
 
-    if (adminTab === "news" || adminTab === "gossip") {
-      await supabase.from(adminTab).insert([
+    if (adminTab === "posts") {
+      await supabase.from("posts").insert([
         {
+          category: formData.postCategory || "ዋና",
           title: formData.title,
           subtitle: formData.subtitle,
-          author: formData.author || "ZenaSoccer",
+          excerpt: formData.excerpt,
           body: formData.body,
           image_url: finalImageUrl,
+          author: "GOLETH",
         },
       ]);
     } else if (adminTab === "products") {
+      const optionsArray = formData.options ? formData.options.split(",").map(opt => opt.trim()) : [];
       await supabase.from("products").insert([
         {
           name: formData.title,
+          brand: formData.brand,
           price: Number(formData.price),
-          category: formData.category,
+          vip_price: Number(formData.vipPrice),
+          category: formData.shopCat,
+          options: optionsArray,
           image_url: finalImageUrl,
-        },
-      ]);
-    } else if (adminTab === "results") {
-      await supabase.from("results").insert([
-        {
-          league_name: formData.league,
-          team_a_name: formData.teamA,
-          team_b_name: formData.teamB,
-          score: formData.score,
-          match_details: formData.details,
-        },
-      ]);
-    } else if (adminTab === "predictions") {
-      // Deactivate old predictions first
-      await supabase
-        .from("predictions")
-        .update({ is_active: false })
-        .neq("id", 0);
-      await supabase.from("predictions").insert([
-        {
-          league_name: formData.league,
-          team_a_name: formData.teamA,
-          team_b_name: formData.teamB,
         },
       ]);
     }
@@ -173,361 +140,297 @@ export default function App() {
     alert("Published successfully!");
   };
 
-  // Helper to format date
   const formatDate = (dateString) => {
+    if (!dateString) return "";
     const options = { year: "numeric", month: "long", day: "numeric" };
-    return new Date(dateString).toLocaleDateString("am-ET", options);
+    return new Date(dateString).toLocaleDateString("am-ET", options).toUpperCase();
   };
 
   // --- UI COMPONENTS ---
 
-  const renderArticle = (item, table) => {
-    const isExpanded = expandedPosts[item.id];
-    const shouldTruncate = item.body && item.body.length > 150;
-    const displayBody =
-      shouldTruncate && !isExpanded
-        ? item.body.substring(0, 150) + "..."
-        : item.body;
-
-    return (
-      <div
-        key={item.id}
-        className="bg-zinc-900 rounded-xl overflow-hidden shadow-lg border border-zinc-800 relative"
-      >
-        {isCEO && (
-          <button
-            onClick={() => handleDelete(table, item.id)}
-            className="absolute top-2 right-2 bg-red-600 p-2 rounded-full z-10 hover:bg-red-700"
-          >
-            <Trash2 size={16} className="text-white" />
-          </button>
-        )}
-        {item.image_url && (
-          <img
-            src={item.image_url}
-            alt={item.title}
-            className="w-full h-56 object-cover"
-          />
-        )}
-        <div className="p-5">
-          <h3 className="text-amber-500 font-black text-xl mb-1 leading-tight">
-            {item.title}
-          </h3>
-          {item.subtitle && (
-            <h4 className="text-white text-md font-bold mb-3">
-              {item.subtitle}
-            </h4>
-          )}
-
-          <div className="flex items-center text-zinc-500 text-xs font-bold uppercase tracking-wider mb-4 border-b border-zinc-800 pb-3">
-            <span>{item.author || "ZenaSoccer"}</span>
-            <span className="mx-2">•</span>
-            <span>{formatDate(item.created_at)}</span>
-          </div>
-
-          <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-            {displayBody}
-          </p>
-
-          {shouldTruncate && (
-            <button
-              onClick={() => toggleReadMore(item.id)}
-              className="text-amber-500 text-xs font-bold mt-2 hover:underline focus:outline-none"
-            >
-              {isExpanded ? "Show Less (አሳጥር)" : "Read More (ሙሉውን አንብብ)"}
-            </button>
-          )}
-
-          <div className="flex justify-end mt-4">
-            <button className="bg-zinc-800 p-2 rounded-full text-zinc-400 hover:text-amber-500">
-              <Share2 size={18} />
-            </button>
-          </div>
+  const renderBanners = () => (
+    <div className="mb-6 space-y-3">
+      <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
+        <div>
+          <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
+          <p className="text-blue-200 text-xs mt-1">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
         </div>
-      </div>
-    );
-  };
-
-  const renderResults = () => (
-    <div className="space-y-4 pb-24">
-      {results.length === 0 && (
-        <p className="text-zinc-500 text-center mt-10">
-          ምንም ውጤት የለም (No Results)
-        </p>
-      )}
-      {results.map((item) => (
-        <div
-          key={item.id}
-          className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 text-center shadow-lg relative"
-        >
-          {isCEO && (
-            <button
-              onClick={() => handleDelete("results", item.id)}
-              className="absolute top-2 right-2 text-red-500"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
-          <p className="text-zinc-400 text-sm mb-4 font-bold tracking-wide">
-            {item.league_name}
-          </p>
-          <div className="flex justify-between items-center mb-6 px-4">
-            <div className="flex flex-col items-center w-1/3">
-              <span className="text-white font-bold">{item.team_a_name}</span>
-            </div>
-            <div className="text-3xl font-black text-amber-500 bg-black px-4 py-2 rounded-lg border border-zinc-800">
-              {item.score}
-            </div>
-            <div className="flex flex-col items-center w-1/3">
-              <span className="text-white font-bold">{item.team_b_name}</span>
-            </div>
-          </div>
-          {item.match_details && (
-            <div className="text-sm text-zinc-400 bg-black p-3 rounded-lg border border-zinc-800">
-              <p>{item.match_details}</p>
-            </div>
-          )}
-        </div>
-      ))}
+        <PlusCircle className="text-blue-300" size={24} />
+      </a>
+      <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="block bg-zinc-900 rounded-xl p-3 flex justify-center items-center border border-zinc-800 text-amber-500 font-bold text-sm">
+        <MessageCircle size={18} className="mr-2" /> ያግኙን (Contact Us)
+      </a>
     </div>
   );
 
-  const renderPredict = () => {
-    const activeMatch = predictions[0];
+  const renderSinglePost = () => (
+    <div className="pb-24 animate-in fade-in zoom-in-95 duration-200">
+      <button onClick={() => setActivePost(null)} className="flex items-center text-zinc-400 mb-4 hover:text-white">
+        <ChevronLeft size={20} className="mr-1" /> ወደ ኋላ ተመለስ (Back)
+      </button>
+      
+      {isCEO && (
+        <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-600 text-white p-2 rounded-lg text-xs font-bold mb-4 w-full">
+          Delete Post
+        </button>
+      )}
+
+      {activePost.image_url && <img src={activePost.image_url} alt={activePost.title} className="w-full h-64 object-cover rounded-xl mb-6 shadow-lg" />}
+      
+      <h1 className="text-3xl font-black text-amber-500 mb-2 leading-tight">{activePost.title}</h1>
+      {activePost.subtitle && <h2 className="text-xl text-zinc-300 font-bold mb-4">{activePost.subtitle}</h2>}
+      
+      <div className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-6">
+        {activePost.author} • {formatDate(activePost.created_at)}
+      </div>
+
+      {activePost.excerpt && <p className="text-lg text-white font-medium mb-6 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
+      
+      <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+        {activePost.body}
+      </div>
+    </div>
+  );
+
+  const renderPostFeed = () => {
+    const filteredPosts = activeTab === "ዋና" ? posts : posts.filter(p => p.category === activeTab);
+
+    if (filteredPosts.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center mt-20 text-zinc-500">
+          <div className="w-12 h-12 rounded-full border border-zinc-800 flex items-center justify-center mb-4">!</div>
+          <p>ምንም አልተገኘም (Empty)</p>
+          <p className="text-xs mt-1">Check back later for updates.</p>
+        </div>
+      );
+    }
 
     return (
-      <div className="pb-24 flex flex-col items-center justify-center pt-10">
-        {!isVIP ? (
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-6 text-center max-w-sm w-full shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
-            <h2 className="text-2xl font-black text-white mb-3 mt-4">
-              የቪአይፒ አባልነት ያስፈልጋል
-            </h2>
-            <p className="text-zinc-400 text-sm mb-8">
-              በወር 50 ብር በመክፈል የቪአይፒ አባል ይሁኑ እና በየሳምንቱ ግምት በማስቀመጥ የገንዘብ ሽልማቶችን
-              ያሸንፉ!
-            </p>
-            <button className="w-full bg-amber-500 text-black font-black py-4 rounded-xl">
-              በቴሌብር ክፈሉ
-            </button>
-          </div>
-        ) : !activeMatch ? (
-          <p className="text-zinc-500">ምንም ጨዋታ የለም (No active match)</p>
-        ) : (
-          <div className="bg-zinc-900 rounded-xl p-6 text-center w-full max-w-sm border border-amber-500/50 shadow-2xl relative">
-            {isCEO && (
-              <button
-                onClick={() => handleDelete("predictions", activeMatch.id)}
-                className="absolute top-2 right-2 text-red-500"
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
-            <p className="text-zinc-400 text-xs font-bold tracking-wide mb-2">
-              {activeMatch.league_name}
-            </p>
-            <h2 className="text-amber-500 font-black text-xl mb-6">
-              የሳምንቱ ጨዋታ ግምት
-            </h2>
-            <div className="flex justify-between items-center mb-8 bg-black p-4 rounded-xl border border-zinc-800">
-              <span className="text-white font-bold w-1/3">
-                {activeMatch.team_a_name}
-              </span>
-              <div className="flex space-x-2 items-center">
-                <input
-                  type="number"
-                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg text-lg font-bold"
-                  defaultValue="0"
-                />
-                <span className="text-zinc-600">-</span>
-                <input
-                  type="number"
-                  className="w-10 h-10 bg-zinc-900 text-amber-500 border border-zinc-700 text-center rounded-lg text-lg font-bold"
-                  defaultValue="0"
-                />
+      <div className="space-y-6 pb-24">
+        {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderBanners()}
+        
+        {/* Layout Engine */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredPosts.map((post, index) => {
+            // Hero Layout (Index 0)
+            if (index === 0) {
+              return (
+                <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
+                  {post.image_url && <img src={post.image_url} alt={post.title} className="w-full h-60 object-cover" />}
+                  <div className="p-5">
+                    <h2 className="text-2xl font-black text-amber-500 mb-2 leading-tight">{post.title}</h2>
+                    <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-3">
+                      {post.author} • {formatDate(post.created_at)}
+                    </div>
+                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body}</p>
+                  </div>
+                </div>
+              );
+            }
+            
+            // Grid Layout (Index 1 to 4)
+            if (index > 0 && index <= 4) {
+              return (
+                <div key={post.id} onClick={() => setActivePost(post)} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
+                  {post.image_url && <img src={post.image_url} alt={post.title} className="w-full h-36 object-cover" />}
+                  <div className="p-4 flex flex-col flex-grow">
+                    <h3 className="text-md font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
+                    <div className="mt-auto text-zinc-500 text-[10px] font-bold uppercase">{formatDate(post.created_at)}</div>
+                  </div>
+                </div>
+              );
+            }
+
+            // List Layout (Index 5+)
+            return (
+              <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 md:col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-2">
+                {post.image_url && <img src={post.image_url} alt={post.title} className="w-24 h-24 object-cover rounded-lg" />}
+                <div className="pl-4 pr-2 flex flex-col justify-center py-1">
+                  <h3 className="text-sm font-bold text-white mb-1 line-clamp-2">{post.title}</h3>
+                  <div className="text-zinc-500 text-[10px] font-bold uppercase">{formatDate(post.created_at)}</div>
+                </div>
               </div>
-              <span className="text-white font-bold w-1/3">
-                {activeMatch.team_b_name}
-              </span>
-            </div>
-            <button className="w-full bg-amber-500 text-black font-black py-3 rounded-xl">
-              አስገባ (Submit)
-            </button>
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     );
   };
 
-  const renderShop = () => (
-    <div className="pb-24 grid grid-cols-2 gap-4">
-      {products.map((item) => (
-        <div
-          key={item.id}
-          className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex flex-col relative"
-        >
-          {isCEO && (
-            <button
-              onClick={() => handleDelete("products", item.id)}
-              className="absolute top-2 right-2 bg-red-600 p-1.5 rounded-full z-10"
-            >
-              <Trash2 size={14} className="text-white" />
+  const renderShop = () => {
+    const primaryCats = ["ሁሉም", "ወንድ", "ሴት", "ልጅ", "መድሀኒት"];
+    const secondaryCats = ["ሁሉም", "ልብስ", "ጫማ", "ሌሎች"];
+
+    let filtered = products;
+    if (shopCategory !== "ሁሉም") filtered = filtered.filter(p => p.category === shopCategory);
+    
+    // Quick frontend filter logic for subcategories if implemented by keyword in category or options
+    // For now, if secondary category is selected, we filter by seeing if the keyword exists in options or brand
+    if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") {
+       filtered = filtered.filter(p => (p.options && p.options.includes(shopSubCategory)) || (p.brand && p.brand.includes(shopSubCategory)));
+    }
+
+    return (
+      <div className="pb-24">
+        {/* Primary Categories */}
+        <div className="flex space-x-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
+          {primaryCats.map(cat => (
+            <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
+              className={`px-5 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${shopCategory === cat ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 border border-zinc-800"}`}>
+              {cat}
             </button>
-          )}
-          {item.image_url ? (
-            <img
-              src={item.image_url}
-              alt={item.name}
-              className="w-full h-40 object-cover"
-            />
-          ) : (
-            <div className="w-full h-40 bg-black" />
-          )}
-          <div className="p-4 flex flex-col flex-grow">
-            <span className="text-xs text-zinc-500 mb-1 font-bold uppercase">
-              {item.category}
-            </span>
-            <h3 className="text-white font-bold text-sm mb-2">{item.name}</h3>
-            <p className="text-amber-500 font-black text-lg mb-4">
-              {item.price} ብር
-            </p>
-            <button className="mt-auto w-full bg-amber-500 text-black font-black py-2 rounded-lg text-sm">
-              እዘዝ (Order)
-            </button>
-          </div>
+          ))}
         </div>
-      ))}
+
+        {/* Banner */}
+        <div className="mb-6">
+          <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600">
+            <div>
+              <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
+              <p className="text-blue-200 text-xs mt-1">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+            </div>
+            <PlusCircle className="text-blue-300" size={24} />
+          </a>
+        </div>
+
+        {/* Secondary Categories (Only show if a primary category is selected) */}
+        {shopCategory !== "ሁሉም" && shopCategory !== "መድሀኒት" && (
+           <div className="flex space-x-2 overflow-x-auto pb-6 mb-2 no-scrollbar">
+           {secondaryCats.map(cat => (
+             <button key={cat} onClick={() => setShopSubCategory(cat)} 
+               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${shopSubCategory === cat ? "bg-white text-black" : "bg-zinc-800 text-zinc-400"}`}>
+               {cat}
+             </button>
+           ))}
+         </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          {filtered.map((item) => (
+            <div key={item.id} className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex flex-col relative">
+              {isCEO && (
+                <button onClick={() => handleDelete("products", item.id)} className="absolute top-2 right-2 bg-red-600 p-1.5 rounded-full z-10">
+                  <Trash2 size={14} className="text-white" />
+                </button>
+              )}
+              {item.category && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-br-lg z-10 uppercase tracking-widest">FREE DELIVERY</div>}
+              
+              <div className="bg-white pt-8 pb-4 px-2 flex justify-center">
+                 {item.image_url ? <img src={item.image_url} alt={item.name} className="h-28 object-contain" /> : <div className="h-28" />}
+              </div>
+
+              <div className="p-4 flex flex-col flex-grow">
+                <p className="text-white font-black text-lg">{item.price} ብር</p>
+                {item.vip_price && (
+                  <p className="text-amber-500 font-bold text-xs mt-1 mb-3 flex items-center">
+                    👑 VIP: {item.vip_price} ብር
+                  </p>
+                )}
+                
+                <h3 className="text-zinc-300 font-bold text-sm mb-1 leading-tight">{item.name}</h3>
+                {item.brand && <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-4">{item.brand}</p>}
+                
+                {item.options && item.options.length > 0 && (
+                  <div className="mb-4">
+                     <p className="text-zinc-500 text-[10px] mb-2">አማራጭ ይምረጡ (OPTION):</p>
+                     <div className="flex flex-wrap gap-2">
+                        {item.options.map(opt => (
+                          <span key={opt} className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs px-2 py-1 rounded-md">{opt}</span>
+                        ))}
+                     </div>
+                  </div>
+                )}
+                
+                <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="mt-auto w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm flex justify-center items-center">
+                  <ShoppingBag size={16} className="mr-2" /> እዘዝ
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderVIP = () => (
+    <div className="pb-24">
+      {renderBanners()}
+      <div className="flex flex-col items-center justify-center pt-10">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center max-w-sm w-full shadow-2xl">
+          <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-full flex items-center justify-center mb-6 border border-zinc-700">
+            <Users className="text-blue-400" size={32} />
+          </div>
+          <h2 className="text-2xl font-black text-white mb-2">እንኳን በደህና መጡ!</h2>
+          <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
+            አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ::
+          </p>
+          <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="w-full bg-[#2AABEE] text-white font-bold py-3.5 rounded-xl flex items-center justify-center shadow-lg hover:bg-blue-500 transition-colors">
+             <MessageCircle size={20} className="mr-2 fill-current" /> Log in with Telegram
+          </a>
+        </div>
+      </div>
     </div>
   );
 
   const renderAdmin = () => (
     <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
       <div className="flex justify-between items-center mb-6 mt-4">
-        <h2 className="text-amber-500 font-black text-2xl tracking-wide">
-          CEO Dashboard
-        </h2>
-        <button
-          onClick={() => setShowAdmin(false)}
-          className="bg-zinc-900 p-2 rounded-full"
-        >
+        <h2 className="text-amber-500 font-black text-2xl tracking-wide">CEO Dashboard</h2>
+        <button onClick={() => setShowAdmin(false)} className="bg-zinc-900 p-2 rounded-full">
           <X className="text-white w-6 h-6" />
         </button>
       </div>
 
-      <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
-        {["news", "gossip", "products", "results", "predictions"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setAdminTab(tab)}
-            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${
-              adminTab === tab
-                ? "bg-amber-500 text-black"
-                : "bg-zinc-900 text-zinc-400"
-            }`}
-          >
+      <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4">
+        {["posts", "products"].map((tab) => (
+          <button key={tab} onClick={() => setAdminTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-bold ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400"}`}>
             {tab.toUpperCase()}
           </button>
         ))}
       </div>
 
       <form onSubmit={handleAdminSubmit} className="space-y-4">
-        {(adminTab === "news" || adminTab === "gossip") && (
+        {adminTab === "posts" && (
           <>
-            <input
-              required
-              placeholder="Main Title (ርዕስ)"
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
-            <input
-              placeholder="Subtitle (ንዑስ ርዕስ)"
-              onChange={(e) =>
-                setFormData({ ...formData, subtitle: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
-            <input
-              placeholder="Author (ደራሲ - Default: ZenaSoccer)"
-              onChange={(e) =>
-                setFormData({ ...formData, author: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
-            <textarea
-              required
-              rows="4"
-              placeholder="Body (ጽሑፍ)"
-              onChange={(e) =>
-                setFormData({ ...formData, body: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            ></textarea>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImageFile(e.target.files[0])}
-              className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white"
-            />
+            <select required onChange={(e) => setFormData({ ...formData, postCategory: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+              <option value="">Select Category (ምድብ)</option>
+              <option value="ዋና">ዋና (Main)</option>
+              <option value="ስፖርት">ስፖርት (Sport)</option>
+              <option value="ሹክሹክታ">ሹክሹክታ (Gossip)</option>
+              <option value="ማህበራዊ">ማህበራዊ (Social)</option>
+            </select>
+            <input required placeholder="Title (ርዕስ)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input placeholder="Subtitle (ንዑስ ርዕስ)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <textarea rows="2" placeholder="Excerpt (አጭር ማብራሪያ)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+            <textarea required rows="6" placeholder="Full Body (ሙሉ ጽሑፍ)" onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"></textarea>
+            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white" />
           </>
         )}
 
-        {(adminTab === "results" || adminTab === "predictions") && (
+        {adminTab === "products" && (
           <>
-            <input
-              required
-              placeholder="League (የሊግ ስም)"
-              onChange={(e) =>
-                setFormData({ ...formData, league: e.target.value })
-              }
-              className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500"
-            />
+            <input required placeholder="Product Name (የእቃው ስም)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input placeholder="Brand Name (ምልክት - e.g. COLE HAAN)" onChange={(e) => setFormData({ ...formData, brand: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            
             <div className="grid grid-cols-2 gap-4">
-              <input
-                required
-                placeholder="Team A (ቡድን 1)"
-                onChange={(e) =>
-                  setFormData({ ...formData, teamA: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
-              <input
-                required
-                placeholder="Team B (ቡድን 2)"
-                onChange={(e) =>
-                  setFormData({ ...formData, teamB: e.target.value })
-                }
-                className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-              />
+              <input required type="number" placeholder="Regular Price" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
+              <input type="number" placeholder="VIP Price (Optional)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl" />
             </div>
-            {adminTab === "results" && (
-              <>
-                <input
-                  required
-                  placeholder="Score (ምሳሌ: 2 - 1)"
-                  onChange={(e) =>
-                    setFormData({ ...formData, score: e.target.value })
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-                />
-                <input
-                  placeholder="Scorers (ሳካ 12', ኦዴጋርድ 45')"
-                  onChange={(e) =>
-                    setFormData({ ...formData, details: e.target.value })
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl"
-                />
-              </>
-            )}
+
+            <select required onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500">
+              <option value="">Primary Category (ዋና ምድብ)</option>
+              <option value="ወንድ">ወንድ</option>
+              <option value="ሴት">ሴት</option>
+              <option value="ልጅ">ልጅ</option>
+              <option value="መድሀኒት">መድሀኒት</option>
+            </select>
+            
+            <input placeholder="Sizes/Options (Comma separated: 42, 43, 44 OR ልብስ, ጫማ)" onChange={(e) => setFormData({ ...formData, options: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500" />
+            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white" />
           </>
         )}
-
-        <button
-          disabled={uploading}
-          type="submit"
-          className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4 flex justify-center"
-        >
+        
+        <button disabled={uploading} type="submit" className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4">
           {uploading ? "Uploading..." : "Publish (አትም)"}
         </button>
       </form>
@@ -535,94 +438,60 @@ export default function App() {
   );
 
   const tabs = [
-    { id: "ዜና", icon: Home },
-    { id: "ውጤቶች", icon: Trophy },
+    { id: "ዋና", icon: Home },
+    { id: "ስፖርት", icon: Trophy },
     { id: "ሹክሹክታ", icon: Flame },
-    { id: "ግምት", icon: Target },
+    { id: "ማህበራዊ", icon: Users },
+    { id: "ቪአይፒ", icon: Target },
     { id: "ሱቅ", icon: ShoppingBag },
   ];
 
   return (
     <div className="min-h-screen bg-black font-sans text-white">
-      <header className="sticky top-0 z-40 bg-zinc-950 border-b border-zinc-800 p-4 flex justify-between items-center shadow-md">
-        <div
-          className="flex items-center space-x-3 cursor-pointer select-none"
-          onClick={handleLogoTap}
-        >
-          <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center shadow-lg">
-            <span className="text-black font-black text-xs">GOL</span>
-          </div>
+      <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-zinc-900 p-4 flex justify-between items-center">
+        <div className="flex items-center space-x-2 cursor-pointer select-none" onClick={handleLogoTap}>
           <h1 className="text-white font-black text-2xl tracking-widest">
-            GOL<span className="text-amber-500">ET</span>
+            GOL<span className="text-amber-500">ETH</span>
           </h1>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 bg-black rounded-full px-3 py-1.5 border border-zinc-800">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase">
-              {isVIP ? "VIP" : "Free"}
-            </span>
-            <div
-              className={`w-9 h-5 rounded-full flex items-center p-0.5 cursor-pointer ${
-                isVIP ? "bg-amber-500" : "bg-zinc-800"
-              }`}
-              onClick={() => setIsVIP(!isVIP)}
-            >
-              <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  isVIP ? "translate-x-4" : "translate-x-0"
-                }`}
-              ></div>
-            </div>
-          </div>
+        <div className="flex items-center space-x-3">
           {isCEO && (
-            <button
-              onClick={() => setShowAdmin(true)}
-              className="bg-amber-500/20 text-amber-500 p-2 rounded-full font-bold text-xs"
-            >
+            <button onClick={() => setShowAdmin(true)} className="bg-amber-500/20 text-amber-500 px-3 py-1.5 rounded-full font-bold text-xs">
               CEO
             </button>
           )}
+          <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-blue-500">
+            ይግቡ / ይመዝገቡ
+          </a>
         </div>
       </header>
 
       <main className="p-4 max-w-lg mx-auto">
-        {activeTab === "ዜና" && (
-          <div className="space-y-4 pb-24">
-            {news.map((n) => renderArticle(n, "news"))}
-          </div>
+        {activePost ? (
+          renderSinglePost()
+        ) : (
+          <>
+            {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderPostFeed()}
+            {activeTab === "ቪአይፒ" && renderVIP()}
+            {activeTab === "ሱቅ" && renderShop()}
+          </>
         )}
-        {activeTab === "ውጤቶች" && renderResults()}
-        {activeTab === "ሹክሹክታ" && (
-          <div className="space-y-4 pb-24">
-            {gossip.map((g) => renderArticle(g, "gossip"))}
-          </div>
-        )}
-        {activeTab === "ግምት" && renderPredict()}
-        {activeTab === "ሱቅ" && renderShop()}
       </main>
 
       {showAdmin && renderAdmin()}
 
-      <nav className="fixed bottom-0 w-full bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 flex justify-around pb-6 pt-3 px-2 z-40">
+      <nav className="fixed bottom-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 flex justify-around pb-6 pt-3 px-1 z-40">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center p-2 ${
-                isActive ? "text-amber-500" : "text-zinc-600"
-              }`}
+              onClick={() => { setActiveTab(tab.id); setActivePost(null); }}
+              className={`flex flex-col items-center p-2 ${isActive ? "text-amber-500" : "text-zinc-500"}`}
             >
-              <Icon
-                size={isActive ? 26 : 24}
-                strokeWidth={isActive ? 2.5 : 2}
-                className="mb-1.5"
-              />
-              <span className="text-[11px] font-bold tracking-wide">
-                {tab.id}
-              </span>
+              <Icon size={24} strokeWidth={isActive ? 2.5 : 2} className="mb-1" />
+              <span className="text-[10px] font-bold tracking-wide">{tab.id}</span>
             </button>
           );
         })}
