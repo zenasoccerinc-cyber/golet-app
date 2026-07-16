@@ -224,18 +224,20 @@ export default function App() {
     alert("በተሳካ ሁኔታ ተጠናቋል! (Success!)");
   };
 
+  // Date is strictly formatted in English
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString("am-ET", { year: "numeric", month: "long", day: "numeric" }).toUpperCase();
+    return new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }).toUpperCase();
   };
 
   const renderOrderBanner = () => (
-    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="col-span-2 block bg-blue-700 rounded-xl p-4 flex justify-between items-center shadow-lg border border-blue-600 mb-2">
-      <div>
-        <h3 className="text-white font-bold text-sm">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-        <p className="text-blue-200 text-xs mt-1">ከአማዞን ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+    <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="col-span-2 block bg-gradient-to-r from-blue-900 to-blue-700 rounded-2xl p-5 flex justify-between items-center shadow-[0_4px_20px_rgba(37,99,235,0.2)] border border-blue-500/30 mb-6 mt-2 relative overflow-hidden">
+      <div className="relative z-10">
+        <h3 className="text-white font-black text-base tracking-wide mb-1">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
+        <p className="text-blue-200 text-xs font-medium">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
       </div>
-      <PlusCircle className="text-blue-300" size={24} />
+      <PlusCircle className="text-blue-400 relative z-10" size={28} />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
     </a>
   );
 
@@ -310,49 +312,46 @@ export default function App() {
 
     return (
       <div className="space-y-6 pb-24">
-        {/* Changed to grid-cols-2 to force the grid layout correctly on mobile */}
         <div className="grid grid-cols-2 gap-4">
           {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderOrderBanner()}
           
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
 
-            // 1. Hero Layout (Top 1) -> spans both columns
+            // 1. Hero Layout (Top 1)
             if (index === 0) {
               return (
-                <div key={post.id} onClick={() => setActivePost(post)} className="col-span-2 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
+                <div key={post.id} onClick={() => setActivePost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2">
                   {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
-                  <div className="p-4">
-                    <h2 className="text-xl font-black text-amber-500 mb-2 leading-tight">{post.title}</h2>
-                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-2">{post.author} • {formatDate(post.created_at)}</div>
-                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt}</p>
+                  <div className="p-5">
+                    <h2 className="text-xl font-black text-amber-500 mb-2 leading-snug line-clamp-3">{post.title}</h2>
+                    <div className="text-zinc-500 text-[10px] font-bold tracking-wider mb-3 uppercase">{post.author} • {formatDate(post.created_at)}</div>
+                    <p className="text-zinc-400 text-sm line-clamp-2">{post.excerpt || post.body.replace(/\[IMAGE\]/g, '')}</p>
                   </div>
                 </div>
               );
             }
             
-            // 2. Grid Layout (Next 4 posts) -> spans 1 column (2 across)
+            // 2. Grid Layout (Next 4 posts) - Excerpt Removed
             if (index > 0 && index <= 4) {
               return (
                 <div key={post.id} onClick={() => setActivePost(post)} className="col-span-1 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col">
                   {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
-                  <div className="p-3 flex flex-col flex-grow">
-                    <h3 className="text-sm font-bold text-white mb-1 line-clamp-2 leading-snug">{post.title}</h3>
-                    <div className="text-zinc-500 text-[10px] font-bold mb-2">{post.author} • {formatDate(post.created_at)}</div>
-                    <p className="text-zinc-400 text-xs line-clamp-2 mt-auto">{post.excerpt}</p>
+                  <div className="p-3 flex flex-col flex-grow justify-between">
+                    <h3 className="text-sm font-bold text-white mb-2 line-clamp-3 leading-snug">{post.title}</h3>
+                    <div className="text-zinc-500 text-[9px] font-bold uppercase mt-auto">{post.author} • {formatDate(post.created_at)}</div>
                   </div>
                 </div>
               );
             }
             
-            // 3. List Layout (Rest of the posts) -> spans both columns
+            // 3. List Layout (Rest of the posts) - Image Increased, Excerpt Removed
             return (
-              <div key={post.id} onClick={() => setActivePost(post)} className="col-span-2 flex items-start bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3">
-                {firstImg && <img src={firstImg} alt={post.title} className="w-24 shrink-0 aspect-[1.91/1] object-cover rounded-lg" />}
-                <div className="pl-3 flex flex-col flex-grow py-1">
-                  <h3 className="text-sm font-bold text-white mb-1 line-clamp-2">{post.title}</h3>
-                  <div className="text-zinc-500 text-[9px] font-bold uppercase mb-1">{post.author} • {formatDate(post.created_at)}</div>
-                  <p className="text-zinc-400 text-xs line-clamp-2">{post.excerpt}</p>
+              <div key={post.id} onClick={() => setActivePost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3 mb-1">
+                {firstImg && <img src={firstImg} alt={post.title} className="w-36 shrink-0 aspect-[1.91/1] object-cover rounded-lg" />}
+                <div className="pl-4 flex flex-col flex-grow">
+                  <h3 className="text-sm font-bold text-white mb-2 line-clamp-3 leading-snug">{post.title}</h3>
+                  <div className="text-zinc-500 text-[9px] font-bold uppercase">{post.author} • {formatDate(post.created_at)}</div>
                 </div>
               </div>
             );
