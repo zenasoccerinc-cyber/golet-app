@@ -55,7 +55,7 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
 
-  // --- NEW VIP & GAMES STATE ---
+  // --- VIP & GAMES STATE ---
   const [currentUser, setCurrentUser] = useState(null);
   const [isVIP, setIsVIP] = useState(false);
   const [games, setGames] = useState([]);
@@ -64,7 +64,7 @@ export default function App() {
   const [newGame, setNewGame] = useState({ team_a: '', team_b: '', team_a_logo: '', team_b_logo: '' });
   const [scoresToUpdate, setScoresToUpdate] = useState({});
   
-  const telegramWrapperRef = useRef(null); // Ref for Telegram Widget
+  const telegramWrapperRef = useRef(null); 
 
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
@@ -78,16 +78,16 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    fetchGames(); // Load games on startup
+    fetchGames(); 
     const handlePopState = () => setActivePost(null);
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // --- TELEGRAM LOGIN INJECTION (Bypasses CodeSandbox Bug) ---
+  // --- TELEGRAM LOGIN INJECTION ---
   useEffect(() => {
     if (activeTab === "ቪአይፒ" && !currentUser && telegramWrapperRef.current) {
-      if (telegramWrapperRef.current.innerHTML !== '') return; // Prevent duplicate widgets
+      if (telegramWrapperRef.current.innerHTML !== '') return; 
 
       window.onTelegramAuth = (user) => {
         handleTelegramLogin(user);
@@ -116,7 +116,6 @@ export default function App() {
     }
   };
 
-  // --- VIP & GAMES LOGIC ---
   const fetchGames = async () => {
     const { data, error } = await supabase.from('games').select('*').order('created_at', { ascending: false });
     if (data) setGames(data);
@@ -396,8 +395,9 @@ export default function App() {
     const name = e.target.name.value;
     const phone = e.target.phone.value;
     const item = e.target.item.value;
+    const shipping = e.target.shipping.value;
     
-    const message = `🛍️ *New Sourcing Order!*\n\n👤 *Name:* ${name}\n📞 *Phone:* ${phone}\n📦 *Item:* ${item}`;
+    const message = `🛍️ *New Sourcing Order!*\n\n👤 *Name:* ${name}\n📞 *Phone:* ${phone}\n📦 *Item:* ${item}\n🚚 *Shipping:* ${shipping}`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -430,6 +430,12 @@ export default function App() {
           <input required name="name" placeholder="ሙሉ ስም (Full Name)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
           <input required name="phone" type="tel" placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
           <textarea required name="item" rows="4" placeholder="የእቃው ስም ወይም የአማዞን ሊንክ (Item Name or Amazon Link)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
+          
+          <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
+            <option value="">ማጓጓዣ ይምረጡ (Shipping Method)</option>
+            <option value="3-5 Business Days">3-5 Business Days (መደበኛ)</option>
+            <option value="Next Day Delivery">Next Day Delivery (አስቸኳይ)</option>
+          </select>
           
           <button type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-2 flex items-center justify-center transition-colors">
             <Send size={18} className="mr-2" /> ትዕዛዙን ላክ (Send Order)
@@ -725,7 +731,6 @@ export default function App() {
             </div>
             <h2 className="text-2xl font-black text-white mb-2">እንኳን በደህና መጡ!</h2>
             <p className="text-zinc-400 text-sm mb-6 leading-relaxed">አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ::</p>
-            {/* INJECTS WIDGET HERE DIRECTLY INSTEAD OF EXTERNAL COMPONENT */}
             <div ref={telegramWrapperRef} className="flex justify-center my-6 min-h-[50px]"></div>
           </div>
         </div>
@@ -737,8 +742,11 @@ export default function App() {
         <div className="pb-24 pt-10 text-center">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-sm mx-auto shadow-2xl">
             <h2 className="text-2xl font-black text-white mb-4">Welcome, {currentUser.first_name}!</h2>
-            <p className="mb-4 text-amber-500 font-bold">Your account is registered but does not have VIP access yet.</p>
-            <p className="text-zinc-400 text-sm">Please contact the Admin to activate your VIP membership.</p>
+            <p className="mb-4 text-amber-500 font-bold">Your account is registered but your VIP access is pending.</p>
+            <p className="text-zinc-400 text-sm mb-6">To activate VIP (Predictions + Discounts), please pay the membership fee (100 ETB via Bank OR $10/mo via PayPal) and contact the Admin.</p>
+            <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="bg-amber-500 text-black font-bold px-6 py-2 rounded-full shadow-lg hover:bg-amber-400 transition-colors">
+              Contact Admin
+            </a>
           </div>
         </div>
       );
@@ -1045,9 +1053,11 @@ export default function App() {
               CEO
             </button>
           )}
-          <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
-            ይግቡ
-          </a>
+          
+          {/* UPDATED LOGIN BUTTON HERE */}
+          <button onClick={() => { setActiveTab("ቪአይፒ"); if(activePost) window.history.back(); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
+            {currentUser ? "የእኔ VIP" : "ይግቡ"}
+          </button>
         </div>
       </header>
 
