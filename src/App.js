@@ -65,7 +65,7 @@ export default function App() {
   
   // Checkout States
   const [checkoutStep, setCheckoutStep] = useState("ክፍያ"); 
-  const [paymentType, setPaymentType] = useState(""); 
+  const [paymentType, setPaymentType] = useState("ሀገር ውስጥ"); // Default to Local
   const [vipPhone, setVipPhone] = useState("");
   
   const telegramWrapperRef = useRef(null); 
@@ -446,14 +446,32 @@ export default function App() {
     alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
+  // --- UPDATED SOURCING ORDER SUBMIT ---
   const submitOrderForm = async (e) => {
     e.preventDefault();
+    setUploading(true);
+
     const name = e.target.name.value;
     const phone = e.target.phone.value;
-    const item = e.target.item.value;
+    const productName = e.target.productName.value;
+    const storeName = e.target.storeName.value;
+    const productLink = e.target.productLink.value;
     const shipping = e.target.shipping.value;
-    
-    const message = `🛍 *አዲስ የእቃ ማዘዣ ትዕዛዝ!*\n\n👤 *ስም:* ${name}\n📞 *ስልክ:* ${phone}\n📦 *እቃ:* ${item}\n🚚 *አቅርቦት:* ${shipping}`;
+    const imageFile = e.target.orderImage.files[0];
+
+    if (!productName && !productLink && !imageFile) {
+       alert("እባክዎ ቢያንስ የእቃውን ስም፣ ሊንክ ወይም ምስል ያስገቡ።");
+       setUploading(false);
+       return;
+    }
+
+    let imageUrl = "ምንም ምስል አልተያያዘም";
+    if (imageFile) {
+       const uploadedUrl = await uploadFileToSupabase(imageFile);
+       if (uploadedUrl) imageUrl = uploadedUrl;
+    }
+
+    const message = `🛍 *አዲስ የእቃ ማዘዣ!*\n\n👤 *ስም:* ${name}\n📞 *ስልክ:* ${phone}\n📦 *የእቃው ስም:* ${productName || "አልተገለጸም"}\n🏪 *የሱቁ ስም:* ${storeName || "አልተገለጸም"}\n🔗 *ሊንክ:* ${productLink || "አልተገለጸም"}\n🚚 *አቅርቦት:* ${shipping}\n🖼️ *ምስል:* ${imageUrl}`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -465,6 +483,7 @@ export default function App() {
       console.log("Telegram Error", err);
     }
 
+    setUploading(false);
     alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!");
     setShowOrderForm(false);
     
@@ -473,28 +492,39 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
+  // --- UPDATED SOURCING ORDER FORM UI ---
   const renderOrderForm = () => (
-    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in zoom-in duration-200 justify-center">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative shadow-2xl">
+    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-4 animate-in fade-in zoom-in duration-200 justify-center">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 relative shadow-2xl max-w-md mx-auto w-full">
         <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors">
           <X className="text-white w-5 h-5" />
         </button>
-        <h2 className="text-xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ</h2>
-        <p className="text-zinc-400 text-xs mb-6">ምን ማምጣት እንድንልዎት ይፈልጋሉ? መረጃዎን ይሙሉና አሁኑኑ እናረጋግጥልዎታለን።</p>
+        <h2 className="text-2xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ</h2>
+        <p className="text-zinc-300 text-sm mb-6">ምን ማምጣት እንድንልዎት ይፈልጋሉ? ከታች ካሉት አማራጮች ቢያንስ አንዱን (ስም፣ ሊንክ ወይም ምስል) ያስገቡ።</p>
         
         <form onSubmit={submitOrderForm} className="space-y-4">
-          <input required name="name" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-          <input required name="phone" type="tel" placeholder="ስልክ ቁጥር" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-          <textarea required name="item" rows="4" placeholder="የእቃው ስም ወይም ሊንክ" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
+          <input required name="name" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+          <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
           
-          <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
+          <div className="border-t border-zinc-800 my-4 pt-4 space-y-3">
+             <input name="productName" placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+             <input name="storeName" placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+             <input name="productLink" type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+             
+             <div>
+                <label className="block text-zinc-400 text-sm mb-1.5 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)፦</label>
+                <input type="file" name="orderImage" accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+             </div>
+          </div>
+          
+          <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-4">
             <option value="">ማጓጓዣ ይምረጡ</option>
             <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
             <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
           </select>
           
-          <button type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-2 flex items-center justify-center transition-colors">
-            <Send size={18} className="mr-2" /> ትዕዛዙን ላክ
+          <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-4 flex items-center justify-center transition-colors text-lg">
+            {uploading ? "በመላክ ላይ..." : <><Send size={20} className="mr-2" /> ትዕዛዙን ላክ</>}
           </button>
         </form>
       </div>
@@ -818,43 +848,43 @@ export default function App() {
       return (
         <div className="pb-24 pt-6">
           {checkoutStep === "ክፍያ" && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm mx-auto shadow-2xl mb-8">
-              <h2 className="text-xl font-black text-amber-500 mb-4 text-center">የቪአይፒ ክፍያ</h2>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md mx-auto shadow-2xl mb-8">
+              <h2 className="text-2xl font-black text-amber-500 mb-4 text-center">የቪአይፒ ክፍያ</h2>
               
-              <div className="flex space-x-2 mb-4">
-                <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-xs font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ (100 ብር)</button>
-                <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-xs font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ($10)</button>
+              <div className="flex space-x-2 mb-6">
+                <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ (100 ብር)</button>
+                <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ($10)</button>
               </div>
 
               {paymentType === "ሀገር ውስጥ" && (
-                <div className="bg-black/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-300 space-y-1 mb-4 animate-in fade-in duration-200">
-                  <p className="font-bold text-amber-500">📌 የባንክ ማስተላለፊያ፦</p>
+                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-zinc-300 space-y-2 mb-6 animate-in fade-in duration-200">
+                  <p className="font-black text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
                   <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
-                  <p>አካውንት ቁጥር: <span className="text-white font-mono font-bold">1000123456789</span></p>
+                  <p>አካውንት ቁጥር: <span className="text-amber-500 font-mono font-black text-lg">1000123456789</span></p>
                 </div>
               )}
 
               {paymentType === "ዳያስፖራ" && (
-                <div className="bg-black/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-300 space-y-1 mb-4 animate-in fade-in duration-200">
-                  <p className="font-bold text-amber-500">📌 የPayPal ማስተላለፊያ፦</p>
-                  <p>PayPal ኢሜይል: <span className="text-white font-mono font-bold">demo@goleth.com</span></p>
+                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-zinc-300 space-y-2 mb-6 animate-in fade-in duration-200">
+                  <p className="font-black text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
+                  <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg">demo@goleth.com</span></p>
                 </div>
               )}
 
               {paymentType !== "" && (
                 <form onSubmit={handleVipPaymentSubmit} className="space-y-4 animate-in fade-in duration-200">
-                  <input required name="fullName" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                  <input required name="fullName" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" />
                   
                   <div>
-                    <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} className="w-full bg-black border border-zinc-800 text-white p-3.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                    <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
                   </div>
                   
                   <div>
-                    <label className="block text-zinc-400 text-xs mb-1.5">የክፍያ ማረጋገጫ (ደረሰኝ ወይም ስክሪንሻት)፦</label>
-                    <input required type="file" name="receiptFile" accept="image/*" className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                    <label className="block text-zinc-400 text-sm font-bold mb-2">የክፍያ ማረጋገጫ (እባክዎ ፋይሉን ያያይዙ)፦</label>
+                    <input required type="file" name="receiptFile" accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                   </div>
                   
-                  <button type="submit" disabled={uploading || vipPhone.length !== 10} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-3.5 rounded-xl text-sm shadow-lg transition-colors">
+                  <button type="submit" disabled={uploading || vipPhone.length !== 10} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
                     {uploading ? "በመጫን ላይ..." : "ላክ"}
                   </button>
                 </form>
@@ -863,10 +893,10 @@ export default function App() {
           )}
 
           {checkoutStep === "ስኬት" && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm mx-auto shadow-2xl text-center mb-8 animate-in zoom-in-95 duration-200">
-              <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 text-xl font-black">✓</div>
-              <h2 className="text-lg font-black text-white mb-2">መረጃዎ እና ክፍያዎ ደርሶናል!</h2>
-              <p className="text-zinc-400 text-xs leading-loose">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md mx-auto shadow-2xl text-center mb-8 animate-in zoom-in-95 duration-200">
+              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 text-2xl font-black">✓</div>
+              <h2 className="text-xl font-black text-white mb-4">መረጃዎ እና ክፍያዎ ደርሶናል!</h2>
+              <p className="text-zinc-400 text-sm leading-loose">
                 ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ ሙሉ መዳረሻ ያገኛሉ።
               </p>
             </div>
@@ -1166,12 +1196,9 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center space-x-3">
-          
-          {/* REPLACE 'YourTelegramUsername' WITH YOUR ACTUAL USERNAME HERE */}
-          <a href="https://t.me/YourTelegramUsername" target="_blank" rel="noreferrer" className="text-zinc-400 font-bold text-sm hover:text-amber-500 px-3 border-r border-zinc-800 transition-colors">
+          <a href="https://t.me/contact_goleth" target="_blank" rel="noreferrer" className="text-zinc-400 font-bold text-sm hover:text-amber-500 px-3 border-r border-zinc-800 transition-colors">
             ያግኙን
           </a>
-          
           {isCEO && (
             <button onClick={() => { openNewPost("posts"); setShowAdmin(true); }} className="bg-amber-500 text-black px-3 py-1.5 rounded-full font-bold text-xs shadow-lg shadow-amber-500/20">
               CEO
