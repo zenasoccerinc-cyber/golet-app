@@ -20,7 +20,7 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Your Telegram Configuration
+// Telegram Configuration
 const TELEGRAM_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU"; 
 const TELEGRAM_CHAT_ID = "813725953"; 
 
@@ -42,7 +42,6 @@ export default function App() {
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [], relatedLinks: [] });
   
-  // Existing Image Previews for Edit Mode
   const [existingMainImage, setExistingMainImage] = useState(null);
   const [existingInlineImages, setExistingInlineImages] = useState([]);
 
@@ -64,6 +63,11 @@ export default function App() {
   const [newGame, setNewGame] = useState({ team_a: '', team_b: '', team_a_logo: '', team_b_logo: '' });
   const [scoresToUpdate, setScoresToUpdate] = useState({});
   
+  // Checkout States
+  const [checkoutStep, setCheckoutStep] = useState("ክፍያ"); 
+  const [paymentType, setPaymentType] = useState(""); 
+  const [vipPhone, setVipPhone] = useState("");
+  
   const telegramWrapperRef = useRef(null); 
 
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
@@ -84,7 +88,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // --- TELEGRAM LOGIN INJECTION ---
+  // Telegram Widget Injection
   useEffect(() => {
     if (activeTab === "ቪአይፒ" && !currentUser && telegramWrapperRef.current) {
       if (telegramWrapperRef.current.innerHTML !== '') return; 
@@ -117,12 +121,12 @@ export default function App() {
   };
 
   const fetchGames = async () => {
-    const { data, error } = await supabase.from('games').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('games').select('*').order('created_at', { ascending: false });
     if (data) setGames(data);
   };
 
   const fetchUserPredictions = async (telegramId) => {
-    const { data, error } = await supabase.from('predictions').select('*').eq('telegram_id', telegramId);
+    const { data } = await supabase.from('predictions').select('*').eq('telegram_id', telegramId);
     if (data) {
       const predictionsMap = {};
       data.forEach(p => { predictionsMap[p.game_id] = p; });
@@ -132,7 +136,7 @@ export default function App() {
 
   const handleTelegramLogin = async (telegramUser) => {
     setCurrentUser(telegramUser);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('vip_users')
       .upsert([ { telegram_id: telegramUser.id, username: telegramUser.username || telegramUser.first_name } ], { onConflict: 'telegram_id' })
       .select();
@@ -140,7 +144,59 @@ export default function App() {
     if (data && data[0]) {
       setIsVIP(data[0].is_vip);
       fetchUserPredictions(telegramUser.id);
+      if (!data[0].is_vip) {
+        setCheckoutStep("ክፍያ");
+      }
     }
+  };
+
+  const handleVipPaymentSubmit = async (e) => {
+    e.preventDefault();
+    setUploading(true);
+
+    const fullName = e.target.fullName.value;
+    const file = e.target.receiptFile.files[0];
+
+    if (vipPhone.length !== 10) {
+      alert("እባክዎ ትክክለኛ ባለ 10 አሃዝ ስልክ ቁጥር ያስገቡ።");
+      setUploading(false);
+      return;
+    }
+
+    let receiptUrl = "";
+    if (file) {
+      receiptUrl = await uploadFileToSupabase(file);
+    }
+
+    const { error: dbError } = await supabase.from("vip_payments").insert([
+      {
+        telegram_id: currentUser?.id,
+        full_name: fullName,
+        phone_number: vipPhone,
+        payment_type: paymentType,
+        receipt_url: receiptUrl
+      }
+    ]);
+
+    if (dbError) {
+      alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
+      setUploading(false);
+      return;
+    }
+
+    const tgMessage = `👑 *አዲስ የVIP አባልነት ክፍያ ደርሷል!*\n\n👤 *ስም:* ${fullName}\n📞 *ስልክ:* ${vipPhone}\n💳 *የክፍያ አይነት:* ${paymentType}\n🖼️ *የደረሰኝ ሊንክ:* ${receiptUrl}`;
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: tgMessage, parse_mode: "Markdown" })
+      });
+    } catch (err) {
+      console.log("Telegram notification error", err);
+    }
+
+    setUploading(false);
+    setCheckoutStep("ስኬት");
   };
 
   const submitPrediction = async (gameId) => {
@@ -149,19 +205,19 @@ export default function App() {
     const scoreB = predictionInputs[gameId]?.b;
 
     if (scoreA === undefined || scoreB === undefined || scoreA === "" || scoreB === "") {
-      alert("እባክዎ ሁለቱንም ውጤቶች ያስገቡ (Please enter both scores).");
+      alert("እባክዎ ሁለቱንም ውጤቶች ያስገቡ።");
       return;
     }
     
-    const { data, error } = await supabase.from('predictions').insert([
+    const { error } = await supabase.from('predictions').insert([
       { telegram_id: currentUser.id, game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }
     ]);
 
     if (!error) {
-      alert("ውጤቱ ተመዝግቧል (Prediction saved)!");
+      alert("ውጤቱ ተመዝግቧል!");
       fetchUserPredictions(currentUser.id);
     } else {
-      alert("Error saving prediction. You may have already predicted this game.");
+      alert("ውጤቱን ቀድመው ገምተዋል።");
     }
   };
 
@@ -169,7 +225,7 @@ export default function App() {
     await supabase.from('games').insert([newGame]);
     setNewGame({ team_a: '', team_b: '', team_a_logo: '', team_b_logo: '' });
     fetchGames();
-    alert("Game Published!");
+    alert("ጨዋታው ታትሟል!");
   };
 
   const updateFinalScore = async (gameId) => {
@@ -183,7 +239,7 @@ export default function App() {
     }).eq('id', gameId);
     
     fetchGames();
-    alert("Game Ended & Scores Updated!");
+    alert("ጨዋታው ተጠናቆ ውጤቱ ተመዝግቧል!");
   };
 
   const handleLogoTap = () => {
@@ -195,7 +251,7 @@ export default function App() {
     setTimeout(() => setTapCount(0), 3000);
 
     if (newCount >= 5) {
-      const password = window.prompt("Enter CEO Password:");
+      const password = window.prompt("የአስተዳዳሪ የይለፍ ቃል ያስገቡ:");
       if (password === "admin123") {
         setIsCEO(true);
         setShowAdmin(true);
@@ -210,7 +266,7 @@ export default function App() {
   };
 
   const handleDelete = async (table, id) => {
-    if (window.confirm("እርግጠኛ ነዎት? (Are you sure you want to delete this?)")) {
+    if (window.confirm("እርግጠኛ ነዎት?")) {
       await supabase.from(table).delete().eq("id", id);
       if (table === "games") fetchGames(); else fetchData();
       if (activePost) window.history.back();
@@ -387,7 +443,7 @@ export default function App() {
     setShowAdmin(false);
     setShowSizeDropdown(false);
     fetchData();
-    alert("በተሳካ ሁኔታ ተጠናቋል! (Success!)");
+    alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
   const submitOrderForm = async (e) => {
@@ -397,7 +453,7 @@ export default function App() {
     const item = e.target.item.value;
     const shipping = e.target.shipping.value;
     
-    const message = `🛍️ *New Sourcing Order!*\n\n👤 *Name:* ${name}\n📞 *Phone:* ${phone}\n📦 *Item:* ${item}\n🚚 *Shipping:* ${shipping}`;
+    const message = `🛍 *አዲስ የእቃ ማዘዣ ትዕዛዝ!*\n\n👤 *ስም:* ${name}\n📞 *ስልክ:* ${phone}\n📦 *እቃ:* ${item}\n🚚 *አቅርቦት:* ${shipping}`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -409,7 +465,7 @@ export default function App() {
       console.log("Telegram Error", err);
     }
 
-    alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል! (Order Sent Successfully!)");
+    alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!");
     setShowOrderForm(false);
     
     if(activePost) window.history.back(); 
@@ -423,22 +479,22 @@ export default function App() {
         <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors">
           <X className="text-white w-5 h-5" />
         </button>
-        <h2 className="text-xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ (Order Form)</h2>
+        <h2 className="text-xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ</h2>
         <p className="text-zinc-400 text-xs mb-6">ምን ማምጣት እንድንልዎት ይፈልጋሉ? መረጃዎን ይሙሉና አሁኑኑ እናረጋግጥልዎታለን።</p>
         
         <form onSubmit={submitOrderForm} className="space-y-4">
-          <input required name="name" placeholder="ሙሉ ስም (Full Name)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-          <input required name="phone" type="tel" placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-          <textarea required name="item" rows="4" placeholder="የእቃው ስም ወይም የአማዞን ሊንክ (Item Name or Amazon Link)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
+          <input required name="name" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
+          <input required name="phone" type="tel" placeholder="ስልክ ቁጥር" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
+          <textarea required name="item" rows="4" placeholder="የእቃው ስም ወይም ሊንክ" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
           
           <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
-            <option value="">ማጓጓዣ ይምረጡ (Shipping Method)</option>
-            <option value="3-5 Business Days">3-5 Business Days (መደበኛ)</option>
-            <option value="Next Day Delivery">Next Day Delivery (አስቸኳይ)</option>
+            <option value="">ማጓጓዣ ይምረጡ</option>
+            <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
+            <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
           </select>
           
           <button type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-2 flex items-center justify-center transition-colors">
-            <Send size={18} className="mr-2" /> ትዕዛዙን ላክ (Send Order)
+            <Send size={18} className="mr-2" /> ትዕዛዙን ላክ
           </button>
         </form>
       </div>
@@ -449,7 +505,7 @@ export default function App() {
     <button onClick={() => setShowOrderForm(true)} className="col-span-2 w-full text-left bg-gradient-to-br from-zinc-900 to-black rounded-xl p-4 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-6 mt-2 hover:border-amber-500/50 transition-all group">
       <div className="relative z-10">
         <h3 className="text-amber-500 font-black text-sm tracking-wide mb-1 drop-shadow-md">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-        <p className="text-zinc-400 text-[10px] font-bold">ከአማዞን (AMAZON) ወይም ከየትኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+        <p className="text-zinc-400 text-[10px] font-bold">ከማንኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
       </div>
       <div className="bg-amber-500/10 p-2 rounded-full shadow-inner border border-amber-500/30 group-hover:bg-amber-500/20 transition-colors">
          <PlusCircle className="text-amber-500 drop-shadow-lg" size={20} />
@@ -526,7 +582,7 @@ export default function App() {
 
     return (
       <div className="mt-10 border-t border-zinc-800 pt-6">
-        <h3 className="text-amber-500 font-black text-sm mb-4">ተያያዥ (Related)</h3>
+        <h3 className="text-amber-500 font-black text-sm mb-4">ተያያዥ</h3>
         <div className="grid grid-cols-2 gap-3">
           {relatedCards}
         </div>
@@ -543,10 +599,10 @@ export default function App() {
       {isCEO && (
         <div className="flex space-x-2 mb-6 w-full">
           <button onClick={() => handleEdit("posts", activePost)} className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors border border-zinc-700">
-            <Edit2 size={14} className="mr-1" /> አስተካክል (Edit)
+            <Edit2 size={14} className="mr-1" /> አስተካክል
           </button>
           <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 hover:text-red-400 border border-red-900 p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors">
-            <Trash2 size={14} className="mr-1" /> ሰርዝ (Delete)
+            <Trash2 size={14} className="mr-1" /> ሰርዝ
           </button>
         </div>
       )}
@@ -711,7 +767,7 @@ export default function App() {
                 )}
                 
                 <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="mt-auto w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-sm flex justify-center items-center transition-colors shadow-lg shadow-amber-500/10">
-                  <ShoppingBag size={16} className="mr-2" /> እዘዝ (Order)
+                  <ShoppingBag size={16} className="mr-2" /> እዘዝ
                 </a>
               </div>
             </div>
@@ -721,44 +777,111 @@ export default function App() {
     );
   };
 
+  const renderBlurGames = () => (
+    <div className="opacity-30 blur-[3px] pointer-events-none select-none max-w-sm mx-auto mt-6">
+      <h2 className="text-lg font-black text-center mb-4">የሳምንቱ የቪአይፒ ጨዋታዎች</h2>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <div className="text-center text-xs">ቡድን አንድ</div>
+          <div className="text-amber-500 font-bold">VS</div>
+          <div className="text-center text-xs">ቡድን ሁለት</div>
+        </div>
+        <div className="flex justify-center space-x-2">
+          <div className="w-12 h-10 bg-black rounded"></div>
+          <div className="w-12 h-10 bg-black rounded"></div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderVIP = () => {
     if (!currentUser) {
       return (
-        <div className="pb-24 pt-10">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center max-w-sm mx-auto shadow-2xl">
-            <div className="w-16 h-16 mx-auto bg-black rounded-full flex items-center justify-center mb-6 border border-zinc-800 shadow-inner">
-              <Users className="text-amber-500" size={32} />
-            </div>
-            <h2 className="text-2xl font-black text-white mb-2">እንኳን በደህና መጡ!</h2>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">አዲስ መለያ ለመፍጠር ወይም ለመግባት የቴሌግራም ቁልፉን ይጫኑ::</p>
-            <div ref={telegramWrapperRef} className="flex justify-center my-6 min-h-[50px]"></div>
+        <div className="pb-24 pt-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center max-w-sm mx-auto shadow-2xl mb-8">
+            <h2 className="text-xl font-black text-amber-500 mb-2">የቪአይፒ አባልነት ጥቅሞች</h2>
+            <ul className="text-zinc-400 text-xs mb-6 text-left space-y-2 px-2">
+              <li>🏆 በየሳምንቱ የውጤት ትንበያዎችን በመገመት ይሸለሙ</li>
+              <li>🛍️ በሱቃችን ላይ ልዩ የዋጋ ቅናሾችን ያግኙ</li>
+              <li>💰 የሀገር ውስጥ አባልነት: 100 ብር በወር</li>
+              <li>💵 የዳያስፖራ አባልነት: $10 ዶላር በወር</li>
+            </ul>
+            <p className="text-white text-sm font-bold mb-4">ለመጀመር በቴሌግራምዎ ይግቡ፦</p>
+            <div ref={telegramWrapperRef} className="flex justify-center min-h-[50px]"></div>
           </div>
+          {renderBlurGames()}
         </div>
       );
     }
 
     if (!isVIP) {
       return (
-        <div className="pb-24 pt-10 text-center">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-sm mx-auto shadow-2xl">
-            <h2 className="text-2xl font-black text-white mb-4">Welcome, {currentUser.first_name}!</h2>
-            <p className="mb-4 text-amber-500 font-bold">Your account is registered but your VIP access is pending.</p>
-            <p className="text-zinc-400 text-sm mb-6">To activate VIP (Predictions + Discounts), please pay the membership fee (100 ETB via Bank OR $10/mo via PayPal) and contact the Admin.</p>
-            <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="bg-amber-500 text-black font-bold px-6 py-2 rounded-full shadow-lg hover:bg-amber-400 transition-colors">
-              Contact Admin
-            </a>
-          </div>
+        <div className="pb-24 pt-6">
+          {checkoutStep === "ክፍያ" && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm mx-auto shadow-2xl mb-8">
+              <h2 className="text-xl font-black text-amber-500 mb-4 text-center">የቪአይፒ ክፍያ</h2>
+              
+              <div className="flex space-x-2 mb-4">
+                <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-xs font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ (100 ብር)</button>
+                <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-xs font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ($10)</button>
+              </div>
+
+              {paymentType === "ሀገር ውስጥ" && (
+                <div className="bg-black/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-300 space-y-1 mb-4 animate-in fade-in duration-200">
+                  <p className="font-bold text-amber-500">📌 የባንክ ማስተላለፊያ፦</p>
+                  <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
+                  <p>አካውንት ቁጥር: <span className="text-white font-mono font-bold">1000123456789</span></p>
+                </div>
+              )}
+
+              {paymentType === "ዳያስፖራ" && (
+                <div className="bg-black/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-300 space-y-1 mb-4 animate-in fade-in duration-200">
+                  <p className="font-bold text-amber-500">📌 የPayPal ማስተላለፊያ፦</p>
+                  <p>PayPal ኢሜይል: <span className="text-white font-mono font-bold">demo@goleth.com</span></p>
+                </div>
+              )}
+
+              {paymentType !== "" && (
+                <form onSubmit={handleVipPaymentSubmit} className="space-y-4 animate-in fade-in duration-200">
+                  <input required name="fullName" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                  
+                  <div>
+                    <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} className="w-full bg-black border border-zinc-800 text-white p-3.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-zinc-400 text-xs mb-1.5">የክፍያ ማረጋገጫ (ደረሰኝ ወይም ስክሪንሻት)፦</label>
+                    <input required type="file" name="receiptFile" accept="image/*" className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                  </div>
+                  
+                  <button type="submit" disabled={uploading || vipPhone.length !== 10} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-3.5 rounded-xl text-sm shadow-lg transition-colors">
+                    {uploading ? "በመጫን ላይ..." : "ላክ"}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {checkoutStep === "ስኬት" && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm mx-auto shadow-2xl text-center mb-8 animate-in zoom-in-95 duration-200">
+              <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 text-xl font-black">✓</div>
+              <h2 className="text-lg font-black text-white mb-2">መረጃዎ እና ክፍያዎ ደርሶናል!</h2>
+              <p className="text-zinc-400 text-xs leading-loose">
+                ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ ሙሉ መዳረሻ ያገኛሉ።
+              </p>
+            </div>
+          )}
+
+          {renderBlurGames()}
         </div>
       );
     }
 
     return (
       <div className="pb-24">
-        <h2 className="text-2xl font-black text-white mb-6 text-center">የVIP ትንበያ (Prediction Games)</h2>
-        
+        <h2 className="text-2xl font-black text-white mb-6 text-center">የVIP ትንበያ</h2>
         {games.map(game => {
           const userPred = userPredictions[game.id];
-          
           return (
             <div key={game.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4 shadow-xl">
               <div className="flex justify-between items-center mb-6">
@@ -781,26 +904,26 @@ export default function App() {
                     <input type="number" value={predictionInputs[game.id]?.b || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...prev[game.id], b: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
                   </div>
                   <button onClick={() => submitPrediction(game.id)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">
-                    ውጤት ላክ (Submit Prediction)
+                    ውጤት ላክ
                   </button>
                 </div>
               )}
 
               {game.status === 'open' && userPred && (
                 <div className="mt-4 text-center bg-black border border-amber-500/50 text-amber-500 text-sm font-bold p-3 rounded-xl">
-                  🔒 Your Pick Locked: {userPred.predicted_score_a} - {userPred.predicted_score_b}
+                  🔒 ግምትዎ ተቆልፏል: {userPred.predicted_score_a} - {userPred.predicted_score_b}
                 </div>
               )}
 
               {game.status === 'finished' && userPred && (
                 <div className="mt-4 text-center border-t border-zinc-800 pt-4">
                   <div className="text-sm font-bold text-zinc-400 mb-2">
-                    Final Score: <span className="text-white">{game.final_score_a} - {game.final_score_b}</span>
+                    ትክክለኛ ውጤት: <span className="text-white">{game.final_score_a} - {game.final_score_b}</span>
                   </div>
                   <div className={`p-3 rounded-xl text-sm font-black text-white ${userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? 'bg-green-600/80 border border-green-500' : 'bg-red-900/50 border border-red-800 text-red-200'}`}>
                     {userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b 
-                      ? "🎉 WINNER (አሸናፊ)!" 
-                      : `You guessed: ${userPred.predicted_score_a} - ${userPred.predicted_score_b} ❌`}
+                      ? "🎉 አሸናፊ!" 
+                      : `የእርስዎ ግምት: ${userPred.predicted_score_a} - ${userPred.predicted_score_b} ❌`}
                   </div>
                 </div>
               )}
@@ -830,7 +953,6 @@ export default function App() {
         </div>
       )}
 
-      {/* GAMES DASHBOARD TAB */}
       {adminTab === "games" && (
         <div className="space-y-8 pb-20">
           <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
@@ -869,7 +991,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ORIGINAL POSTS & PRODUCTS FORMS */}
       {adminTab !== "games" && (
         <form onSubmit={handleAdminSubmit} className="space-y-4 pb-20">
           {adminTab === "posts" && (
@@ -967,12 +1088,12 @@ export default function App() {
 
           {adminTab === "products" && (
             <>
-              <input required value={formData.title || ""} placeholder="የእቃው ስም (Product Name)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
+              <input required value={formData.title || ""} placeholder="የእቃው ስም" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
               <input value={formData.brand || ""} placeholder="ምልክት (Brand - e.g. NIKE)" onChange={(e) => setFormData({ ...formData, brand: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
               
               <div className="grid grid-cols-2 gap-4">
-                <input required value={formData.price || ""} type="number" placeholder="ዋጋ (Price)" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ (Optional)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                <input required value={formData.price || ""} type="number" placeholder="ዋጋ" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -993,7 +1114,7 @@ export default function App() {
               
               <div className="relative">
                 <button type="button" onClick={() => setShowSizeDropdown(!showSizeDropdown)} className="w-full bg-zinc-900 border border-zinc-800 text-left p-4 rounded-xl focus:border-amber-500 text-zinc-400 flex justify-between items-center transition-colors">
-                  <span>መጠኖች ይምረጡ (Sizes) {formData.options?.length > 0 && <span className="text-amber-500 font-bold ml-1">({formData.options.length})</span>}</span>
+                  <span>መጠኖች ይምረጡ {formData.options?.length > 0 && <span className="text-amber-500 font-bold ml-1">({formData.options.length})</span>}</span>
                   <span>{showSizeDropdown ? "▲" : "▼"}</span>
                 </button>
                 
@@ -1007,20 +1128,20 @@ export default function App() {
                         </label>
                       ))}
                     </div>
-                    <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-bold py-2 rounded-lg transition-colors">Done (ጨርስ)</button>
+                    <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-bold py-2 rounded-lg transition-colors">Done</button>
                   </div>
                 )}
               </div>
 
               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                 <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች (Product Images)</label>
+                 <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች</label>
                  <input type="file" multiple accept="image/*" onChange={(e) => setProductImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
               </div>
             </>
           )}
           
           <button disabled={uploading} type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-4 transition-colors">
-            {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል (Update)" : "አትም (Publish)")}
+            {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል" : "አትም")}
           </button>
         </form>
       )}
@@ -1045,16 +1166,18 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center space-x-3">
-          <a href="https://t.me/goleth_app_bot" target="_blank" rel="noreferrer" className="text-zinc-400 font-bold text-sm hover:text-amber-500 px-3 border-r border-zinc-800 transition-colors">
+          
+          {/* REPLACE 'YourTelegramUsername' WITH YOUR ACTUAL USERNAME HERE */}
+          <a href="https://t.me/YourTelegramUsername" target="_blank" rel="noreferrer" className="text-zinc-400 font-bold text-sm hover:text-amber-500 px-3 border-r border-zinc-800 transition-colors">
             ያግኙን
           </a>
+          
           {isCEO && (
             <button onClick={() => { openNewPost("posts"); setShowAdmin(true); }} className="bg-amber-500 text-black px-3 py-1.5 rounded-full font-bold text-xs shadow-lg shadow-amber-500/20">
               CEO
             </button>
           )}
           
-          {/* UPDATED LOGIN BUTTON HERE */}
           <button onClick={() => { setActiveTab("ቪአይፒ"); if(activePost) window.history.back(); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
             {currentUser ? "የእኔ VIP" : "ይግቡ"}
           </button>
