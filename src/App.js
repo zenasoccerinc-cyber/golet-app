@@ -34,6 +34,7 @@ export default function App() {
   const [isCEO, setIsCEO] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false); // NEW: Success Modal State
   
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
@@ -65,7 +66,7 @@ export default function App() {
   
   // Checkout States
   const [checkoutStep, setCheckoutStep] = useState("ክፍያ"); 
-  const [paymentType, setPaymentType] = useState("ሀገር ውስጥ"); // Default to Local
+  const [paymentType, setPaymentType] = useState("ሀገር ውስጥ"); 
   const [vipPhone, setVipPhone] = useState("");
   
   const telegramWrapperRef = useRef(null); 
@@ -168,6 +169,7 @@ export default function App() {
       receiptUrl = await uploadFileToSupabase(file);
     }
 
+    // 1. Insert into Database
     const { error: dbError } = await supabase.from("vip_payments").insert([
       {
         telegram_id: currentUser?.id,
@@ -184,19 +186,36 @@ export default function App() {
       return;
     }
 
-    const tgMessage = `👑 *አዲስ የVIP አባልነት ክፍያ ደርሷል!*\n\n👤 *ስም:* ${fullName}\n📞 *ስልክ:* ${vipPhone}\n💳 *የክፍያ አይነት:* ${paymentType}\n🖼️ *የደረሰኝ ሊንክ:* ${receiptUrl}`;
+    // 2. Send Telegram to Admin (You)
+    const adminMsg = `👑 *አዲስ የVIP አባልነት ክፍያ ደርሷል!*\n\n👤 *ስም:* ${fullName}\n📞 *ስልክ:* ${vipPhone}\n💳 *የክፍያ አይነት:* ${paymentType}\n🖼️ *የደረሰኝ ሊንክ:* ${receiptUrl}`;
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: tgMessage, parse_mode: "Markdown" })
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "Markdown" })
       });
     } catch (err) {
-      console.log("Telegram notification error", err);
+      console.log("Admin Telegram Error", err);
+    }
+
+    // 3. Send Telegram directly to the User!
+    const userMsg = `🎉 *ክፍያዎ በተሳካ ሁኔታ ደርሶናል!*\n\nውድ ${fullName}፣ የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\n\n- ጎሌት (Goleth)`;
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "Markdown" })
+      });
+    } catch (err) {
+      console.log("User Telegram Error", err);
     }
 
     setUploading(false);
-    setCheckoutStep("ስኬት");
+    
+    // 4. Redirect Home and Show Card
+    setActiveTab("ዋና");
+    window.scrollTo(0,0);
+    setShowSuccessModal(true);
   };
 
   const submitPrediction = async (gameId) => {
@@ -446,7 +465,6 @@ export default function App() {
     alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
-  // --- UPDATED SOURCING ORDER SUBMIT ---
   const submitOrderForm = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -492,7 +510,25 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- UPDATED SOURCING ORDER FORM UI ---
+  // --- SUCCESS MODAL UI ---
+  const renderSuccessModal = () => (
+    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in zoom-in duration-200 justify-center">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 relative shadow-2xl max-w-md mx-auto w-full text-center">
+        <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors">
+          <X className="text-white w-5 h-5" />
+        </button>
+        <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
+        <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
+        <p className="text-zinc-300 text-sm leading-loose mb-8">
+          የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የቪአይፒ (VIP) መዳረሻዎ ይከፈታል። ማረጋገጫ በቴሌግራም መልዕክት ልከንልዎታል።
+        </p>
+        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-2xl transition-colors text-lg shadow-lg">
+          እሺ (OK)
+        </button>
+      </div>
+    </div>
+  );
+
   const renderOrderForm = () => (
     <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-4 animate-in fade-in zoom-in duration-200 justify-center">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 relative shadow-2xl max-w-md mx-auto w-full">
@@ -887,21 +923,11 @@ export default function App() {
                   <button type="submit" disabled={uploading || vipPhone.length !== 10} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
                     {uploading ? "በመጫን ላይ..." : "ላክ"}
                   </button>
+                  <p className="text-[10px] text-zinc-500 text-center">ማሳሰቢያ: የ"ላክ" ቁልፍ የሚበራው ባለ 10 አሃዝ ስልክ ቁጥር በትክክል ሲያስገቡ ነው።</p>
                 </form>
               )}
             </div>
           )}
-
-          {checkoutStep === "ስኬት" && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md mx-auto shadow-2xl text-center mb-8 animate-in zoom-in-95 duration-200">
-              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 text-2xl font-black">✓</div>
-              <h2 className="text-xl font-black text-white mb-4">መረጃዎ እና ክፍያዎ ደርሶናል!</h2>
-              <p className="text-zinc-400 text-sm leading-loose">
-                ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ ሙሉ መዳረሻ ያገኛሉ።
-              </p>
-            </div>
-          )}
-
           {renderBlurGames()}
         </div>
       );
@@ -1223,6 +1249,7 @@ export default function App() {
         )}
       </main>
 
+      {showSuccessModal && renderSuccessModal()}
       {showOrderForm && renderOrderForm()}
       {showAdmin && renderAdmin()}
 
