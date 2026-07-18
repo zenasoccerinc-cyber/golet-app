@@ -11,7 +11,8 @@ import {
   Edit2,
   ChevronLeft,
   PlusCircle,
-  Send
+  Send,
+  ChevronRight
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,6 +31,13 @@ export default function App() {
   
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
+
+  // Shopping States
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
+  const [checkoutProduct, setCheckoutProduct] = useState(null);
+  const [orderAddress, setOrderAddress] = useState("");
 
   const [isCEO, setIsCEO] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -51,7 +59,6 @@ export default function App() {
   const [productImageFiles, setProductImageFiles] = useState([]);
   
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
-  // NEW: Track which size category is expanded in the CEO menu
   const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
   const [posts, setPosts] = useState([]);
@@ -72,10 +79,10 @@ export default function App() {
   const [vipPhone, setVipPhone] = useState("");
   
   const telegramWrapperRef = useRef(null); 
+  const telegramCheckoutRef = useRef(null);
 
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
-  // NEW: Categorized options for CEO ease of use
   const categorizedOptions = {
     "ጫማ (Shoes)": ["38", "39", "40", "41", "42", "43", "44", "45"],
     "የልጆች ልብስ (Kids Clothing)": ["Kids 0-3m", "Kids 3-6m", "Kids 6-12m", "Kids 1-2Y", "Kids 2-4Y", "Kids 4-6Y", "Kids 6-8Y", "Kids 8-10Y", "Kids 10-12Y"],
@@ -88,20 +95,20 @@ export default function App() {
   useEffect(() => {
     fetchData();
     fetchGames(); 
-    const handlePopState = () => setActivePost(null);
+    const handlePopState = () => {
+       setActivePost(null);
+       setSelectedProduct(null);
+       setCheckoutProduct(null);
+    };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Telegram Widget Injection
+  // Telegram Widget Injection for VIP Tab
   useEffect(() => {
     if (activeTab === "ቪአይፒ" && !currentUser && telegramWrapperRef.current) {
       if (telegramWrapperRef.current.innerHTML !== '') return; 
-
-      window.onTelegramAuth = (user) => {
-        handleTelegramLogin(user);
-      };
-
+      window.onTelegramAuth = (user) => { handleTelegramLogin(user); };
       const script = document.createElement("script");
       script.src = "https://telegram.org/js/telegram-widget.js?22";
       script.setAttribute("data-telegram-login", "goleth_app_bot");
@@ -109,10 +116,25 @@ export default function App() {
       script.setAttribute("data-request-access", "write");
       script.setAttribute("data-onauth", "onTelegramAuth(user)");
       script.async = true;
-
       telegramWrapperRef.current.appendChild(script);
     }
   }, [activeTab, currentUser]);
+
+  // Telegram Widget Injection for Checkout
+  useEffect(() => {
+    if (checkoutProduct && !currentUser && telegramCheckoutRef.current) {
+      if (telegramCheckoutRef.current.innerHTML !== '') return; 
+      window.onTelegramAuth = (user) => { handleTelegramLogin(user); };
+      const script = document.createElement("script");
+      script.src = "https://telegram.org/js/telegram-widget.js?22";
+      script.setAttribute("data-telegram-login", "goleth_app_bot");
+      script.setAttribute("data-size", "large");
+      script.setAttribute("data-request-access", "write");
+      script.setAttribute("data-onauth", "onTelegramAuth(user)");
+      script.async = true;
+      telegramCheckoutRef.current.appendChild(script);
+    }
+  }, [checkoutProduct, currentUser]);
 
   const fetchData = async () => {
     try {
@@ -155,6 +177,17 @@ export default function App() {
     }
   };
 
+  const uploadFileToSupabase = async (file) => {
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
+    if (!uploadError) {
+      const { data } = supabase.storage.from("images").getPublicUrl(fileName);
+      return data.publicUrl;
+    }
+    return null;
+  };
+
   const handleVipPaymentSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -174,13 +207,7 @@ export default function App() {
     }
 
     const { error: dbError } = await supabase.from("vip_payments").insert([
-      {
-        telegram_id: currentUser?.id,
-        full_name: fullName,
-        phone_number: vipPhone,
-        payment_type: paymentType,
-        receipt_url: receiptUrl
-      }
+      { telegram_id: currentUser?.id, full_name: fullName, phone_number: vipPhone, payment_type: paymentType, receipt_url: receiptUrl }
     ]);
 
     if (dbError) {
@@ -190,29 +217,72 @@ export default function App() {
     }
 
     const adminMsg = `👑 *አዲስ የVIP አባልነት ክፍያ ደርሷል!*\n\n👤 *ስም:* ${fullName}\n📞 *ስልክ:* ${vipPhone}\n💳 *የክፍያ አይነት:* ${paymentType}\n🖼️ *የደረሰኝ ሊንክ:* ${receiptUrl}`;
-    try {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "Markdown" })
-      });
-    } catch (err) {
-      console.log("Admin Telegram Error", err);
-    }
-
     const userMsg = `🎉 *ክፍያዎ በተሳካ ሁኔታ ደርሶናል!*\n\nውድ ${fullName}፣ የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\n\n- ጎሌት (Goleth)`;
+    
     try {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "Markdown" })
-      });
-    } catch (err) {
-      console.log("User Telegram Error", err);
-    }
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "Markdown" }) });
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "Markdown" }) });
+    } catch (err) { console.log(err); }
 
     setUploading(false);
     setActiveTab("ዋና");
+    window.scrollTo(0,0);
+    setShowSuccessModal(true);
+  };
+
+  const handleProductOrderSubmit = async (e) => {
+    e.preventDefault();
+    setUploading(true);
+
+    const fullName = e.target.fullName.value;
+    const file = e.target.receiptFile.files[0];
+    const finalPrice = checkoutProduct.vip_price && isVIP ? checkoutProduct.vip_price : checkoutProduct.price;
+
+    if (vipPhone.length !== 10) {
+      alert("እባክዎ ትክክለኛ ባለ 10 አሃዝ ስልክ ቁጥር ያስገቡ።");
+      setUploading(false);
+      return;
+    }
+
+    let receiptUrl = "";
+    if (file) {
+      receiptUrl = await uploadFileToSupabase(file);
+    }
+
+    const { error: dbError } = await supabase.from("product_orders").insert([
+      { 
+        telegram_id: currentUser.id, 
+        full_name: fullName, 
+        phone_number: vipPhone, 
+        delivery_address: orderAddress,
+        product_id: checkoutProduct.id,
+        product_name: checkoutProduct.name,
+        selected_option: selectedOption || "N/A",
+        price: finalPrice,
+        payment_type: paymentType, 
+        receipt_url: receiptUrl 
+      }
+    ]);
+
+    if (dbError) {
+      alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
+      setUploading(false);
+      return;
+    }
+
+    const adminMsg = `🛍 *አዲስ የእቃ ትዕዛዝ!*\n\n👤 *ስም:* ${fullName}\n📞 *ስልክ:* ${vipPhone}\n📍 *አድራሻ:* ${orderAddress}\n📦 *እቃ:* ${checkoutProduct.name}\n📏 *አማራጭ:* ${selectedOption || "N/A"}\n💰 *ዋጋ:* ${finalPrice} ብር\n💳 *ክፍያ:* ${paymentType}\n🖼️ *ደረሰኝ:* ${receiptUrl}`;
+    const userMsg = `🎉 *ትዕዛዝዎ ደርሶናል!*\n\nውድ ${fullName}፣ ለ ${checkoutProduct.name} የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል።\n\n- ጎሌት (Goleth)`;
+    
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "Markdown" }) });
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "Markdown" }) });
+    } catch (err) { console.log(err); }
+
+    setUploading(false);
+    setCheckoutProduct(null);
+    setSelectedProduct(null);
+    setSelectedOption(null);
+    setActiveTab("ሱቅ");
     window.scrollTo(0,0);
     setShowSuccessModal(true);
   };
@@ -283,11 +353,18 @@ export default function App() {
     setActivePost(post);
   };
 
+  const openProduct = (prod) => {
+    window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`);
+    setSelectedProduct(prod);
+    setCurrentImgIndex(0);
+    setSelectedOption(null);
+  };
+
   const handleDelete = async (table, id) => {
     if (window.confirm("እርግጠኛ ነዎት?")) {
       await supabase.from(table).delete().eq("id", id);
       if (table === "games") fetchGames(); else fetchData();
-      if (activePost) window.history.back();
+      if (activePost || selectedProduct) window.history.back();
     }
   };
 
@@ -361,31 +438,13 @@ export default function App() {
   const handleAddRelated = (e) => {
     const value = e.target.value;
     if (!value) return;
-    
     if (!formData.relatedLinks?.includes(value)) {
-      setFormData(prev => ({
-        ...prev,
-        relatedLinks: [...(prev.relatedLinks || []), value]
-      }));
+      setFormData(prev => ({ ...prev, relatedLinks: [...(prev.relatedLinks || []), value] }));
     }
   };
 
   const removeRelated = (linkToRemove) => {
-    setFormData(prev => ({
-      ...prev,
-      relatedLinks: prev.relatedLinks.filter(l => l !== linkToRemove)
-    }));
-  };
-
-  const uploadFileToSupabase = async (file) => {
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
-    if (!uploadError) {
-      const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-      return data.publicUrl;
-    }
-    return null;
+    setFormData(prev => ({ ...prev, relatedLinks: prev.relatedLinks.filter(l => l !== linkToRemove) }));
   };
 
   const handleAdminSubmit = async (e) => {
@@ -426,11 +485,9 @@ export default function App() {
         image_urls: finalUrls
       };
 
-      if (editId) {
-        await supabase.from("posts").update(payload).eq("id", editId);
-      } else {
-        await supabase.from("posts").insert([payload]);
-      }
+      if (editId) { await supabase.from("posts").update(payload).eq("id", editId); } 
+      else { await supabase.from("posts").insert([payload]); }
+
     } else if (adminTab === "products") {
       if (productImageFiles.length > 0) {
         for (const file of productImageFiles) {
@@ -450,11 +507,8 @@ export default function App() {
       };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
 
-      if (editId) {
-        await supabase.from("products").update(payload).eq("id", editId);
-      } else {
-        await supabase.from("products").insert([payload]);
-      }
+      if (editId) { await supabase.from("products").update(payload).eq("id", editId); } 
+      else { await supabase.from("products").insert([payload]); }
     }
 
     setFormData({ options: [], relatedLinks: [] });
@@ -496,17 +550,13 @@ export default function App() {
        if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    const message = `🛍 *አዲስ የእቃ ማዘዣ!*\n\n👤 *ስም:* ${name}\n📞 *ስልክ:* ${phone}\n📦 *የእቃው ስም:* ${productName || "አልተገለጸም"}\n🏪 *የሱቁ ስም:* ${storeName || "አልተገለጸም"}\n🔗 *ሊንክ:* ${productLink || "አልተገለጸም"}\n🚚 *አቅርቦት:* ${shipping}\n🖼️ *ምስል:* ${imageUrl}`;
+    const message = `🛍 *አዲስ ልዩ የእቃ ማዘዣ!*\n\n👤 *ስም:* ${name}\n📞 *ስልክ:* ${phone}\n📦 *የእቃው ስም:* ${productName || "አልተገለጸም"}\n🏪 *የሱቁ ስም:* ${storeName || "አልተገለጸም"}\n🔗 *ሊንክ:* ${productLink || "አልተገለጸም"}\n🚚 *አቅርቦት:* ${shipping}\n🖼️ *ምስል:* ${imageUrl}`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "Markdown" })
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "Markdown" })
       });
-    } catch (err) {
-      console.log("Telegram Error", err);
-    }
+    } catch (err) { console.log(err); }
 
     setUploading(false);
     alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!");
@@ -526,7 +576,7 @@ export default function App() {
         <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
         <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
         <p className="text-zinc-300 text-sm leading-loose mb-8">
-          የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የቪአይፒ (VIP) መዳረሻዎ ይከፈታል። ማረጋገጫ በቴሌግራም መልዕክት ልከንልዎታል።
+          የክፍያ ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል። ማረጋገጫ በቴሌግራም መልዕክት ልከንልዎታል።
         </p>
         <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-2xl transition-colors text-lg shadow-lg">
           እሺ (OK)
@@ -542,7 +592,7 @@ export default function App() {
           <X className="text-white w-5 h-5" />
         </button>
         <h2 className="text-2xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ</h2>
-        <p className="text-zinc-300 text-sm mb-6">ምን ማምጣት እንድንልዎት ይፈልጋሉ? ከታች ካሉት አማራጮች ቢያንስ አንዱን (ስም፣ ሊንክ ወይም ምስል) ያስገቡ።</p>
+        <p className="text-zinc-300 text-sm mb-6">ምን ማምጣት እንድንልዎት ይፈልጋሉ? ከታች ካሉት አማራጮች ቢያንስ አንዱን ያስገቡ።</p>
         
         <form onSubmit={submitOrderForm} className="space-y-4">
           <input required name="name" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
@@ -587,7 +637,6 @@ export default function App() {
 
   const renderBodyWithImages = (text, urls) => {
     if (!text) return null;
-    
     const regex = /\[image\s*(\d+)\]/gi;
     const parts = [];
     let lastIndex = 0;
@@ -597,18 +646,13 @@ export default function App() {
       if (match.index > lastIndex) {
         parts.push(text.substring(lastIndex, match.index));
       }
-      
       const imgNumber = parseInt(match[1], 10);
       if (urls && urls[imgNumber]) {
          parts.push(<img key={match.index} src={urls[imgNumber]} alt="Article Content" className="w-full h-auto rounded-xl my-6 shadow-lg object-cover border border-zinc-800" />);
       }
-      
       lastIndex = regex.lastIndex;
     }
-
-    if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
-    }
+    if (lastIndex < text.length) { parts.push(text.substring(lastIndex)); }
 
     return (
       <div className="text-zinc-300 text-sm leading-loose whitespace-pre-wrap">
@@ -641,7 +685,7 @@ export default function App() {
         if (!p) return null;
         const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
         return (
-          <div key={`prod_${p.id}`} onClick={() => { setActivePost(null); setActiveTab('ሱቅ'); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-amber-500/50 hover:border-amber-500 cursor-pointer flex flex-col items-center p-3 relative transition-colors">
+          <div key={`prod_${p.id}`} onClick={() => { setActivePost(null); openProduct(p); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-amber-500/50 hover:border-amber-500 cursor-pointer flex flex-col items-center p-3 relative transition-colors">
              <span className="absolute top-0 right-0 bg-amber-500 text-black text-[9px] font-black px-2 py-0.5 rounded-bl-lg z-10">ወደ ሱቅ</span>
              {img && <img src={img} alt={p.name} className="h-20 object-contain mb-2 drop-shadow-md" />}
              <h4 className="text-white text-xs font-bold line-clamp-1 text-center w-full">{p.name}</h4>
@@ -702,6 +746,192 @@ export default function App() {
     </div>
   );
 
+  const renderProductDetail = () => {
+    if (!selectedProduct) return null;
+    const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
+    const finalPrice = selectedProduct.vip_price && isVIP ? selectedProduct.vip_price : selectedProduct.price;
+
+    return (
+      <div className="fixed inset-0 z-50 bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
+        <div className="sticky top-0 z-10 flex justify-between items-center p-4">
+          <button onClick={() => window.history.back()} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white hover:text-amber-500 transition-colors">
+            <ChevronLeft size={24} />
+          </button>
+          {isCEO && (
+             <div className="flex space-x-2">
+               <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white"><Edit2 size={18} /></button>
+               <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-red-500"><Trash2 size={18} /></button>
+             </div>
+          )}
+        </div>
+
+        {hasImages ? (
+          <div className="relative w-full h-[50vh] bg-white flex items-center justify-center -mt-16 pt-16">
+            <img src={selectedProduct.image_urls[currentImgIndex]} alt={selectedProduct.name} className="max-h-full object-contain p-8 mix-blend-multiply" />
+            
+            {selectedProduct.image_urls.length > 1 && (
+              <>
+                <button onClick={() => setCurrentImgIndex(prev => prev > 0 ? prev - 1 : selectedProduct.image_urls.length - 1)} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-black/5 rounded-full hover:bg-black/10 transition-colors"><ChevronLeft size={24} className="text-black" /></button>
+                <button onClick={() => setCurrentImgIndex(prev => prev < selectedProduct.image_urls.length - 1 ? prev + 1 : 0)} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-black/5 rounded-full hover:bg-black/10 transition-colors"><ChevronRight size={24} className="text-black" /></button>
+                <div className="absolute bottom-4 flex space-x-2">
+                  {selectedProduct.image_urls.map((_, idx) => (
+                    <div key={idx} onClick={() => setCurrentImgIndex(idx)} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === currentImgIndex ? 'bg-black w-4' : 'bg-gray-300'}`} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="w-full h-[40vh] bg-zinc-900 flex items-center justify-center -mt-16 pt-16">
+             <span className="text-zinc-600 font-bold">ምስል የለም</span>
+          </div>
+        )}
+
+        <div className="p-6">
+          {selectedProduct.category && <div className="inline-block bg-zinc-800 text-zinc-300 text-[10px] font-black px-2 py-1 rounded-md tracking-widest mb-4 uppercase">{selectedProduct.category}</div>}
+          
+          <h1 className="text-2xl font-black text-white mb-1 leading-tight">{selectedProduct.name}</h1>
+          {selectedProduct.brand && <h2 className="text-zinc-400 text-xs font-bold uppercase tracking-widest mb-6">{selectedProduct.brand}</h2>}
+
+          <div className="flex items-end mb-8 space-x-4">
+            {selectedProduct.vip_price ? (
+              <>
+                <div>
+                  <p className="text-zinc-500 text-[10px] font-bold uppercase mb-1">VIP ዋጋ</p>
+                  <p className="text-amber-500 font-black text-3xl leading-none">{selectedProduct.vip_price} <span className="text-lg">ብር</span></p>
+                </div>
+                <div>
+                  <p className="text-zinc-600 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
+                  <p className="text-zinc-400 font-bold text-xl line-through leading-none">{selectedProduct.price} <span className="text-sm">ብር</span></p>
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="text-zinc-500 text-[10px] font-bold uppercase mb-1">ዋጋ</p>
+                <p className="text-white font-black text-3xl leading-none">{selectedProduct.price} <span className="text-lg">ብር</span></p>
+              </div>
+            )}
+          </div>
+
+          {selectedProduct.options && selectedProduct.options.length > 0 && (
+            <div className="mb-8 border-t border-zinc-900 pt-6">
+              <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ</h3>
+                 <span className="text-zinc-500 text-xs">{selectedProduct.options.length} አማራጮች</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {selectedProduct.options.map(opt => (
+                  <button 
+                    key={opt} 
+                    onClick={() => setSelectedOption(opt)} 
+                    className={`py-3 px-1 text-xs font-bold text-center border rounded-lg transition-all ${selectedOption === opt ? 'border-amber-500 text-amber-500 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : 'border-zinc-800 text-zinc-300 bg-zinc-900 hover:border-zinc-600'}`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="fixed bottom-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 p-4 px-6 flex flex-col z-20">
+          {isVIP ? (
+            <p className="text-amber-500 text-[10px] font-black mb-3 text-center tracking-wide uppercase">👑 ቪአይፒ: ነፃ የነገ አቅርቦት</p>
+          ) : (
+            <p className="text-zinc-400 text-[10px] font-bold mb-3 text-center tracking-wide uppercase">መደበኛ አቅርቦት: 3-5 ቀናት</p>
+          )}
+          
+          <button 
+            disabled={selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption}
+            onClick={() => setCheckoutProduct(selectedProduct)} 
+            className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg flex justify-center items-center transition-colors shadow-lg"
+          >
+             ይግዙ
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCheckoutForm = () => {
+    if (!checkoutProduct) return null;
+    const finalPrice = checkoutProduct.vip_price && isVIP ? checkoutProduct.vip_price : checkoutProduct.price;
+
+    return (
+      <div className="fixed inset-0 z-[60] bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
+        <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-black/95 backdrop-blur border-b border-zinc-900">
+          <button onClick={() => setCheckoutProduct(null)} className="p-2 text-zinc-400 hover:text-white transition-colors"><X size={24} /></button>
+          <h2 className="text-white font-black text-lg">ክፍያ እና ማረጋገጫ</h2>
+          <div className="w-10"></div> 
+        </div>
+
+        {!currentUser ? (
+          <div className="p-8 text-center flex flex-col items-center justify-center h-[70vh]">
+            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-6">
+               <Target className="text-amber-500 w-8 h-8" />
+            </div>
+            <h3 className="text-white font-black text-xl mb-3">ለመቀጠል መግባት ያስፈልጋል</h3>
+            <p className="text-zinc-400 text-sm mb-8 leading-relaxed max-w-xs mx-auto">
+              ትዕዛዝዎን በትክክል ለማስኬድ እና መረጃ ለመላክ በቴሌግራም መለያዎ ይግቡ።
+            </p>
+            <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
+          </div>
+        ) : (
+          <div className="p-6 max-w-md mx-auto">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center mb-8">
+               {checkoutProduct.image_urls && checkoutProduct.image_urls[0] ? (
+                 <img src={checkoutProduct.image_urls[0]} alt="product" className="w-16 h-16 object-contain bg-white rounded-lg p-1 mr-4 mix-blend-screen" />
+               ) : <div className="w-16 h-16 bg-zinc-800 rounded-lg mr-4"></div>}
+               <div>
+                  <h3 className="text-white font-bold text-sm leading-tight line-clamp-1 mb-1">{checkoutProduct.name}</h3>
+                  {selectedOption && <p className="text-zinc-400 text-[10px] font-bold mb-1">አማራጭ: {selectedOption}</p>}
+                  <p className="text-amber-500 font-black">{finalPrice} ብር</p>
+               </div>
+            </div>
+
+            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4">የትዕዛዝ መረጃ</h3>
+            <form onSubmit={handleProductOrderSubmit} className="space-y-4">
+              <input required name="fullName" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+              <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
+              <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base"></textarea>
+
+              <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4 mt-8">የክፍያ አማራጭ</h3>
+              <div className="flex space-x-2 mb-4">
+                <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ ባንክ</button>
+                <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ክፍያ</button>
+              </div>
+
+              {paymentType === "ሀገር ውስጥ" && (
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 text-sm text-zinc-300 space-y-2 mb-6">
+                  <p className="font-black text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
+                  <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
+                  <p>አካውንት ቁጥር: <span className="text-amber-500 font-mono font-black text-lg ml-2">1000123456789</span></p>
+                  <p className="text-xs text-zinc-500 mt-2">ገንዘቡን ካስገቡ በኋላ ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
+                </div>
+              )}
+
+              {paymentType === "ዳያስፖራ" && (
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 text-sm text-zinc-300 space-y-2 mb-6">
+                  <p className="font-black text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
+                  <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg ml-2">demo@goleth.com</span></p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-white text-sm font-bold mb-3">የክፍያ ማረጋገጫ (ደረሰኝ)፦</label>
+                <input required type="file" name="receiptFile" accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-3 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 transition-colors bg-black border border-zinc-800 rounded-xl p-2" />
+              </div>
+              
+              <button type="submit" disabled={uploading || vipPhone.length !== 10} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6">
+                {uploading ? "በመላክ ላይ..." : "ትዕዛዝ አረጋግጥ"}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderPostFeed = () => {
     const filteredPosts = activeTab === "ዋና" ? posts : posts.filter(p => p.category === activeTab);
 
@@ -721,7 +951,6 @@ export default function App() {
           
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
-
             if (index === 0) {
               return (
                 <div key={post.id} onClick={() => openPost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2 hover:border-zinc-700 transition-colors">
@@ -734,7 +963,6 @@ export default function App() {
                 </div>
               );
             }
-            
             if (index > 0 && index <= 4) {
               return (
                 <div key={post.id} onClick={() => openPost(post)} className="col-span-1 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col hover:border-zinc-700 transition-colors">
@@ -746,7 +974,6 @@ export default function App() {
                 </div>
               );
             }
-            
             return (
               <div key={post.id} onClick={() => openPost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3 mb-1 hover:border-zinc-700 transition-colors">
                 {firstImg && <img src={firstImg} alt={post.title} className="w-36 shrink-0 aspect-[1.91/1] object-cover rounded-lg border border-zinc-800" />}
@@ -798,52 +1025,35 @@ export default function App() {
          </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 mt-2">
           {filtered.map((item) => (
-            <div key={item.id} className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex flex-col relative group">
-              
-              {isCEO && (
-                <div className="absolute top-2 right-2 flex space-x-1 z-10">
-                  <button onClick={() => handleEdit("products", item)} className="bg-zinc-800 border border-zinc-700 p-1.5 rounded-md shadow">
-                    <Edit2 size={14} className="text-white" />
-                  </button>
-                  <button onClick={() => handleDelete("products", item.id)} className="bg-red-900/50 border border-red-900 p-1.5 rounded-md shadow">
-                    <Trash2 size={14} className="text-red-400" />
-                  </button>
-                </div>
-              )}
-              {item.category && <div className="absolute top-0 left-0 bg-amber-500 text-black text-[10px] font-black px-3 py-1 rounded-br-lg z-10 tracking-widest shadow-md">ነፃ ትራንስፖርት</div>}
-              
-              <div className="bg-white pt-8 pb-4 px-2 flex overflow-x-auto snap-x no-scrollbar">
+            <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full">
+              <div className="bg-white rounded-2xl p-4 mb-3 h-48 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02]">
+                 {isCEO && (
+                    <div className="absolute top-2 right-2 flex space-x-1 z-10">
+                      <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={14}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={14}/></button>
+                    </div>
+                 )}
                  {item.image_urls && item.image_urls.length > 0 ? (
-                   item.image_urls.map((img, i) => <img key={i} src={img} alt={item.name} className="h-28 object-contain flex-shrink-0 snap-center mr-2 drop-shadow-sm" />)
-                 ) : <div className="h-28" />}
+                    <img src={item.image_urls[0]} alt={item.name} className="max-h-full object-contain mix-blend-multiply" />
+                 ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
               </div>
-
-              <div className="p-4 flex flex-col flex-grow">
-                <p className="text-white font-black text-lg">{item.price} ብር</p>
-                {item.vip_price && <p className="text-amber-500 font-bold text-xs mt-1 mb-3 flex items-center">👑 VIP: {item.vip_price} ብር</p>}
-                
-                <h3 className="text-zinc-300 font-bold text-sm mb-1 leading-tight">{item.name}</h3>
-                {item.brand && <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-2">{item.brand}</p>}
-                
-                {item.options && item.options.length > 0 && (
-                  <p className="text-zinc-400 text-[11px] font-bold mt-1 mb-2">
-                    {item.options.length} አማራጮች (Options)
-                  </p>
-                )}
-
-                <div className="mt-auto pt-2 border-t border-zinc-800/50">
-                  {isVIP ? (
-                    <p className="text-amber-500 text-[10px] font-black mb-3">👑 ቪአይፒ: ነፃ የነገ አቅርቦት</p>
-                  ) : (
-                    <p className="text-zinc-400 text-[10px] font-bold mb-3">መደበኛ አቅርቦት: 3-5 ቀናት</p>
-                  )}
-                  
-                  <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-sm flex justify-center items-center transition-colors shadow-lg shadow-amber-500/10">
-                    <ShoppingBag size={16} className="mr-2" /> ወደ ቅርጫት ጨምር
-                  </a>
-                </div>
+              
+              <div className="px-1 flex flex-col flex-grow">
+                 {item.vip_price ? (
+                    <p className="text-amber-500 font-black text-xl leading-none mb-1.5">{item.vip_price} ብር <span className="text-zinc-600 text-[10px] line-through ml-1 font-bold">{item.price} ብር</span></p>
+                 ) : (
+                    <p className="text-white font-black text-xl leading-none mb-1.5">{item.price} ብር</p>
+                 )}
+                 <p className="text-zinc-300 font-black text-[11px] tracking-widest uppercase mb-1 line-clamp-1">{item.brand}</p>
+                 <h3 className="text-zinc-500 font-bold text-xs line-clamp-2 leading-snug">{item.name}</h3>
+                 
+                 <div className="mt-auto pt-2">
+                   {item.options && item.options.length > 0 && (
+                      <p className="text-zinc-600 font-bold text-[10px]">{item.options.length} አማራጮች (Options)</p>
+                   )}
+                 </div>
               </div>
             </div>
           ))}
@@ -1263,9 +1473,9 @@ export default function App() {
       </header>
 
       <main className="p-4 max-w-lg mx-auto">
-        {activePost ? (
-          renderSinglePost()
-        ) : (
+        {activePost && !selectedProduct && renderSinglePost()}
+        
+        {!activePost && !selectedProduct && (
           <>
             {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderPostFeed()}
             {activeTab === "ቪአይፒ" && renderVIP()}
@@ -1273,6 +1483,9 @@ export default function App() {
           </>
         )}
       </main>
+
+      {renderProductDetail()}
+      {renderCheckoutForm()}
 
       {showSuccessModal && renderSuccessModal()}
       {showOrderForm && renderOrderForm()}
@@ -1285,7 +1498,7 @@ export default function App() {
           return (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); if(activePost) window.history.back(); window.scrollTo(0,0); }}
+              onClick={() => { setActiveTab(tab.id); setActivePost(null); setSelectedProduct(null); window.scrollTo(0,0); }}
               className={`flex flex-col items-center p-2 transition-colors ${isActive ? "text-amber-500" : "text-zinc-600 hover:text-zinc-400"}`}
             >
               <Icon size={24} strokeWidth={isActive ? 2.5 : 2} className="mb-1" />
