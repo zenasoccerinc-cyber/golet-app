@@ -239,16 +239,25 @@ export default function App() {
     e.preventDefault();
     setUploading(true);
 
-    const finalPrice = checkoutProduct.vip_price && isVIP ? checkoutProduct.vip_price : checkoutProduct.price;
+    const shippingSpeed = e.target.shippingSpeed.value;
+    const basePrice = checkoutProduct.vip_price && isVIP ? checkoutProduct.vip_price : checkoutProduct.price;
+    
+    // Base weight calc (Rounds up to nearest kg for hostess logic)
+    const itemWeight = checkoutProduct.weight_kg || 1.0;
+    const roundedWeight = Math.ceil(itemWeight); 
+    const shippingCostBirr = roundedWeight * 2000;
+    
+    // Calculate final combined price
+    let finalPrice = basePrice + shippingCostBirr; 
+    let orderNotes = shippingSpeed === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard";
 
     let receiptUrl = "";
     if (orderFile) {
       receiptUrl = await uploadFileToSupabase(orderFile);
     }
 
-    const { error: dbError } = await supabase.from("product_orders").insert([
-      { 
-        telegram_id: currentUser.id, 
+    const { error: dbError } = await supabase.from("product_orders").insert([{ 
+        telegram_id: currentUser.id.toString(), 
         full_name: orderName, 
         phone_number: vipPhone, 
         delivery_address: orderAddress,
@@ -257,9 +266,10 @@ export default function App() {
         selected_option: selectedOption || "N/A",
         price: finalPrice,
         payment_type: paymentType, 
-        receipt_url: receiptUrl 
-      }
-    ]);
+        receipt_url: receiptUrl,
+        shipping_speed: shippingSpeed,
+        total_weight_kg: roundedWeight
+      }]);
 
     if (dbError) {
       alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
@@ -267,7 +277,7 @@ export default function App() {
       return;
     }
 
-    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${orderAddress}\n📦 <b>እቃ:</b> ${checkoutProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n💰 <b>ዋጋ:</b> ${finalPrice} ብር\n💳 <b>ክፍያ:</b> ${paymentType}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
+    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${orderAddress}\n📦 <b>እቃ:</b> ${checkoutProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n⚖️ <b>ክብደት:</b> ${roundedWeight} kg\n🚚 <b>ማጓጓዣ:</b> ${shippingSpeed}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር ${orderNotes}\n💳 <b>ክፍያ:</b> ${paymentType}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${checkoutProduct.name} የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል።\n\n- ጎሌት (Goleth)`;
     
     try {
@@ -397,6 +407,7 @@ export default function App() {
         brand: item.brand || "",
         price: item.price,
         vipPrice: item.vip_price || "",
+        weight_kg: item.weight_kg || "",
         shopCat: item.category,
         shopSubCat: item.subcategory || "",
         options: item.options || [],
@@ -502,6 +513,7 @@ export default function App() {
         brand: formData.brand,
         price: Number(formData.price),
         vip_price: formData.vipPrice ? Number(formData.vipPrice) : null,
+        weight_kg: formData.weight_kg ? Number(formData.weight_kg) : 1.0,
         category: formData.shopCat,
         subcategory: formData.shopSubCat,
         options: formData.options,
@@ -529,6 +541,11 @@ export default function App() {
 
   const submitOrderForm = async (e) => {
     e.preventDefault();
+    if (!currentUser) {
+      alert("እባክዎ ትዕዛዝዎን ለመላክ መጀመሪያ በቴሌግራም ይግቡ (ወደ VIP ገጽ ሄደው ይግቡ)።");
+      return;
+    }
+    
     setUploading(true);
 
     const name = e.target.name.value;
@@ -545,13 +562,31 @@ export default function App() {
        return;
     }
 
-    let imageUrl = "ምንም ምስል አልተያያዘም";
+    let imageUrl = "";
     if (imageFile) {
        const uploadedUrl = await uploadFileToSupabase(imageFile);
        if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    const message = `🛍 <b>አዲስ ልዩ የእቃ ማዘዣ!</b>\n\n👤 <b>ስም:</b> ${name}\n📞 <b>ስልክ:</b> ${phone}\n📦 <b>የእቃው ስም:</b> ${productName || "አልተገለጸም"}\n🏪 <b>የሱቁ ስም:</b> ${storeName || "አልተገለጸም"}\n🔗 <b>ሊንክ:</b> ${productLink || "አልተገለጸም"}\n🚚 <b>አቅርቦት:</b> ${shipping}\n🖼️ <b>ምስል:</b> ${imageUrl}`;
+    // Save to the new Supabase table
+    const { error: dbError } = await supabase.from("sourcing_requests").insert([{
+      telegram_id: currentUser.id.toString(),
+      full_name: name,
+      phone_number: phone,
+      product_name: productName || null,
+      store_name: storeName || null,
+      product_link: productLink || null,
+      image_url: imageUrl || null,
+      shipping_speed: shipping
+    }]);
+
+    if (dbError) {
+      alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
+      setUploading(false);
+      return;
+    }
+
+    const message = `🛍 <b>አዲስ ልዩ የእቃ ማዘዣ!</b>\n\n👤 <b>ስም:</b> ${name}\n📞 <b>ስልክ:</b> ${phone}\n📦 <b>የእቃው ስም:</b> ${productName || "አልተገለጸም"}\n🏪 <b>የሱቁ ስም:</b> ${storeName || "አልተገለጸም"}\n🔗 <b>ሊንክ:</b> ${productLink || "አልተገለጸም"}\n🚚 <b>አቅርቦት:</b> ${shipping}\n🖼️ <b>ምስል:</b> ${imageUrl || "ምንም ምስል አልተያያዘም"}`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -875,6 +910,12 @@ export default function App() {
               <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
               <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
               <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base"></textarea>
+
+              <select required name="shippingSpeed" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-4">
+                <option value="">ማጓጓዣ ይምረጡ</option>
+                <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ)</option>
+                <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
+              </select>
 
               <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4 mt-8">የክፍያ አማራጭ</h3>
               <div className="flex space-x-2 mb-4">
@@ -1362,6 +1403,8 @@ export default function App() {
                 <input required value={formData.price || ""} type="number" placeholder="ዋጋ" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
                 <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
               </div>
+              
+              <input value={formData.weight_kg || ""} type="number" step="0.1" placeholder="ክብደት በኪሎግራም (Weight in KG - Default 1.0)" onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
 
               <div className="grid grid-cols-2 gap-4">
                 <select required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
