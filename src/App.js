@@ -1,18 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home,
-  Trophy,
-  Flame,
-  Users,
-  Target,
-  ShoppingBag,
-  X,
-  Trash2,
-  Edit2,
-  ChevronLeft,
-  PlusCircle,
-  Send,
-  ChevronRight
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, ChevronRight, CheckCircle
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -39,7 +27,9 @@ export default function App() {
   const [showInlineCheckout, setShowInlineCheckout] = useState(false);
   const [includeVipSignup, setIncludeVipSignup] = useState(false);
   
-  // Checkout Form States for Validation
+  // Checkout Form States
+  const [userRegion, setUserRegion] = useState("ሀገር ውስጥ");
+  const [checkoutShipping, setCheckoutShipping] = useState("standard");
   const [orderName, setOrderName] = useState("");
   const [orderAddress, setOrderAddress] = useState("");
   const [orderFile, setOrderFile] = useState(null);
@@ -55,14 +45,11 @@ export default function App() {
   
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [], relatedLinks: [] });
-  
   const [existingMainImage, setExistingMainImage] = useState(null);
   const [existingInlineImages, setExistingInlineImages] = useState([]);
-
   const [mainImageFile, setMainImageFile] = useState(null);
   const [inlineImageFiles, setInlineImageFiles] = useState([]);
   const [productImageFiles, setProductImageFiles] = useState([]);
-  
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
@@ -72,6 +59,7 @@ export default function App() {
   // --- VIP & GAMES STATE ---
   const [currentUser, setCurrentUser] = useState(null);
   const [isVIP, setIsVIP] = useState(false);
+  const [vipStatus, setVipStatus] = useState("none"); // none, active, expiring_soon, expired
   const [hasPendingVip, setHasPendingVip] = useState(false);
   const [games, setGames] = useState([]);
   const [userPredictions, setUserPredictions] = useState({});
@@ -79,9 +67,7 @@ export default function App() {
   const [newGame, setNewGame] = useState({ team_a: '', team_b: '', team_a_logo: '', team_b_logo: '' });
   const [scoresToUpdate, setScoresToUpdate] = useState({});
   
-  // Checkout States
-  const [checkoutStep, setCheckoutStep] = useState("ክፍያ"); 
-  const [paymentType, setPaymentType] = useState("ሀገር ውስጥ"); 
+  const [vipPaymentType, setVipPaymentType] = useState("ሀገር ውስጥ"); 
   const [vipPhone, setVipPhone] = useState("");
   const [vipReceiptFile, setVipReceiptFile] = useState(null);
   
@@ -111,7 +97,6 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Telegram Widget Injection for VIP Tab
   useEffect(() => {
     if (activeTab === "ቪአይፒ" && !currentUser && telegramWrapperRef.current) {
       if (telegramWrapperRef.current.innerHTML !== '') return; 
@@ -127,7 +112,6 @@ export default function App() {
     }
   }, [activeTab, currentUser]);
 
-  // Telegram Widget Injection for Checkout
   useEffect(() => {
     if (showInlineCheckout && !currentUser && telegramCheckoutRef.current) {
       if (telegramCheckoutRef.current.innerHTML !== '') return; 
@@ -178,15 +162,34 @@ export default function App() {
     const { data } = await supabase
       .from('vip_users')
       .upsert([ { telegram_id: telegramUser.id, username: telegramUser.username || telegramUser.first_name } ], { onConflict: 'telegram_id' })
-      .select();
+      .select('*');
 
     if (data && data[0]) {
-      setIsVIP(data[0].is_vip);
+      const userRecord = data[0];
+      let currentStatus = "none";
+      let activeVip = userRecord.is_vip;
+
+      if (userRecord.vip_until) {
+        const now = new Date();
+        const expireDate = new Date(userRecord.vip_until);
+        const gracePeriodDate = new Date(expireDate.getTime() + (2 * 24 * 60 * 60 * 1000)); 
+        
+        if (now > gracePeriodDate) {
+          currentStatus = "expired";
+          activeVip = false; 
+        } else if (now > expireDate) {
+          currentStatus = "expiring_soon"; 
+        } else {
+          currentStatus = "active";
+        }
+      } else if (activeVip) {
+        currentStatus = "active";
+      }
+
+      setIsVIP(activeVip);
+      setVipStatus(currentStatus);
       fetchUserPredictions(telegramUser.id);
       checkPendingVip(telegramUser.id);
-      if (!data[0].is_vip) {
-        setCheckoutStep("ክፍያ");
-      }
     }
   };
 
@@ -207,32 +210,29 @@ export default function App() {
     setUploading(true);
 
     const fullName = e.target.fullName.value;
-
     if (vipPhone.length !== 10 || !vipReceiptFile) {
       alert("እባክዎ መረጃዎችን በትክክል ያስገቡ።");
-      setUploading(false);
-      return;
+      setUploading(false); return;
     }
 
     const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
 
     const { error: dbError } = await supabase.from("vip_payments").insert([
-      { telegram_id: currentUser?.id, full_name: fullName, phone_number: vipPhone, payment_type: paymentType, receipt_url: receiptUrl, status: 'pending' }
+      { telegram_id: currentUser?.id, full_name: fullName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }
     ]);
 
     if (dbError) {
       alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
-      setUploading(false);
-      return;
+      setUploading(false); return;
     }
 
-    const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${fullName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${paymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
+    const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${fullName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${vipPaymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${fullName}፣ የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\nማሳሰቢያ: መልዕክት እንዲደርስዎ @goleth_app_bot ን START ማለቶን ያረጋግጡ።\n\n- ጎሌት (Goleth)`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
-    } catch (err) { console.log(err); }
+    } catch (err) {}
 
     setUploading(false);
     setHasPendingVip(true);
@@ -245,21 +245,19 @@ export default function App() {
     e.preventDefault();
     setUploading(true);
 
-    const shippingSpeed = e.target.shippingSpeed.value;
     const isGettingVipPrice = isVIP || includeVipSignup;
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
-    
-    // Base weight calc (Rounds up to nearest kg for hostess logic)
-    const itemWeight = selectedProduct.weight_kg || 1.0;
-    const roundedWeight = Math.ceil(itemWeight); 
+    const roundedWeight = Math.ceil(selectedProduct.weight_kg || 1.0); 
     const shippingCostBirr = roundedWeight * 2000;
     
-    // Calculate final combined price
     let finalPrice = basePrice + shippingCostBirr; 
-    if (includeVipSignup) finalPrice += (paymentType === "ሀገር ውስጥ" ? 100 : 10);
+    let nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
+    let vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
+    
+    finalPrice = finalPrice + nextDayBirr + vipSignupBirr;
 
-    let orderNotes = shippingSpeed === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard";
-    if (includeVipSignup) orderNotes += " | +VIP Membership Signup";
+    let orderNotes = checkoutShipping === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard";
+    if (includeVipSignup) orderNotes += ` | +VIP Membership Signup (${userRegion})`;
 
     const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
 
@@ -272,26 +270,25 @@ export default function App() {
         product_name: selectedProduct.name,
         selected_option: selectedOption || "N/A",
         price: finalPrice,
-        payment_type: paymentType, 
+        payment_type: userRegion, 
         receipt_url: receiptUrl,
-        shipping_speed: shippingSpeed,
+        shipping_speed: checkoutShipping,
         total_weight_kg: roundedWeight,
-        is_new_vip_signup: includeVipSignup // Marking this in Supabase
+        is_new_vip_signup: includeVipSignup 
       }]);
 
     if (dbError) {
       alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
-      setUploading(false);
-      return;
+      setUploading(false); return;
     }
 
-    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${orderAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n⚖️ <b>ክብደት:</b> ${roundedWeight} kg\n🚚 <b>ማጓጓዣ:</b> ${shippingSpeed}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ:</b> ${paymentType}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
+    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${orderAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n⚖️ <b>ክብደት:</b> ${roundedWeight} kg\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል።\nማሳሰቢያ: መልዕክት እንዲደርስዎ @goleth_app_bot ን START ማለቶን ያረጋግጡ።\n\n- ጎሌት (Goleth)`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
-    } catch (err) { console.log(err); }
+    } catch (err) {}
 
     setUploading(false);
     setShowInlineCheckout(false);
@@ -795,31 +792,41 @@ export default function App() {
     if (!selectedProduct) return null;
     const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
 
-    // INLINE CHECKOUT MERGED HERE
+    // Dynamic Checkout Subtotal Logic
+    const isGettingVipPrice = isVIP || includeVipSignup;
+    const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
+    const roundedWeight = Math.ceil(selectedProduct.weight_kg || 1.0); 
+    const shippingCostBirr = roundedWeight * 2000;
+    const nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
+    const dynamicTotal = basePrice + shippingCostBirr + nextDayBirr + vipSignupBirr;
+
     const inlineCheckoutUI = showInlineCheckout ? (
       <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-5 mt-8 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
         {!currentUser ? (
           <div className="text-center">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto">
-               <Target className="text-amber-500 w-8 h-8" />
-            </div>
+            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
             <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">
-              ትዕዛዝዎን በትክክል ለማስኬድ እና መረጃ ለመላክ በቴሌግራም መለያዎ ይግቡ።
-            </p>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ።</p>
             <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
             <p className="text-xs text-zinc-500 mt-4">ማሳሰቢያ: መልዕክት እንዲደርስዎ የ <a href={`https://t.me/goleth_app_bot`} target="_blank" rel="noreferrer" className="text-amber-500 font-bold">@goleth_app_bot</a> ቦትን Start ያድርጉ።</p>
           </div>
         ) : (
           <form onSubmit={handleProductOrderSubmit} className="space-y-4">
-            <h3 className="text-white font-black text-lg border-b border-zinc-800 pb-2">ክፍያ እና ማረጋገጫ</h3>
+            <h3 className="text-white font-black text-lg border-b border-zinc-800 pb-2 mb-4">የት ነዎት? (Location)</h3>
+            <div className="flex space-x-2 mb-6">
+              <button type="button" onClick={() => setUserRegion("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${userRegion === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ኢትዮጵያ ውስጥ</button>
+              <button type="button" onClick={() => setUserRegion("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${userRegion === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ውጪ ሀገር (Diaspora)</button>
+            </div>
+
+            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4">መረጃዎ</h3>
             
             {!isVIP && selectedProduct.vip_price && (
               <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl flex items-start space-x-3 mb-6">
                 <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
                 <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
-                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+100 ብር)</span>
-                  ይህንን በመጫን የVIP አባልነት ይግዙና እቃውን በVIP ዋጋ ({selectedProduct.vip_price} ብር) ይውሰዱ።
+                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '$10 USD' : '100 ብር'})</span>
+                  ይህንን በመጫን የVIP አባልነት ይግዙና እቃውን በVIP ዋጋ ይውሰዱ።
                 </label>
               </div>
             )}
@@ -828,33 +835,39 @@ export default function App() {
             <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
             <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base"></textarea>
 
-            <select required name="shippingSpeed" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-bold mt-4">
-              <option value="">ማጓጓዣ ይምረጡ</option>
+            <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-bold mt-4">
               <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ)</option>
               <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
             </select>
 
-            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4 mt-8">የክፍያ አማራጭ</h3>
-            <div className="flex space-x-2 mb-4">
-              <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ ባንክ</button>
-              <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ክፍያ</button>
+            <div className="bg-black p-4 rounded-xl border border-zinc-800 text-sm mt-6 mb-6">
+               <h4 className="text-amber-500 font-black mb-3 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር (Payment Summary)</h4>
+               <div className="flex justify-between mb-1"><span className="text-zinc-400">እቃ:</span> <span className="text-white font-bold">{basePrice} ብር</span></div>
+               <div className="flex justify-between mb-1"><span className="text-zinc-400">ትራንስፖርት ({roundedWeight}kg):</span> <span className="text-white font-bold">{shippingCostBirr} ብር</span></div>
+               {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ 850 ብር ($10)</span></div>}
+               {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '850 ብር ($10)' : '100 ብር'}</span></div>}
+               
+               <div className="flex justify-between mt-3 pt-2 border-t border-zinc-800">
+                 <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
+                 <span className="text-amber-500 font-black text-lg">{dynamicTotal} ብር</span>
+               </div>
+
+               <div className="mt-4 bg-zinc-900 p-3 rounded-lg border border-amber-500/20">
+                 {userRegion === "ሀገር ውስጥ" ? (
+                   <>
+                     <p className="font-bold text-amber-500 mb-1">🏦 የባንክ ማስተላለፊያ</p>
+                     <p className="text-zinc-300 text-xs mb-1">የኢትዮጵያ ንግድ ባንክ (CBE)</p>
+                     <p className="text-zinc-300">አካውንት: <span className="text-white font-mono text-lg font-black ml-1">1000123456789</span></p>
+                   </>
+                 ) : (
+                   <>
+                     <p className="font-bold text-amber-500 mb-1">💳 PayPal (Diaspora)</p>
+                     <p className="text-zinc-300">Email: <span className="text-white font-mono text-lg font-black ml-1">demo@goleth.com</span></p>
+                     <p className="text-[10px] text-zinc-500 mt-1">Please convert the Birr total to USD/CAD before sending.</p>
+                   </>
+                 )}
+               </div>
             </div>
-
-            {paymentType === "ሀገር ውስጥ" && (
-              <div className="bg-black p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
-                <p className="font-black text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
-                <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
-                <p>አካውንት ቁጥር: <span className="text-amber-500 font-mono font-black text-lg ml-2">1000123456789</span></p>
-                <p className="text-xs text-zinc-400 mt-2">ገንዘቡን ካስገቡ በኋላ ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
-              </div>
-            )}
-
-            {paymentType === "ዳያስፖራ" && (
-              <div className="bg-black p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
-                <p className="font-black text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
-                <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg ml-2">demo@goleth.com</span></p>
-              </div>
-            )}
 
             <div className="pt-2 border-t border-zinc-800">
               <label className="block text-zinc-400 text-xs font-bold mb-2">⚠️ ክፍያ ከፈጸሙ በኋላ ደረሰኙን እዚህ ያያይዙ፦</label>
@@ -862,7 +875,7 @@ export default function App() {
             </div>
             
             <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6">
-              {uploading ? "በመላክ ላይ..." : "ትዕዛዝ አረጋግጥ"}
+              {uploading ? "በመላክ ላይ..." : "ይዘዙ"}
             </button>
           </form>
         )}
@@ -872,9 +885,7 @@ export default function App() {
     return (
       <div className="fixed inset-0 z-[60] bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
         <div className="sticky top-0 z-10 flex justify-between items-center p-4">
-          <button onClick={() => window.history.back()} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white hover:text-amber-500 transition-colors">
-            <ChevronLeft size={24} />
-          </button>
+          <button onClick={() => window.history.back()} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white"><ChevronLeft size={24} /></button>
           {isCEO && (
              <div className="flex space-x-2">
                <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white"><Edit2 size={18} /></button>
@@ -911,30 +922,45 @@ export default function App() {
           <h1 className="text-2xl font-black text-white mb-1 leading-tight">{selectedProduct.name}</h1>
           {selectedProduct.brand && <h2 className="text-zinc-200 text-sm font-black uppercase tracking-widest mb-6">{selectedProduct.brand}</h2>}
 
-          <div className="flex items-baseline space-x-4 mb-8 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-            <div>
-               <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
-               <p className="text-white font-black text-2xl leading-none">{selectedProduct.price} <span className="text-sm">ብር</span></p>
-            </div>
-            {selectedProduct.vip_price && (
-              <div className="pl-4 border-l border-zinc-800">
-                <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
-                <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
+          {isVIP ? (
+            <div className="flex items-baseline space-x-4 mb-8 bg-zinc-900 p-4 rounded-2xl border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]">
+              <div>
+                 <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 የእርስዎ VIP ዋጋ</p>
+                 <p className="text-amber-500 font-black text-3xl leading-none">{selectedProduct.vip_price || selectedProduct.price} <span className="text-sm">ብር</span></p>
               </div>
-            )}
-          </div>
+              {selectedProduct.vip_price && (
+                <div className="pl-4 border-l border-zinc-800 opacity-50">
+                  <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ</p>
+                  <p className="text-zinc-400 font-black text-lg line-through">{selectedProduct.price} ብር</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-baseline space-x-4 mb-8 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+              <div>
+                 <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
+                 <p className="text-white font-black text-3xl leading-none">{selectedProduct.price} <span className="text-sm">ብር</span></p>
+              </div>
+              {selectedProduct.vip_price && (
+                <div className="pl-4 border-l border-zinc-800">
+                  <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
+                  <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
+                </div>
+              )}
+            </div>
+          )}
 
           {!showInlineCheckout && selectedProduct.options && selectedProduct.options.length > 0 && (
             <div className="mb-8 border-t border-zinc-900 pt-6">
               <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ</h3>
+                 <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
                  <span className="text-zinc-300 text-xs font-bold">{selectedProduct.options.length} አማራጮች</span>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedProduct.options.map(opt => (
                   <button 
                     key={opt} 
-                    onClick={() => setSelectedOption(opt)} 
+                    onClick={() => { setSelectedOption(opt); setShowInlineCheckout(true); }} 
                     className={`py-3 px-1 text-xs font-bold text-center border rounded-lg transition-all ${selectedOption === opt ? 'border-amber-500 text-amber-500 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : 'border-zinc-700 text-white bg-zinc-900 hover:border-zinc-500'}`}
                   >
                     {opt}
@@ -944,16 +970,10 @@ export default function App() {
             </div>
           )}
 
-          {!showInlineCheckout && (
-             <div className="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 p-4 px-6 flex flex-col z-20">
-               <button 
-                 disabled={selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption}
-                 onClick={() => setShowInlineCheckout(true)} 
-                 className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg flex justify-center items-center transition-colors shadow-lg"
-               >
-                  አሁን ይግዙ (Buy Now)
-               </button>
-             </div>
+          {!showInlineCheckout && (!selectedProduct.options || selectedProduct.options.length === 0) && (
+             <button onClick={() => setShowInlineCheckout(true)} className="w-full bg-amber-500 text-black font-black py-4 rounded-xl text-lg flex justify-center items-center mt-6 shadow-lg">
+                አሁን ይግዙ (Buy Now)
+             </button>
           )}
 
           {inlineCheckoutUI}
@@ -1071,12 +1091,17 @@ export default function App() {
               </div>
               
               <div className="px-1 flex flex-col flex-grow">
-                 <div className="flex items-baseline space-x-2 mb-1.5">
-                   <p className="text-white font-black text-xl leading-none">{item.price} ብር</p>
-                   {item.vip_price && (
-                      <p className="text-amber-500 font-bold text-sm leading-none">VIP: {item.vip_price} ብር</p>
-                   )}
-                 </div>
+                 {isVIP ? (
+                   <div className="flex items-baseline space-x-2 mb-1.5">
+                     <p className="text-amber-500 font-black text-xl leading-none">{item.vip_price || item.price} ብር</p>
+                     {item.vip_price && <p className="text-zinc-500 font-bold text-xs leading-none line-through">{item.price}</p>}
+                   </div>
+                 ) : (
+                   <div className="flex items-baseline space-x-2 mb-1.5">
+                     <p className="text-white font-black text-xl leading-none">{item.price} ብር</p>
+                     {item.vip_price && <p className="text-amber-500 font-bold text-sm leading-none">VIP: {item.vip_price}</p>}
+                   </div>
+                 )}
                  
                  <p className="text-white font-black text-[13px] tracking-widest uppercase mb-1 line-clamp-1">{item.brand}</p>
                  <h3 className="text-zinc-200 font-bold text-sm line-clamp-2 leading-snug">{item.name}</h3>
@@ -1116,19 +1141,18 @@ export default function App() {
       return (
         <div className="pb-24 pt-6">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center max-w-sm mx-auto shadow-2xl mb-8">
-            <h2 className="text-2xl font-black text-amber-500 mb-6">እንኳን ደህና መጡ!</h2>
-
-            <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 mb-4 text-left">
-              <h3 className="text-white font-black text-sm mb-1">👑 ነባር አባል ነዎት? (Returning VIP)</h3>
-              <p className="text-zinc-400 text-xs leading-relaxed">ወደ አካውንትዎ ለመግባት እና ጨዋታዎችን ለመገመት በቴሌግራም ይግቡ።</p>
+            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
+            <h2 className="text-2xl font-black text-white mb-6">የVIP አባልነት ጥቅሞች</h2>
+            
+            <div className="text-left space-y-3 mb-8">
+              <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5" /><span className="text-sm text-zinc-300">የስፖርት ትንበያዎችን ያግኙ</span></div>
+              <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5" /><span className="text-sm text-zinc-300">በእቃዎች ላይ ከፍተኛ የVIP ቅናሽ</span></div>
+              <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5" /><span className="text-sm text-zinc-300">ልዩ የእቃ ማዘዣ ቅድሚያ</span></div>
             </div>
 
-            <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 mb-6 text-left">
-              <h3 className="text-white font-black text-sm mb-1">⭐ አዲስ አባል ለመሆን? (New VIP)</h3>
-              <p className="text-zinc-400 text-xs leading-relaxed">ክፍያ ፈጽመው የVIP አባልነት ለመጀመር በቴሌግራም ይግቡ።</p>
-            </div>
+            <p className="text-amber-500 font-black mb-4 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">ወርሃዊ ክፍያ: 100 ብር (ወይም $10 USD)</p>
 
-            <p className="text-white text-sm font-bold mb-4">በቴሌግራም ይግቡ (Log in with Telegram)፦</p>
+            <p className="text-white text-sm font-bold mb-4">አባል ለመሆን ወይም ለመግባት፦</p>
             <div ref={telegramWrapperRef} className="flex justify-center min-h-[50px]"></div>
           </div>
           {renderBlurGames()}
@@ -1148,59 +1172,49 @@ export default function App() {
       );
     }
 
-    if (!isVIP) {
+    if (!isVIP || vipStatus === "expired" || vipStatus === "none") {
       return (
         <div className="pb-24 pt-6">
-          {checkoutStep === "ክፍያ" && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md mx-auto shadow-2xl mb-8">
-              <h2 className="text-2xl font-black text-amber-500 mb-4 text-center">የቪአይፒ ክፍያ</h2>
-              
-              <div className="flex space-x-2 mb-6">
-                <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ (100 ብር)</button>
-                <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ($10)</button>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md mx-auto shadow-2xl mb-8">
+            <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">
+              {vipStatus === "expired" ? "አባልነትዎ አልቋል (Expired)" : "ወርሃዊ የVIP አባልነት"}
+            </h2>
+            <p className="text-center text-zinc-400 text-xs mb-6">የVIP ጥቅሞችን ለማግኘት ከታች ያለውን ፎርም ይሙሉና ይክፈሉ።</p>
+
+            <form onSubmit={handleVipPaymentSubmit} className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex space-x-2 mb-2">
+                <button type="button" onClick={() => setVipPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${vipPaymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ኢትዮጵያ ውስጥ (100 ብር)</button>
+                <button type="button" onClick={() => setVipPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${vipPaymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ($10)</button>
               </div>
 
               <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
-                <p className="font-black text-amber-500 text-base">📌 መመሪያ፦</p>
-                <p className="text-xs text-zinc-300">መጀመሪያ ክፍያዎን ከታች ወዳለው አካውንት ያስተላልፉ። በመቀጠል ደረሰኙን ፎቶ አንስተው እዚህ ያያይዙ።</p>
+                {vipPaymentType === "ሀገር ውስጥ" ? (
+                  <>
+                    <p className="font-bold text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
+                    <p>የኢትዮጵያ ንግድ ባንክ (CBE) - <span className="text-amber-500 font-mono font-black text-lg">1000123456789</span></p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
+                    <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg">demo@goleth.com</span></p>
+                  </>
+                )}
+                <p className="text-xs text-zinc-400 pt-2 border-t border-zinc-800 mt-2">መጀመሪያ ክፍያዎን ያስተላልፉ። በመቀጠል ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
               </div>
 
-              {paymentType === "ሀገር ውስጥ" && (
-                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6 animate-in fade-in duration-200">
-                  <p className="font-black text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
-                  <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
-                  <p>አካውንት ቁጥር: <span className="text-amber-500 font-mono font-black text-lg">1000123456789</span></p>
-                </div>
-              )}
-
-              {paymentType === "ዳያስፖራ" && (
-                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6 animate-in fade-in duration-200">
-                  <p className="font-black text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
-                  <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg">demo@goleth.com</span></p>
-                </div>
-              )}
-
-              {paymentType !== "" && (
-                <form onSubmit={handleVipPaymentSubmit} className="space-y-4 animate-in fade-in duration-200">
-                  <input required name="fullName" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" />
-                  
-                  <div>
-                    <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-zinc-400 text-sm font-bold mb-2">የክፍያ ማረጋገጫ (እባክዎ ፋይሉን ያያይዙ)፦</label>
-                    <input required type="file" name="receiptFile" onChange={(e) => setVipReceiptFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
-                  </div>
-                  
-                  <button type="submit" disabled={uploading || vipPhone.length !== 10 || !vipReceiptFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
-                    {uploading ? "በመጫን ላይ..." : "ላክ"}
-                  </button>
-                  <p className="text-[10px] text-zinc-500 text-center">ማሳሰቢያ: የ"ላክ" ቁልፍ የሚበራው ባለ 10 አሃዝ ስልክ ቁጥር እና ፋይል በትክክል ሲያስገቡ ነው።</p>
-                </form>
-              )}
-            </div>
-          )}
+              <input required name="fullName" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" />
+              <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
+              
+              <div>
+                <label className="block text-zinc-400 text-sm font-bold mb-2">የክፍያ ማረጋገጫ ፋይል ያያይዙ፦</label>
+                <input required type="file" name="receiptFile" onChange={(e) => setVipReceiptFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+              </div>
+              
+              <button type="submit" disabled={uploading || vipPhone.length !== 10 || !vipReceiptFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
+                {uploading ? "በመጫን ላይ..." : "መረጃ ላክ"}
+              </button>
+            </form>
+          </div>
           {renderBlurGames()}
         </div>
       );
@@ -1208,6 +1222,11 @@ export default function App() {
 
     return (
       <div className="pb-24">
+        {vipStatus === "expiring_soon" && (
+          <div className="bg-red-900/50 border border-red-500 text-white p-4 rounded-xl mb-6 text-center text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+            ⚠️ <span className="font-bold">ማሳሰቢያ:</span> የVIP አባልነትዎ ሊያልቅ ጥቂት ቀናት ቀርተውታል። አገልግሎቱ እንዳይቋረጥ እባክዎ ያድሱ።
+          </div>
+        )}
         <h2 className="text-2xl font-black text-white mb-6 text-center">የVIP ትንበያ</h2>
         {games.map(game => {
           const userPred = userPredictions[game.id];
