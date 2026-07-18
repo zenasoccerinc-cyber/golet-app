@@ -36,7 +36,8 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
-  const [checkoutProduct, setCheckoutProduct] = useState(null);
+  const [showInlineCheckout, setShowInlineCheckout] = useState(false);
+  const [includeVipSignup, setIncludeVipSignup] = useState(false);
   
   // Checkout Form States for Validation
   const [orderName, setOrderName] = useState("");
@@ -71,6 +72,7 @@ export default function App() {
   // --- VIP & GAMES STATE ---
   const [currentUser, setCurrentUser] = useState(null);
   const [isVIP, setIsVIP] = useState(false);
+  const [hasPendingVip, setHasPendingVip] = useState(false);
   const [games, setGames] = useState([]);
   const [userPredictions, setUserPredictions] = useState({});
   const [predictionInputs, setPredictionInputs] = useState({});
@@ -81,6 +83,7 @@ export default function App() {
   const [checkoutStep, setCheckoutStep] = useState("ክፍያ"); 
   const [paymentType, setPaymentType] = useState("ሀገር ውስጥ"); 
   const [vipPhone, setVipPhone] = useState("");
+  const [vipReceiptFile, setVipReceiptFile] = useState(null);
   
   const telegramWrapperRef = useRef(null); 
   const telegramCheckoutRef = useRef(null);
@@ -102,7 +105,7 @@ export default function App() {
     const handlePopState = () => {
        setActivePost(null);
        setSelectedProduct(null);
-       setCheckoutProduct(null);
+       setShowInlineCheckout(false);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -126,7 +129,7 @@ export default function App() {
 
   // Telegram Widget Injection for Checkout
   useEffect(() => {
-    if (checkoutProduct && !currentUser && telegramCheckoutRef.current) {
+    if (showInlineCheckout && !currentUser && telegramCheckoutRef.current) {
       if (telegramCheckoutRef.current.innerHTML !== '') return; 
       window.onTelegramAuth = (user) => { handleTelegramLogin(user); };
       const script = document.createElement("script");
@@ -138,7 +141,7 @@ export default function App() {
       script.async = true;
       telegramCheckoutRef.current.appendChild(script);
     }
-  }, [checkoutProduct, currentUser]);
+  }, [showInlineCheckout, currentUser]);
 
   const fetchData = async () => {
     try {
@@ -165,6 +168,11 @@ export default function App() {
     }
   };
 
+  const checkPendingVip = async (telegramId) => {
+    const { data } = await supabase.from('vip_payments').select('status').eq('telegram_id', telegramId).eq('status', 'pending');
+    if (data && data.length > 0) setHasPendingVip(true);
+  };
+
   const handleTelegramLogin = async (telegramUser) => {
     setCurrentUser(telegramUser);
     const { data } = await supabase
@@ -175,6 +183,7 @@ export default function App() {
     if (data && data[0]) {
       setIsVIP(data[0].is_vip);
       fetchUserPredictions(telegramUser.id);
+      checkPendingVip(telegramUser.id);
       if (!data[0].is_vip) {
         setCheckoutStep("ክፍያ");
       }
@@ -198,18 +207,14 @@ export default function App() {
     setUploading(true);
 
     const fullName = e.target.fullName.value;
-    const file = e.target.receiptFile.files[0];
 
-    if (vipPhone.length !== 10) {
-      alert("እባክዎ ትክክለኛ ባለ 10 አሃዝ ስልክ ቁጥር ያስገቡ።");
+    if (vipPhone.length !== 10 || !vipReceiptFile) {
+      alert("እባክዎ መረጃዎችን በትክክል ያስገቡ።");
       setUploading(false);
       return;
     }
 
-    let receiptUrl = "";
-    if (file) {
-      receiptUrl = await uploadFileToSupabase(file);
-    }
+    const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
 
     const { error: dbError } = await supabase.from("vip_payments").insert([
       { telegram_id: currentUser?.id, full_name: fullName, phone_number: vipPhone, payment_type: paymentType, receipt_url: receiptUrl, status: 'pending' }
@@ -222,7 +227,7 @@ export default function App() {
     }
 
     const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${fullName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${paymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${fullName}፣ የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\n\n- ጎሌት (Goleth)`;
+    const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${fullName}፣ የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\nማሳሰቢያ: መልዕክት እንዲደርስዎ @goleth_app_bot ን START ማለቶን ያረጋግጡ።\n\n- ጎሌት (Goleth)`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
@@ -230,6 +235,7 @@ export default function App() {
     } catch (err) { console.log(err); }
 
     setUploading(false);
+    setHasPendingVip(true);
     setActiveTab("ዋና");
     window.scrollTo(0,0);
     setShowSuccessModal(true);
@@ -240,35 +246,37 @@ export default function App() {
     setUploading(true);
 
     const shippingSpeed = e.target.shippingSpeed.value;
-    const basePrice = checkoutProduct.vip_price && isVIP ? checkoutProduct.vip_price : checkoutProduct.price;
+    const isGettingVipPrice = isVIP || includeVipSignup;
+    const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
     
     // Base weight calc (Rounds up to nearest kg for hostess logic)
-    const itemWeight = checkoutProduct.weight_kg || 1.0;
+    const itemWeight = selectedProduct.weight_kg || 1.0;
     const roundedWeight = Math.ceil(itemWeight); 
     const shippingCostBirr = roundedWeight * 2000;
     
     // Calculate final combined price
     let finalPrice = basePrice + shippingCostBirr; 
-    let orderNotes = shippingSpeed === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard";
+    if (includeVipSignup) finalPrice += (paymentType === "ሀገር ውስጥ" ? 100 : 10);
 
-    let receiptUrl = "";
-    if (orderFile) {
-      receiptUrl = await uploadFileToSupabase(orderFile);
-    }
+    let orderNotes = shippingSpeed === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard";
+    if (includeVipSignup) orderNotes += " | +VIP Membership Signup";
+
+    const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
 
     const { error: dbError } = await supabase.from("product_orders").insert([{ 
         telegram_id: currentUser.id.toString(), 
         full_name: orderName, 
         phone_number: vipPhone, 
         delivery_address: orderAddress,
-        product_id: checkoutProduct.id,
-        product_name: checkoutProduct.name,
+        product_id: selectedProduct.id,
+        product_name: selectedProduct.name,
         selected_option: selectedOption || "N/A",
         price: finalPrice,
         payment_type: paymentType, 
         receipt_url: receiptUrl,
         shipping_speed: shippingSpeed,
-        total_weight_kg: roundedWeight
+        total_weight_kg: roundedWeight,
+        is_new_vip_signup: includeVipSignup // Marking this in Supabase
       }]);
 
     if (dbError) {
@@ -277,8 +285,8 @@ export default function App() {
       return;
     }
 
-    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${orderAddress}\n📦 <b>እቃ:</b> ${checkoutProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n⚖️ <b>ክብደት:</b> ${roundedWeight} kg\n🚚 <b>ማጓጓዣ:</b> ${shippingSpeed}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር ${orderNotes}\n💳 <b>ክፍያ:</b> ${paymentType}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${checkoutProduct.name} የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል።\n\n- ጎሌት (Goleth)`;
+    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${orderAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n⚖️ <b>ክብደት:</b> ${roundedWeight} kg\n🚚 <b>ማጓጓዣ:</b> ${shippingSpeed}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ:</b> ${paymentType}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
+    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል።\nማሳሰቢያ: መልዕክት እንዲደርስዎ @goleth_app_bot ን START ማለቶን ያረጋግጡ።\n\n- ጎሌት (Goleth)`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
@@ -286,9 +294,10 @@ export default function App() {
     } catch (err) { console.log(err); }
 
     setUploading(false);
-    setCheckoutProduct(null);
+    setShowInlineCheckout(false);
     setSelectedProduct(null);
     setSelectedOption(null);
+    setIncludeVipSignup(false);
     setOrderName("");
     setOrderAddress("");
     setOrderFile(null);
@@ -369,6 +378,7 @@ export default function App() {
     setSelectedProduct(prod);
     setCurrentImgIndex(0);
     setSelectedOption(null);
+    setShowInlineCheckout(false);
   };
 
   const handleDelete = async (table, id) => {
@@ -568,7 +578,6 @@ export default function App() {
        if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    // Save to the new Supabase table
     const { error: dbError } = await supabase.from("sourcing_requests").insert([{
       telegram_id: currentUser.id.toString(),
       full_name: name,
@@ -786,8 +795,82 @@ export default function App() {
     if (!selectedProduct) return null;
     const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
 
+    // INLINE CHECKOUT MERGED HERE
+    const inlineCheckoutUI = showInlineCheckout ? (
+      <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-5 mt-8 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
+        {!currentUser ? (
+          <div className="text-center">
+            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto">
+               <Target className="text-amber-500 w-8 h-8" />
+            </div>
+            <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">
+              ትዕዛዝዎን በትክክል ለማስኬድ እና መረጃ ለመላክ በቴሌግራም መለያዎ ይግቡ።
+            </p>
+            <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
+            <p className="text-xs text-zinc-500 mt-4">ማሳሰቢያ: መልዕክት እንዲደርስዎ የ <a href={`https://t.me/goleth_app_bot`} target="_blank" rel="noreferrer" className="text-amber-500 font-bold">@goleth_app_bot</a> ቦትን Start ያድርጉ።</p>
+          </div>
+        ) : (
+          <form onSubmit={handleProductOrderSubmit} className="space-y-4">
+            <h3 className="text-white font-black text-lg border-b border-zinc-800 pb-2">ክፍያ እና ማረጋገጫ</h3>
+            
+            {!isVIP && selectedProduct.vip_price && (
+              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl flex items-start space-x-3 mb-6">
+                <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
+                <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
+                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+100 ብር)</span>
+                  ይህንን በመጫን የVIP አባልነት ይግዙና እቃውን በVIP ዋጋ ({selectedProduct.vip_price} ብር) ይውሰዱ።
+                </label>
+              </div>
+            )}
+
+            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" />
+            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
+            <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base"></textarea>
+
+            <select required name="shippingSpeed" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-bold mt-4">
+              <option value="">ማጓጓዣ ይምረጡ</option>
+              <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ)</option>
+              <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
+            </select>
+
+            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4 mt-8">የክፍያ አማራጭ</h3>
+            <div className="flex space-x-2 mb-4">
+              <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ ባንክ</button>
+              <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ክፍያ</button>
+            </div>
+
+            {paymentType === "ሀገር ውስጥ" && (
+              <div className="bg-black p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
+                <p className="font-black text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
+                <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
+                <p>አካውንት ቁጥር: <span className="text-amber-500 font-mono font-black text-lg ml-2">1000123456789</span></p>
+                <p className="text-xs text-zinc-400 mt-2">ገንዘቡን ካስገቡ በኋላ ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
+              </div>
+            )}
+
+            {paymentType === "ዳያስፖራ" && (
+              <div className="bg-black p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
+                <p className="font-black text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
+                <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg ml-2">demo@goleth.com</span></p>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-zinc-800">
+              <label className="block text-zinc-400 text-xs font-bold mb-2">⚠️ ክፍያ ከፈጸሙ በኋላ ደረሰኙን እዚህ ያያይዙ፦</label>
+              <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-300 file:mr-3 file:py-3 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
+            </div>
+            
+            <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6">
+              {uploading ? "በመላክ ላይ..." : "ትዕዛዝ አረጋግጥ"}
+            </button>
+          </form>
+        )}
+      </div>
+    ) : null;
+
     return (
-      <div className="fixed inset-0 z-50 bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
+      <div className="fixed inset-0 z-[60] bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
         <div className="sticky top-0 z-10 flex justify-between items-center p-4">
           <button onClick={() => window.history.back()} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white hover:text-amber-500 transition-colors">
             <ChevronLeft size={24} />
@@ -828,14 +911,20 @@ export default function App() {
           <h1 className="text-2xl font-black text-white mb-1 leading-tight">{selectedProduct.name}</h1>
           {selectedProduct.brand && <h2 className="text-zinc-200 text-sm font-black uppercase tracking-widest mb-6">{selectedProduct.brand}</h2>}
 
-          <div className="flex items-baseline space-x-3 mb-8">
-            <p className="text-white font-black text-3xl leading-none">{selectedProduct.price} <span className="text-lg">ብር</span></p>
+          <div className="flex items-baseline space-x-4 mb-8 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+            <div>
+               <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
+               <p className="text-white font-black text-2xl leading-none">{selectedProduct.price} <span className="text-sm">ብር</span></p>
+            </div>
             {selectedProduct.vip_price && (
-              <p className="text-amber-500 font-black text-xl leading-none">VIP: {selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
+              <div className="pl-4 border-l border-zinc-800">
+                <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
+                <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
+              </div>
             )}
           </div>
 
-          {selectedProduct.options && selectedProduct.options.length > 0 && (
+          {!showInlineCheckout && selectedProduct.options && selectedProduct.options.length > 0 && (
             <div className="mb-8 border-t border-zinc-900 pt-6">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ</h3>
@@ -854,106 +943,21 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {!showInlineCheckout && (
+             <div className="fixed bottom-0 left-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 p-4 px-6 flex flex-col z-20">
+               <button 
+                 disabled={selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption}
+                 onClick={() => setShowInlineCheckout(true)} 
+                 className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg flex justify-center items-center transition-colors shadow-lg"
+               >
+                  አሁን ይግዙ (Buy Now)
+               </button>
+             </div>
+          )}
+
+          {inlineCheckoutUI}
         </div>
-
-        <div className="fixed bottom-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 p-4 px-6 flex flex-col z-20">
-          <button 
-            disabled={selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption}
-            onClick={() => setCheckoutProduct(selectedProduct)} 
-            className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg flex justify-center items-center transition-colors shadow-lg"
-          >
-             ይግዙ
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderCheckoutForm = () => {
-    if (!checkoutProduct) return null;
-    const finalPrice = checkoutProduct.vip_price && isVIP ? checkoutProduct.vip_price : checkoutProduct.price;
-
-    return (
-      <div className="fixed inset-0 z-[60] bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
-        <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-black/95 backdrop-blur border-b border-zinc-900">
-          <button onClick={() => setCheckoutProduct(null)} className="p-2 text-zinc-400 hover:text-white transition-colors"><X size={24} /></button>
-          <h2 className="text-white font-black text-lg">ክፍያ እና ማረጋገጫ</h2>
-          <div className="w-10"></div> 
-        </div>
-
-        {!currentUser ? (
-          <div className="p-8 text-center flex flex-col items-center justify-center h-[70vh]">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-6">
-               <Target className="text-amber-500 w-8 h-8" />
-            </div>
-            <h3 className="text-white font-black text-xl mb-3">ለመቀጠል መግባት ያስፈልጋል</h3>
-            <p className="text-zinc-400 text-sm mb-8 leading-relaxed max-w-xs mx-auto">
-              ትዕዛዝዎን በትክክል ለማስኬድ እና መረጃ ለመላክ በቴሌግራም መለያዎ ይግቡ።
-            </p>
-            <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
-          </div>
-        ) : (
-          <div className="p-6 max-w-md mx-auto">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center mb-8">
-               {checkoutProduct.image_urls && checkoutProduct.image_urls[0] ? (
-                 <img src={checkoutProduct.image_urls[0]} alt="product" className="w-16 h-16 object-contain bg-white rounded-lg p-1 mr-4 mix-blend-screen" />
-               ) : <div className="w-16 h-16 bg-zinc-800 rounded-lg mr-4"></div>}
-               <div>
-                  <h3 className="text-white font-bold text-sm leading-tight line-clamp-1 mb-1">{checkoutProduct.name}</h3>
-                  {selectedOption && <p className="text-zinc-300 text-[10px] font-bold mb-1">አማራጭ: {selectedOption}</p>}
-                  <p className="text-amber-500 font-black">{finalPrice} ብር</p>
-               </div>
-            </div>
-
-            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4">የትዕዛዝ መረጃ</h3>
-            <form onSubmit={handleProductOrderSubmit} className="space-y-4">
-              <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-              <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
-              <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base"></textarea>
-
-              <select required name="shippingSpeed" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-4">
-                <option value="">ማጓጓዣ ይምረጡ</option>
-                <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ)</option>
-                <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
-              </select>
-
-              <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4 mt-8">የክፍያ አማራጭ</h3>
-              <div className="flex space-x-2 mb-4">
-                <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ ባንክ</button>
-                <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ክፍያ</button>
-              </div>
-
-              {paymentType === "ሀገር ውስጥ" && (
-                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
-                  <p className="font-black text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
-                  <p>የኢትዮጵያ ንግድ ባንክ (CBE)</p>
-                  <p>አካውንት ቁጥር: <span className="text-amber-500 font-mono font-black text-lg ml-2">1000123456789</span></p>
-                  <p className="text-xs text-zinc-400 mt-2">ገንዘቡን ካስገቡ በኋላ ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
-                </div>
-              )}
-
-              {paymentType === "ዳያስፖራ" && (
-                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
-                  <p className="font-black text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
-                  <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg ml-2">demo@goleth.com</span></p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-white text-sm font-bold mb-3">የክፍያ ማረጋገጫ (ደረሰኝ)፦</label>
-                <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-300 file:mr-3 file:py-3 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 transition-colors bg-black border border-zinc-800 rounded-xl p-2" />
-              </div>
-              
-              <button 
-                type="submit" 
-                disabled={uploading || vipPhone.length !== 10 || !orderName.trim() || !orderAddress.trim() || !orderFile} 
-                className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6"
-              >
-                {uploading ? "በመላክ ላይ..." : "ትዕዛዝ አረጋግጥ"}
-              </button>
-            </form>
-          </div>
-        )}
       </div>
     );
   };
@@ -1132,6 +1136,18 @@ export default function App() {
       );
     }
 
+    if (hasPendingVip) {
+      return (
+        <div className="pb-24 pt-6 text-center">
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-8 mb-8 max-w-md mx-auto">
+            <div className="text-amber-500 mb-4 animate-pulse text-4xl">⏳</div>
+            <h2 className="text-xl font-black text-white mb-2">ማረጋገጫ በሂደት ላይ ነው</h2>
+            <p className="text-zinc-400 text-sm leading-relaxed">የላኩት ክፍያ በCEO በመታየት ላይ ነው። ሲፈቀድ መረጃ ይደርስዎታል።</p>
+          </div>
+        </div>
+      );
+    }
+
     if (!isVIP) {
       return (
         <div className="pb-24 pt-6">
@@ -1142,6 +1158,11 @@ export default function App() {
               <div className="flex space-x-2 mb-6">
                 <button type="button" onClick={() => setPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ (100 ብር)</button>
                 <button type="button" onClick={() => setPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${paymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 font-black" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ ($10)</button>
+              </div>
+
+              <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
+                <p className="font-black text-amber-500 text-base">📌 መመሪያ፦</p>
+                <p className="text-xs text-zinc-300">መጀመሪያ ክፍያዎን ከታች ወዳለው አካውንት ያስተላልፉ። በመቀጠል ደረሰኙን ፎቶ አንስተው እዚህ ያያይዙ።</p>
               </div>
 
               {paymentType === "ሀገር ውስጥ" && (
@@ -1169,13 +1190,13 @@ export default function App() {
                   
                   <div>
                     <label className="block text-zinc-400 text-sm font-bold mb-2">የክፍያ ማረጋገጫ (እባክዎ ፋይሉን ያያይዙ)፦</label>
-                    <input required type="file" name="receiptFile" accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                    <input required type="file" name="receiptFile" onChange={(e) => setVipReceiptFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                   </div>
                   
-                  <button type="submit" disabled={uploading || vipPhone.length !== 10} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
+                  <button type="submit" disabled={uploading || vipPhone.length !== 10 || !vipReceiptFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
                     {uploading ? "በመጫን ላይ..." : "ላክ"}
                   </button>
-                  <p className="text-[10px] text-zinc-500 text-center">ማሳሰቢያ: የ"ላክ" ቁልፍ የሚበራው ባለ 10 አሃዝ ስልክ ቁጥር በትክክል ሲያስገቡ ነው።</p>
+                  <p className="text-[10px] text-zinc-500 text-center">ማሳሰቢያ: የ"ላክ" ቁልፍ የሚበራው ባለ 10 አሃዝ ስልክ ቁጥር እና ፋይል በትክክል ሲያስገቡ ነው።</p>
                 </form>
               )}
             </div>
@@ -1502,7 +1523,7 @@ export default function App() {
           )}
           
           <button onClick={() => { setActiveTab("ቪአይፒ"); if(activePost) window.history.back(); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
-            {currentUser ? "የእኔ VIP" : "ይግቡ"}
+            {currentUser ? currentUser.first_name : "ይግቡ"}
           </button>
         </div>
       </header>
@@ -1520,7 +1541,6 @@ export default function App() {
       </main>
 
       {renderProductDetail()}
-      {renderCheckoutForm()}
 
       {showSuccessModal && renderSuccessModal()}
       {showOrderForm && renderOrderForm()}
