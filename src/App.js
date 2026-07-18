@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, ChevronRight
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, ChevronRight, CheckCircle
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -283,7 +283,8 @@ export default function App() {
     const msg = `🛍 <b>ልዩ ዕቃ ማዘዣ!</b>\n👤 ${name}\n📞 ${phone}\n📦 ${productName}\n🔗 ${productLink}\n🖼️ ${imageUrl}`;
     fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg, parse_mode: "HTML" }) });
 
-    setUploading(false); setShowOrderForm(false); alert("ተልኳል!");
+    setUploading(false); setShowOrderForm(false); 
+    setShowSuccessModal(true);
   };
 
   const handleLogoTap = () => {
@@ -300,11 +301,90 @@ export default function App() {
   const openPost = (post) => { window.history.pushState({}, "", `#article-${post.id}`); setActivePost(post); };
   const openProduct = (prod) => { window.history.pushState({}, "", `#product-${prod.id}`); setSelectedProduct(prod); setCurrentImgIndex(0); setSelectedOption(null); setShowInlineCheckout(false); };
 
+  const renderHome = () => (
+    <div className="pb-24 animate-in fade-in duration-500">
+      <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-6 mb-8 text-center shadow-2xl">
+        <h2 className="text-3xl font-black text-white mb-2 tracking-tight">እንኳን ወደ <span className="text-amber-500">Goleth</span> በደህና መጡ</h2>
+        <p className="text-zinc-400 text-sm mb-6">የእርስዎ ዘመናዊ መገበያያ እና የዜና መድረክ</p>
+        <button onClick={() => setActiveTab("ሱቅ")} className="bg-amber-500 text-black px-8 py-3 rounded-xl font-black shadow-lg">አሁን ይገበያዩ</button>
+      </div>
+
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-black text-white">አዳዲስ እቃዎች</h3>
+          <button onClick={() => setActiveTab("ሱቅ")} className="text-amber-500 text-sm font-bold">ሁሉንም እይ</button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {products.slice(0, 4).map(product => (
+            <div key={product.id} onClick={() => openProduct(product)} className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 cursor-pointer">
+              {product.image_urls && product.image_urls.length > 0 && (
+                <div className="w-full h-32 bg-white rounded-xl mb-3 flex items-center justify-center overflow-hidden">
+                  <img src={product.image_urls[0]} alt={product.name} className="h-full object-cover mix-blend-multiply" />
+                </div>
+              )}
+              <h4 className="text-white font-bold text-sm truncate">{product.name}</h4>
+              <p className="text-amber-500 font-black text-sm mt-1">{product.price} ብር</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSocial = () => (
+    <div className="pb-24">
+      <h2 className="text-2xl font-black text-white mb-6">ማህበራዊ (Social)</h2>
+      {posts.map(post => (
+        <div key={post.id} onClick={() => openPost(post)} className="bg-zinc-900 rounded-2xl mb-6 overflow-hidden border border-zinc-800 cursor-pointer shadow-lg">
+          {post.main_image_url && <img src={post.main_image_url} alt={post.title} className="w-full h-48 object-cover" />}
+          <div className="p-5">
+            <h3 className="text-lg font-black text-white leading-tight mb-2">{post.title}</h3>
+            <p className="text-zinc-400 text-sm line-clamp-2">{post.content}</p>
+            <div className="mt-4 flex justify-between items-center text-xs text-zinc-500 font-bold">
+              <span>{new Date(post.created_at).toLocaleDateString()}</span>
+              <span className="text-amber-500">Read More →</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderShop = () => (
+    <div className="pb-24">
+      <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-6 mb-8 text-center shadow-xl">
+        <h3 className="text-white font-black text-lg mb-2">የሚፈልጉትን እቃ አላገኙም?</h3>
+        <p className="text-zinc-400 text-xs mb-4">ሊንክ ወይም ፎቶ ይላኩልን፣ እኛ ገዝተን እናመጣለን!</p>
+        <button onClick={() => setShowOrderForm(true)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg flex items-center justify-center gap-2">
+          <PlusCircle size={18} /> ልዩ ትዕዛዝ አስገባ
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {products.map(product => (
+          <div key={product.id} onClick={() => openProduct(product)} className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 cursor-pointer hover:border-amber-500 transition-colors">
+            {product.image_urls && product.image_urls.length > 0 ? (
+              <div className="w-full h-40 bg-white rounded-xl mb-3 flex items-center justify-center overflow-hidden">
+                <img src={product.image_urls[0]} alt={product.name} className="h-full object-cover mix-blend-multiply p-2" />
+              </div>
+            ) : (
+              <div className="w-full h-40 bg-zinc-800 rounded-xl mb-3 flex items-center justify-center"><ShoppingBag className="text-zinc-600" /></div>
+            )}
+            <h4 className="text-white font-bold text-sm truncate mb-1">{product.name}</h4>
+            <div className="flex justify-between items-end">
+              <p className="text-white font-black text-lg">{product.price} <span className="text-xs">ብር</span></p>
+              {product.vip_price && <span className="text-amber-500 text-[10px] font-bold">👑 VIP {product.vip_price}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderProductDetail = () => {
     if (!selectedProduct) return null;
     const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
     
-    // Inline Checkout Form UI
     const inlineCheckoutUI = showInlineCheckout ? (
       <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-5 mt-8 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
         {!currentUser ? (
@@ -390,7 +470,7 @@ export default function App() {
             )}
           </div>
 
-          {!showInlineCheckout && selectedProduct.options && (
+          {!showInlineCheckout && selectedProduct.options && selectedProduct.options.length > 0 && (
             <div className="mb-8">
               <h3 className="text-white font-bold text-sm mb-4">አማራጭ ይምረጡ</h3>
               <div className="grid grid-cols-3 gap-3">
@@ -402,7 +482,7 @@ export default function App() {
           )}
 
           {!showInlineCheckout && (
-            <button disabled={selectedProduct.options?.length > 0 && !selectedOption} onClick={() => setShowInlineCheckout(true)} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg mt-4">
+            <button disabled={selectedProduct.options?.length > 0 && !selectedOption} onClick={() => setShowInlineCheckout(true)} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg mt-4 shadow-lg shadow-amber-500/20">
                አሁን ይግዙ (Buy Now)
             </button>
           )}
@@ -430,7 +510,7 @@ export default function App() {
       return (
         <div className="pb-24 pt-6 text-center">
           <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-8 mb-8">
-            <div className="text-amber-500 mb-4 animate-pulse">⏳</div>
+            <div className="text-amber-500 mb-4 animate-pulse text-4xl">⏳</div>
             <h2 className="text-xl font-black text-white mb-2">ማረጋገጫ በሂደት ላይ ነው</h2>
             <p className="text-zinc-400 text-sm">የላኩት ክፍያ በCEO በመታየት ላይ ነው። ሲፈቀድ መረጃ ይደርስዎታል።</p>
           </div>
@@ -489,11 +569,11 @@ export default function App() {
 
   const renderSuccessModal = () => (
     <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 text-center max-w-md w-full">
-        <div className="text-amber-500 text-4xl mb-4">✓</div>
-        <h2 className="text-xl font-black text-white mb-4">ተሳክቷል!</h2>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 text-center max-w-md w-full animate-in zoom-in-95 duration-300">
+        <div className="text-amber-500 flex justify-center mb-4"><CheckCircle size={64} /></div>
+        <h2 className="text-2xl font-black text-white mb-4">ተሳክቷል!</h2>
         <p className="text-zinc-400 text-sm mb-6">መረጃዎ ደርሷል። በቴሌግራም መልዕክት እንዲደርስዎ የ <a href={`https://t.me/${BOT_USERNAME}`} target="_blank" rel="noreferrer" className="text-amber-500 font-bold">@${BOT_USERNAME}</a> ቦትን Start ማለቶን አይርሱ።</p>
-        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 text-black font-black py-3 rounded-xl">እሺ</button>
+        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 text-black font-black py-4 rounded-xl text-lg">እሺ</button>
       </div>
     </div>
   );
@@ -503,7 +583,7 @@ export default function App() {
       <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-zinc-900 p-4 flex justify-between items-center">
         <h1 onClick={handleLogoTap} className="text-white font-black text-2xl tracking-widest cursor-pointer">GOL<span className="text-amber-500">ETH</span></h1>
         <div className="flex items-center space-x-3">
-          <button onClick={() => { setActiveTab("ቪአይፒ"); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold">
+          <button onClick={() => { setActiveTab("ቪአይፒ"); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg shadow-[#2AABEE]/20">
             {currentUser ? currentUser.first_name : "ይግቡ"}
           </button>
         </div>
@@ -512,16 +592,49 @@ export default function App() {
       <main className="p-4 max-w-lg mx-auto">
         {selectedProduct ? renderProductDetail() : (
           <>
-            {activeTab === "ቪአይፒ" ? renderVIP() : <div className="text-center mt-10 text-zinc-500">ይህ ገጽ በቅርቡ ይዘመናል</div>}
+            {activeTab === "ዋና" && renderHome()}
+            {activeTab === "ማህበራዊ" && renderSocial()}
+            {activeTab === "ቪአይፒ" && renderVIP()}
+            {activeTab === "ሱቅ" && renderShop()}
           </>
         )}
       </main>
 
+      {/* Sourcing Modal Form */}
+      {showOrderForm && (
+        <div className="fixed inset-0 bg-black/95 z-50 p-6 flex flex-col justify-center overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 relative w-full max-w-md mx-auto">
+            <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24} /></button>
+            <h2 className="text-xl font-black text-amber-500 mb-6">ልዩ ትዕዛዝ አስገባ</h2>
+            <form onSubmit={submitOrderForm} className="space-y-4">
+              <input required name="name" placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+              <input required type="tel" name="phone" placeholder="ስልክ ቁጥር" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+              <input name="productName" placeholder="የእቃው ስም (አማራጭ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+              <input name="productLink" placeholder="የእቃው ሊንክ (አማራጭ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+              
+              <select name="shipping" className="w-full bg-black border border-zinc-800 text-zinc-400 p-3 rounded-xl focus:border-amber-500 outline-none">
+                <option value="standard">መደበኛ ማጓጓዣ (15-20 ቀናት)</option>
+                <option value="express">አስቸኳይ ማጓጓዣ (5-7 ቀናት)</option>
+              </select>
+
+              <div className="border border-zinc-800 rounded-xl p-4 bg-black">
+                <label className="block text-zinc-400 text-sm font-bold mb-2">የእቃው ፎቶ (ካለዎት)</label>
+                <input type="file" name="orderImage" accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0" />
+              </div>
+
+              <button type="submit" disabled={uploading} className="w-full bg-amber-500 text-black font-black py-4 rounded-xl mt-4 shadow-lg shadow-amber-500/20">
+                {uploading ? "በመላክ ላይ..." : "ትዕዛዝ ላክ"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showSuccessModal && renderSuccessModal()}
 
       <nav className="fixed bottom-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 flex justify-around pb-6 pt-3 px-1 z-40">
-        {[ {id:"ዋና", icon:Home}, {id:"ቪአይፒ", icon:Target}, {id:"ሱቅ", icon:ShoppingBag} ].map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedProduct(null); }} className={`flex flex-col items-center p-2 ${activeTab === tab.id ? "text-amber-500" : "text-zinc-600"}`}>
+        {[ {id:"ዋና", icon:Home}, {id:"ማህበራዊ", icon:Users}, {id:"ቪአይፒ", icon:Target}, {id:"ሱቅ", icon:ShoppingBag} ].map(tab => (
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedProduct(null); }} className={`flex flex-col items-center p-2 ${activeTab === tab.id ? "text-amber-500" : "text-zinc-600"} transition-colors`}>
             <tab.icon size={24} className="mb-1" />
             <span className="text-[10px] font-bold">{tab.id}</span>
           </button>
