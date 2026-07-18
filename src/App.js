@@ -212,7 +212,7 @@ export default function App() {
     }
 
     const { error: dbError } = await supabase.from("vip_payments").insert([
-      { telegram_id: currentUser?.id, full_name: fullName, phone_number: vipPhone, payment_type: paymentType, receipt_url: receiptUrl }
+      { telegram_id: currentUser?.id, full_name: fullName, phone_number: vipPhone, payment_type: paymentType, receipt_url: receiptUrl, status: 'pending' }
     ]);
 
     if (dbError) {
@@ -1071,14 +1071,19 @@ export default function App() {
       return (
         <div className="pb-24 pt-6">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center max-w-sm mx-auto shadow-2xl mb-8">
-            <h2 className="text-xl font-black text-amber-500 mb-2">የቪአይፒ አባልነት ጥቅሞች</h2>
-            <ul className="text-zinc-400 text-xs mb-6 text-left space-y-2 px-2">
-              <li>🏆 በየሳምንቱ የውጤት ትንበያዎችን በመገመት ይሸለሙ</li>
-              <li>🛍️ በሱቃችን ላይ ልዩ የዋጋ ቅናሾችን ያግኙ</li>
-              <li>💰 የሀገር ውስጥ አባልነት: 100 ብር በወር</li>
-              <li>💵 የዳያስፖራ አባልነት: $10 ዶላር በወር</li>
-            </ul>
-            <p className="text-white text-sm font-bold mb-4">ለመጀመር በቴሌግራምዎ ይግቡ፦</p>
+            <h2 className="text-2xl font-black text-amber-500 mb-6">እንኳን ደህና መጡ!</h2>
+
+            <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 mb-4 text-left">
+              <h3 className="text-white font-black text-sm mb-1">👑 ነባር አባል ነዎት? (Returning VIP)</h3>
+              <p className="text-zinc-400 text-xs leading-relaxed">ወደ አካውንትዎ ለመግባት እና ጨዋታዎችን ለመገመት በቴሌግራም ይግቡ።</p>
+            </div>
+
+            <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 mb-6 text-left">
+              <h3 className="text-white font-black text-sm mb-1">⭐ አዲስ አባል ለመሆን? (New VIP)</h3>
+              <p className="text-zinc-400 text-xs leading-relaxed">ክፍያ ፈጽመው የVIP አባልነት ለመጀመር በቴሌግራም ይግቡ።</p>
+            </div>
+
+            <p className="text-white text-sm font-bold mb-4">በቴሌግራም ይግቡ (Log in with Telegram)፦</p>
             <div ref={telegramWrapperRef} className="flex justify-center min-h-[50px]"></div>
           </div>
           {renderBlurGames()}
