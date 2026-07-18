@@ -135,13 +135,14 @@ export default function App() {
     }
   }, [showInlineCheckout, currentUser]);
 
-  // Pre-fill forms when profile loads
   useEffect(() => {
     if (currentUserProfile) {
       setOrderName(currentUserProfile.full_name || "");
       setVipPhone(currentUserProfile.phone_number || "");
-      setUserRegion(currentUserProfile.region === 'Diaspora' ? 'ዳያስፖራ' : 'ሀገር ውስጥ');
-      setVipPaymentType(currentUserProfile.region === 'Diaspora' ? 'ዳያስፖራ' : 'ሀገር ውስጥ');
+      if (currentUserProfile.region) {
+        setUserRegion(currentUserProfile.region === 'Diaspora' ? 'ዳያስፖራ' : 'ሀገር ውስጥ');
+        setVipPaymentType(currentUserProfile.region === 'Diaspora' ? 'ዳያስፖራ' : 'ሀገር ውስጥ');
+      }
     }
   }, [currentUserProfile]);
 
@@ -184,7 +185,6 @@ export default function App() {
       const userRecord = data[0];
       setCurrentUserProfile(userRecord);
 
-      // Check if profile is incomplete
       if (!userRecord.full_name || !userRecord.phone_number) {
         setShowProfileModal(true);
       }
@@ -748,8 +748,8 @@ export default function App() {
           <form onSubmit={handleProductOrderSubmit} className="space-y-4">
             <h3 className="text-white font-black text-lg border-b border-zinc-800 pb-2 mb-4">የት ነዎት? (Location)</h3>
             <div className="flex space-x-2 mb-6">
-              <button type="button" onClick={() => setUserRegion("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${userRegion === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ኢትዮጵያ ውስጥ</button>
-              <button type="button" onClick={() => setUserRegion("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${userRegion === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ውጪ ሀገር (Diaspora)</button>
+              <button type="button" disabled={!!currentUserProfile?.region} onClick={() => setUserRegion("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${userRegion === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ኢትዮጵያ ውስጥ</button>
+              <button type="button" disabled={!!currentUserProfile?.region} onClick={() => setUserRegion("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${userRegion === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-black text-zinc-400 border-zinc-800"}`}>ውጪ ሀገር (Diaspora)</button>
             </div>
 
             <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4">የእርስዎ መረጃ</h3>
@@ -794,7 +794,7 @@ export default function App() {
                {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '850 ብር ($10)' : '100 ብር'}</span></div>}
                
                <div className="flex justify-between mt-3 pt-2 border-t border-zinc-800">
-                 <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
+                 <span className="text-white font-black">ጠቅላ জরিমানা ክፍያ:</span>
                  <span className="text-amber-500 font-black text-lg">{dynamicTotal} ብር</span>
                </div>
 
@@ -1137,8 +1137,8 @@ export default function App() {
 
               <form onSubmit={handleVipPaymentSubmit} className="space-y-4 animate-in fade-in duration-200">
                 <div className="flex space-x-2 mb-2">
-                  <button type="button" onClick={() => setVipPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${vipPaymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ</button>
-                  <button type="button" onClick={() => setVipPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all ${vipPaymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ</button>
+                  <button type="button" disabled={!!currentUserProfile?.region} onClick={() => setVipPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${vipPaymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ</button>
+                  <button type="button" disabled={!!currentUserProfile?.region} onClick={() => setVipPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${vipPaymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ</button>
                 </div>
 
                 <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
