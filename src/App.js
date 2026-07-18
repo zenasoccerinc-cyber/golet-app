@@ -34,7 +34,7 @@ export default function App() {
   const [isCEO, setIsCEO] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false); // NEW: Success Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState(false); 
   
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
@@ -51,6 +51,8 @@ export default function App() {
   const [productImageFiles, setProductImageFiles] = useState([]);
   
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
+  // NEW: Track which size category is expanded in the CEO menu
+  const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -73,13 +75,15 @@ export default function App() {
 
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
-  const availableSizes = [
-    "XS", "S", "M", "L", "XL", "XXL", 
-    "38", "39", "40", "41", "42", "43", "44", "45",
-    "Kids 0-3m", "Kids 3-6m", "Kids 6-12m", "Kids 1-2Y", "Kids 2-4Y", "Kids 4-6Y", "Kids 6-8Y", "Kids 8-10Y", "Kids 10-12Y",
-    "Kids Shoe 20-25", "Kids Shoe 26-30", "Kids Shoe 31-35",
-    "50g", "100g", "250g", "500g", "1kg"
-  ];
+  // NEW: Categorized options for CEO ease of use
+  const categorizedOptions = {
+    "ጫማ (Shoes)": ["38", "39", "40", "41", "42", "43", "44", "45"],
+    "የልጆች ልብስ (Kids Clothing)": ["Kids 0-3m", "Kids 3-6m", "Kids 6-12m", "Kids 1-2Y", "Kids 2-4Y", "Kids 4-6Y", "Kids 6-8Y", "Kids 8-10Y", "Kids 10-12Y"],
+    "የልጆች ጫማ (Kids Shoes)": ["Kids Shoe 20-25", "Kids Shoe 26-30", "Kids Shoe 31-35"],
+    "ልብስ (Clothing)": ["XS", "S", "M", "L", "XL", "XXL"],
+    "ክብደት/መጠን (Weights/Liquids)": ["50g", "100g", "250g", "500g", "1kg", "250ml", "500ml", "1L"],
+    "ስልክ/ኤሌክትሮኒክስ (Electronics)": ["64GB", "128GB", "256GB", "512GB", "1TB"]
+  };
 
   useEffect(() => {
     fetchData();
@@ -169,7 +173,6 @@ export default function App() {
       receiptUrl = await uploadFileToSupabase(file);
     }
 
-    // 1. Insert into Database
     const { error: dbError } = await supabase.from("vip_payments").insert([
       {
         telegram_id: currentUser?.id,
@@ -186,7 +189,6 @@ export default function App() {
       return;
     }
 
-    // 2. Send Telegram to Admin (You)
     const adminMsg = `👑 *አዲስ የVIP አባልነት ክፍያ ደርሷል!*\n\n👤 *ስም:* ${fullName}\n📞 *ስልክ:* ${vipPhone}\n💳 *የክፍያ አይነት:* ${paymentType}\n🖼️ *የደረሰኝ ሊንክ:* ${receiptUrl}`;
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -198,7 +200,6 @@ export default function App() {
       console.log("Admin Telegram Error", err);
     }
 
-    // 3. Send Telegram directly to the User!
     const userMsg = `🎉 *ክፍያዎ በተሳካ ሁኔታ ደርሶናል!*\n\nውድ ${fullName}፣ የላኩትን የክፍያ ማረጋገጫ (ደረሰኝ) ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\n\n- ጎሌት (Goleth)`;
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -211,8 +212,6 @@ export default function App() {
     }
 
     setUploading(false);
-    
-    // 4. Redirect Home and Show Card
     setActiveTab("ዋና");
     window.scrollTo(0,0);
     setShowSuccessModal(true);
@@ -352,6 +351,13 @@ export default function App() {
     });
   };
 
+  const toggleOptionCategory = (categoryName) => {
+    setExpandedOptionCategories((prev) => ({
+      ...prev,
+      [categoryName]: !prev[categoryName]
+    }));
+  };
+
   const handleAddRelated = (e) => {
     const value = e.target.value;
     if (!value) return;
@@ -461,6 +467,7 @@ export default function App() {
     setUploading(false);
     setShowAdmin(false);
     setShowSizeDropdown(false);
+    setExpandedOptionCategories({});
     fetchData();
     alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
@@ -510,7 +517,6 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
-  // --- SUCCESS MODAL UI ---
   const renderSuccessModal = () => (
     <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in zoom-in duration-200 justify-center">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 relative shadow-2xl max-w-md mx-auto w-full text-center">
@@ -819,22 +825,25 @@ export default function App() {
                 {item.vip_price && <p className="text-amber-500 font-bold text-xs mt-1 mb-3 flex items-center">👑 VIP: {item.vip_price} ብር</p>}
                 
                 <h3 className="text-zinc-300 font-bold text-sm mb-1 leading-tight">{item.name}</h3>
-                {item.brand && <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-4">{item.brand}</p>}
+                {item.brand && <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-2">{item.brand}</p>}
                 
                 {item.options && item.options.length > 0 && (
-                  <div className="mb-4">
-                     <p className="text-zinc-500 text-[10px] mb-2 font-medium">አማራጭ ይምረጡ፡</p>
-                     <div className="flex flex-wrap gap-2">
-                        {item.options.map(opt => (
-                          <span key={opt} className="bg-black border border-zinc-800 text-zinc-300 text-[10px] font-bold px-2.5 py-1 rounded-md">{opt}</span>
-                        ))}
-                     </div>
-                  </div>
+                  <p className="text-zinc-400 text-[11px] font-bold mt-1 mb-2">
+                    {item.options.length} አማራጮች (Options)
+                  </p>
                 )}
-                
-                <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="mt-auto w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-sm flex justify-center items-center transition-colors shadow-lg shadow-amber-500/10">
-                  <ShoppingBag size={16} className="mr-2" /> እዘዝ
-                </a>
+
+                <div className="mt-auto pt-2 border-t border-zinc-800/50">
+                  {isVIP ? (
+                    <p className="text-amber-500 text-[10px] font-black mb-3">👑 ቪአይፒ: ነፃ የነገ አቅርቦት</p>
+                  ) : (
+                    <p className="text-zinc-400 text-[10px] font-bold mb-3">መደበኛ አቅርቦት: 3-5 ቀናት</p>
+                  )}
+                  
+                  <a href="https://t.me/goleth_orders_bot" target="_blank" rel="noreferrer" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 rounded-xl text-sm flex justify-center items-center transition-colors shadow-lg shadow-amber-500/10">
+                    <ShoppingBag size={16} className="mr-2" /> ወደ ቅርጫት ጨምር
+                  </a>
+                </div>
               </div>
             </div>
           ))}
@@ -994,7 +1003,7 @@ export default function App() {
     <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
       <div className="flex justify-between items-center mb-6 mt-4">
         <h2 className="text-amber-500 font-black text-2xl tracking-wide">{editId ? "Edit Listing" : "CEO Dashboard"}</h2>
-        <button onClick={() => { setShowAdmin(false); setEditId(null); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors">
+        <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors">
           <X className="text-white w-6 h-6" />
         </button>
       </div>
@@ -1175,16 +1184,32 @@ export default function App() {
                 </button>
                 
                 {showSizeDropdown && (
-                  <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-60 overflow-y-auto p-4 shadow-2xl">
-                    <div className="grid grid-cols-2 gap-2">
-                      {availableSizes.map(size => (
-                        <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-700 transition-colors">
-                          <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500 w-4 h-4" />
-                          <span className="text-sm">{size}</span>
-                        </label>
+                  <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-80 overflow-y-auto p-4 shadow-2xl">
+                    <div className="space-y-3">
+                      {Object.entries(categorizedOptions).map(([categoryName, sizes]) => (
+                        <div key={categoryName} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700">
+                          <button
+                            type="button"
+                            onClick={() => toggleOptionCategory(categoryName)}
+                            className="w-full text-left px-4 py-3 flex justify-between items-center text-sm font-bold text-amber-500 hover:bg-zinc-800 transition-colors"
+                          >
+                            <span>{categoryName}</span>
+                            <span>{expandedOptionCategories[categoryName] ? "▲" : "▼"}</span>
+                          </button>
+                          {expandedOptionCategories[categoryName] && (
+                            <div className="p-4 grid grid-cols-2 gap-2 bg-black border-t border-zinc-700">
+                              {sizes.map(size => (
+                                <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors">
+                                  <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500 w-4 h-4" />
+                                  <span className="text-xs font-bold">{size}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
-                    <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-bold py-2 rounded-lg transition-colors">Done</button>
+                    <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-lg transition-colors sticky bottom-0">አረጋግጥ (Done)</button>
                   </div>
                 )}
               </div>
