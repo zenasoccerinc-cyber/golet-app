@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, ChevronRight, CheckCircle
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, ChevronRight, CheckCircle, LogOut
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -96,6 +96,15 @@ export default function App() {
   useEffect(() => {
     fetchData();
     fetchGames(); 
+    
+    // Check local storage for persistent login
+    const savedUserStr = localStorage.getItem('goleth_user');
+    if (savedUserStr) {
+      const savedUser = JSON.parse(savedUserStr);
+      setCurrentUser(savedUser);
+      handleTelegramLogin(savedUser); // Silent re-auth to fetch latest VIP status
+    }
+
     const handlePopState = () => {
        setActivePost(null);
        setSelectedProduct(null);
@@ -176,6 +185,8 @@ export default function App() {
 
   const handleTelegramLogin = async (telegramUser) => {
     setCurrentUser(telegramUser);
+    localStorage.setItem('goleth_user', JSON.stringify(telegramUser));
+
     const { data } = await supabase
       .from('vip_users')
       .upsert([ { telegram_id: telegramUser.id, username: telegramUser.username || telegramUser.first_name } ], { onConflict: 'telegram_id' })
@@ -184,6 +195,7 @@ export default function App() {
     if (data && data[0]) {
       const userRecord = data[0];
       setCurrentUserProfile(userRecord);
+      localStorage.setItem('goleth_profile', JSON.stringify(userRecord));
 
       if (!userRecord.full_name || !userRecord.phone_number) {
         setShowProfileModal(true);
@@ -216,6 +228,19 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('goleth_user');
+    localStorage.removeItem('goleth_profile');
+    setCurrentUser(null);
+    setCurrentUserProfile(null);
+    setIsVIP(false);
+    setVipStatus("none");
+    setUserPredictions({});
+    setHasPendingVip(false);
+    setIsCEO(false);
+    setShowAdmin(false);
+  };
+
   const saveUserProfile = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -235,6 +260,7 @@ export default function App() {
 
       if (data && data[0]) {
         setCurrentUserProfile(data[0]);
+        localStorage.setItem('goleth_profile', JSON.stringify(data[0]));
         setShowProfileModal(false); 
       }
     } catch (err) {
@@ -794,7 +820,7 @@ export default function App() {
                {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '850 ብር ($10)' : '100 ብር'}</span></div>}
                
                <div className="flex justify-between mt-3 pt-2 border-t border-zinc-800">
-                 <span className="text-white font-black">ጠቅላ জরিমানা ክፍያ:</span>
+                 <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
                  <span className="text-amber-500 font-black text-lg">{dynamicTotal} ብር</span>
                </div>
 
@@ -863,38 +889,22 @@ export default function App() {
         )}
 
         <div className="p-6">
-          {selectedProduct.category && <div className="inline-block bg-zinc-800 text-white text-[10px] font-black px-2 py-1 rounded-md tracking-widest mb-4 uppercase">{selectedProduct.category}</div>}
-          
-          <h1 className="text-2xl font-black text-white mb-1 leading-tight">{selectedProduct.name}</h1>
-          {selectedProduct.brand && <h2 className="text-zinc-200 text-sm font-black uppercase tracking-widest mb-6">{selectedProduct.brand}</h2>}
+          {selectedProduct.brand && <h2 className="text-zinc-400 text-sm font-black uppercase tracking-widest mb-2">{selectedProduct.brand}</h2>}
+          <h1 className="text-2xl font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
 
-          {isVIP ? (
-            <div className="flex items-baseline space-x-4 mb-8 bg-zinc-900 p-4 rounded-2xl border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]">
-              <div>
-                 <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 የእርስዎ VIP ዋጋ</p>
-                 <p className="text-amber-500 font-black text-3xl leading-none">{selectedProduct.vip_price || selectedProduct.price} <span className="text-sm">ብር</span></p>
-              </div>
-              {selectedProduct.vip_price && (
-                <div className="pl-4 border-l border-zinc-800 opacity-80">
-                  <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ</p>
-                  <p className="text-white font-black text-lg line-through decoration-red-500 decoration-2">{selectedProduct.price} ብር</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-baseline space-x-4 mb-8 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-              <div>
-                 <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
-                 <p className="text-white font-black text-3xl leading-none">{selectedProduct.price} <span className="text-sm">ብር</span></p>
-              </div>
-              {selectedProduct.vip_price && (
-                <div className="pl-4 border-l border-zinc-800">
-                  <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
-                  <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="flex justify-between items-center bg-zinc-900 p-5 rounded-2xl border border-zinc-800 mb-8 shadow-lg">
+             <div className={isVIP && selectedProduct.vip_price ? 'opacity-50' : ''}>
+                <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
+                <p className={`text-white font-black text-2xl leading-none ${isVIP && selectedProduct.vip_price ? 'line-through decoration-red-500 decoration-2' : ''}`}>{selectedProduct.price} <span className="text-sm">ብር</span></p>
+             </div>
+
+             {selectedProduct.vip_price && (
+               <div className="text-right pl-4 border-l border-zinc-800">
+                 <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center justify-end">👑 VIP ዋጋ</p>
+                 <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
+               </div>
+             )}
+          </div>
 
           {!showInlineCheckout && selectedProduct.options && selectedProduct.options.length > 0 && (
             <div className="mb-8 border-t border-zinc-900 pt-6">
@@ -1023,8 +1033,14 @@ export default function App() {
 
         <div className="grid grid-cols-2 gap-4 mt-2">
           {filtered.map((item) => (
-            <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full">
-              <div className="bg-white rounded-2xl p-4 mb-3 h-48 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02]">
+            <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl p-3 border border-zinc-800 hover:border-zinc-700 transition-colors">
+              
+              <div className="mb-2">
+                 <p className="text-white font-black text-[13px] tracking-widest uppercase mb-0.5 line-clamp-1">{item.brand}</p>
+                 <h3 className="text-zinc-300 font-bold text-sm line-clamp-2 leading-snug">{item.name}</h3>
+              </div>
+
+              <div className="bg-white rounded-xl p-2 mb-3 h-36 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02]">
                  {isCEO && (
                     <div className="absolute top-2 right-2 flex space-x-1 z-10">
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={14}/></button>
@@ -1036,27 +1052,24 @@ export default function App() {
                  ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
               </div>
               
-              <div className="px-1 flex flex-col flex-grow">
-                 {isVIP ? (
-                   <div className="flex items-baseline space-x-2 mb-1.5">
-                     <p className="text-amber-500 font-black text-xl leading-none">{item.vip_price || item.price} ብር</p>
-                     {item.vip_price && <p className="text-zinc-400 font-bold text-xs leading-none line-through decoration-red-500">{item.price} ብር</p>}
-                   </div>
-                 ) : (
-                   <div className="flex items-baseline space-x-2 mb-1.5">
-                     <p className="text-white font-black text-xl leading-none">{item.price} ብር</p>
-                     {item.vip_price && <p className="text-amber-500 font-bold text-sm leading-none">VIP: {item.vip_price}</p>}
-                   </div>
-                 )}
-                 
-                 <p className="text-white font-black text-[13px] tracking-widest uppercase mb-1 line-clamp-1">{item.brand}</p>
-                 <h3 className="text-zinc-200 font-bold text-sm line-clamp-2 leading-snug">{item.name}</h3>
-                 
-                 <div className="mt-auto pt-2">
-                   {item.options && item.options.length > 0 && (
-                      <p className="text-zinc-400 font-bold text-xs">{item.options.length} አማራጮች</p>
+              <div className="flex flex-col flex-grow justify-end mt-auto">
+                 <div className="flex justify-between items-center mb-1">
+                   {isVIP ? (
+                     <>
+                       <p className="text-amber-500 font-black text-lg leading-none">{item.vip_price || item.price} ብር</p>
+                       {item.vip_price && <p className="text-zinc-500 font-bold text-xs leading-none line-through decoration-red-500">{item.price} ብር</p>}
+                     </>
+                   ) : (
+                     <>
+                       <p className="text-white font-black text-lg leading-none">{item.price} ብር</p>
+                       {item.vip_price && <p className="text-amber-500 font-bold text-[10px] leading-none bg-amber-500/10 px-1.5 py-0.5 rounded">VIP: {item.vip_price}</p>}
+                     </>
                    )}
                  </div>
+                 
+                 {item.options && item.options.length > 0 && (
+                    <p className="text-zinc-500 font-bold text-[10px]">{item.options.length} አማራጮች (Options)</p>
+                 )}
               </div>
             </div>
           ))}
@@ -1500,9 +1513,16 @@ export default function App() {
             </button>
           )}
           
-          <button onClick={() => { setActiveTab("ቪአይፒ"); if(activePost) window.history.back(); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
-            {currentUser ? currentUserProfile?.full_name || "VIP" : "ይግቡ"}
-          </button>
+          <div className="flex items-center space-x-2">
+            <button onClick={() => { setActiveTab("ቪአይፒ"); if(activePost) window.history.back(); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
+              {currentUser ? currentUserProfile?.full_name || "VIP" : "ይግቡ"}
+            </button>
+            {currentUser && (
+              <button onClick={handleLogout} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 p-1.5 rounded-full transition-colors" title="Sign Out">
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
