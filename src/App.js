@@ -179,7 +179,7 @@ export default function App() {
   };
 
   const fetchUserPredictions = async (telegramId) => {
-    const { data } = await supabase.from('predictions').select('*').eq('telegram_id', telegramId);
+    const { data } = await supabase.from('predictions').select('*').eq('telegram_id', telegramId.toString());
     if (data) {
       const predictionsMap = {};
       data.forEach(p => { predictionsMap[p.game_id] = p; });
@@ -188,7 +188,7 @@ export default function App() {
   };
 
   const checkPendingVip = async (telegramId) => {
-    const { data } = await supabase.from('vip_payments').select('status').eq('telegram_id', telegramId).eq('status', 'pending');
+    const { data } = await supabase.from('vip_payments').select('status').eq('telegram_id', telegramId.toString()).eq('status', 'pending');
     if (data && data.length > 0) setHasPendingVip(true);
   };
 
@@ -198,7 +198,7 @@ export default function App() {
 
     const { data } = await supabase
       .from('vip_users')
-      .upsert([ { telegram_id: telegramUser.id, username: telegramUser.username || telegramUser.first_name } ], { onConflict: 'telegram_id' })
+      .upsert([ { telegram_id: telegramUser.id.toString(), username: telegramUser.username || telegramUser.first_name } ], { onConflict: 'telegram_id' })
       .select('*');
 
     if (data && data[0]) {
@@ -263,7 +263,7 @@ export default function App() {
         full_name: name, 
         phone_number: phone, 
         region: region 
-      }).eq('telegram_id', currentUser.id).select('*');
+      }).eq('telegram_id', currentUser.id.toString()).select('*');
 
       if (error) throw error;
 
@@ -303,7 +303,7 @@ export default function App() {
     const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
 
     const { error: dbError } = await supabase.from("vip_payments").insert([
-      { telegram_id: currentUser?.id, full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }
+      { telegram_id: currentUser?.id.toString(), full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }
     ]);
 
     if (dbError) {
@@ -464,7 +464,7 @@ export default function App() {
     if (scoreA === undefined || scoreB === undefined || scoreA === "" || scoreB === "") { alert("እባክዎ ሁለቱንም ውጤቶች ያስገቡ።"); return; }
     
     const { error } = await supabase.from('predictions').insert([
-      { telegram_id: currentUser.id, game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }
+      { telegram_id: currentUser.id.toString(), game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }
     ]);
 
     if (!error) { alert("ውጤቱ ተመዝግቧል!"); fetchUserPredictions(currentUser.id); } 
@@ -657,7 +657,7 @@ export default function App() {
             <div className="p-4 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
               <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-2">የተቀባዩ መረጃ (Recipient Info)</h4>
               <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-              <input required type="tel" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value)} placeholder="የተቀባዩ ስልክ ቁጥር" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+              <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
               <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
             </div>
           )}
@@ -852,7 +852,7 @@ export default function App() {
               <div className="p-4 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
                 <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-2">የተቀባዩ መረጃ (Recipient Info)</h4>
                 <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                <input required type="tel" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value)} placeholder="የተቀባዩ ስልክ ቁጥር" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
                 <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
               </div>
             )}
@@ -965,7 +965,7 @@ export default function App() {
                  <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
               </div>
               <div className="mb-4">
-                 <span className="text-zinc-300 text-xs font-bold">{selectedProduct.options.join(", ")}</span>
+                 <span className="text-zinc-300 text-xs font-bold">መጠን/ቀለም (Size/Color): {selectedProduct.options.join(", ")}</span>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedProduct.options.map(opt => (
@@ -1124,7 +1124,7 @@ export default function App() {
                  )}
                  
                  {item.options && item.options.length > 0 && (
-                    <p className="text-zinc-400 font-bold text-[11px] mt-2 line-clamp-1">{item.options.join(", ")}</p>
+                    <p className="text-zinc-400 font-bold text-[11px] mt-2 line-clamp-1"><span className="text-zinc-500">Size/Color:</span> {item.options.join(", ")}</p>
                  )}
               </div>
             </div>
