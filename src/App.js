@@ -95,11 +95,10 @@ export default function App() {
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
   const categorizedOptions = {
-    "ወንድ (Men)": ["S", "M", "L", "XL", "XXL", "38", "39", "40", "41", "42", "43", "44", "45"],
-    "ሴት (Women)": ["XS", "S", "M", "L", "XL", "35", "36", "37", "38", "39", "40", "41"],
-    "ትላልቅ ልጆች (Big Kids)": ["8-10Y", "10-12Y", "12-14Y", "Shoe 31", "Shoe 32", "Shoe 33", "Shoe 34", "Shoe 35"],
-    "ትናንሽ ልጆች (Small Kids)": ["0-3m", "3-6m", "6-12m", "1-2Y", "2-4Y", "4-6Y", "6-8Y", "Shoe 20-25", "Shoe 26-30"],
-    "ክብደት/መጠን (Measurements)": ["50g", "100g", "250g", "500g", "1kg", "250ml", "500ml", "1L"],
+    "የጫማ መጠን (Shoe Sizes)": ["15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47"],
+    "የልብስ መጠን (Clothing Sizes)": ["XXS", "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "0-3m", "3-6m", "6-12m", "1-2Y", "2-4Y", "4-6Y", "6-8Y", "8-10Y", "10-12Y", "12-14Y"],
+    "ቀለም (Colors)": ["Black (ጥቁር)", "White (ነጭ)", "Red (ቀይ)", "Blue (ሰማያዊ)", "Green (አረንጓዴ)", "Yellow (ቢጫ)", "Brown (ቡናማ)", "Grey (ግራጫ)", "Pink (ሮዝ)", "Purple (ሐምራዊ)", "Orange (ብርቱካናማ)", "Gold (ወርቃማ)", "Silver (ብር)", "Multi (የተለያየ)"],
+    "መጠን/ክብደት (Measurements)": ["50g", "100g", "200g", "250g", "500g", "1kg", "2kg", "5kg", "100ml", "250ml", "500ml", "1L", "2L", "5L", "10L"],
     "የእርስዎ (Custom)": savedCustomSizes
   };
 
@@ -600,7 +599,7 @@ export default function App() {
         <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
         <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
         <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
-        <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል። ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።</p>
+        <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በጥሩ ሁኔታ ተልኳል። ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።</p>
 
         <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-colors text-lg shadow-lg">እሺ (OK)</button>
       </div>
@@ -806,7 +805,6 @@ export default function App() {
             <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
             <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ።</p>
             <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
-            <p className="text-xs text-zinc-500 mt-4">ማሳሰቢያ: መልዕክት እንዲደርስዎ የ <a href={`https://t.me/goleth_app_bot`} target="_blank" rel="noreferrer" className="text-amber-500 font-bold">@goleth_app_bot</a> ቦትን Start ያድርጉ።</p>
           </div>
         ) : (
           <form onSubmit={handleProductOrderSubmit} className="space-y-4">
@@ -928,11 +926,11 @@ export default function App() {
 
         <div className="p-6">
           <div className="flex items-center space-x-2 mb-2">
-             {selectedProduct.brand && <h2 className="text-amber-500 text-sm font-black uppercase tracking-widest">{selectedProduct.brand}</h2>}
-             {selectedProduct.category && <span className="text-zinc-500 text-[10px] font-bold bg-zinc-800 px-2 py-0.5 rounded">{selectedProduct.category}</span>}
+             {selectedProduct.brand && <h2 className="text-amber-500 text-[14px] font-black uppercase tracking-widest">{selectedProduct.brand}</h2>}
+             {selectedProduct.category && <span className="text-zinc-200 text-[12px] font-bold bg-zinc-700/80 px-2 py-0.5 rounded">{selectedProduct.category}</span>}
           </div>
           
-          <h1 className="text-2xl font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
+          <h1 className="text-[16px] font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
 
           <div className="flex space-x-4 items-center bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6 shadow-lg">
              <div className="flex-1">
@@ -952,7 +950,9 @@ export default function App() {
             <div className="mb-8 border-t border-zinc-900 pt-6">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
-                 <span className="text-zinc-300 text-xs font-bold">{selectedProduct.options.length} አይነት አማራጮች አሉት</span>
+              </div>
+              <div className="mb-4">
+                 <span className="text-zinc-300 text-xs font-bold">አማራጮች: {selectedProduct.options.join(", ")}</span>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedProduct.options.map(opt => (
@@ -1079,10 +1079,10 @@ export default function App() {
               
               <div className="mb-2">
                  <div className="flex items-center space-x-2 mb-1">
-                    <p className="text-amber-500 font-black text-sm uppercase line-clamp-1">{item.brand || "\u00A0"}</p>
-                    {item.category && <p className="text-zinc-500 text-[10px] font-bold bg-zinc-800 px-1.5 py-0.5 rounded">{item.category}</p>}
+                    <p className="text-amber-500 font-black text-[13px] uppercase line-clamp-1">{item.brand || "\u00A0"}</p>
+                    {item.category && <p className="text-zinc-300 text-[11px] font-bold bg-zinc-700/80 px-1.5 py-0.5 rounded">{item.category}</p>}
                  </div>
-                 <h3 className="text-white font-black text-base line-clamp-2 leading-snug">{item.name}</h3>
+                 <h3 className="text-white font-black text-[15px] line-clamp-2 leading-snug">{item.name}</h3>
               </div>
 
               <div className="bg-white rounded-xl p-2 mb-3 h-40 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02] overflow-hidden">
@@ -1097,25 +1097,21 @@ export default function App() {
                  ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
               </div>
               
-              <div className="flex flex-col flex-grow justify-end mt-auto">
-                 <div className="flex justify-between items-center mb-1">
-                   {isVIP ? (
-                     <>
-                       <p className="text-amber-500 font-black text-xl leading-none">{item.vip_price || item.price} ብር</p>
-                       {item.vip_price && <p className="text-zinc-400 font-bold text-lg leading-none line-through decoration-red-500">{item.price} ብር</p>}
-                     </>
-                   ) : (
-                     <>
-                       <p className="text-white font-black text-xl leading-none">{item.price} ብር</p>
-                       {item.vip_price && <p className="text-amber-500 font-bold text-lg leading-none">VIP: {item.vip_price} ብር</p>}
-                     </>
-                   )}
-                 </div>
+              <div className="flex flex-col mt-auto pt-2 border-t border-zinc-800">
+                 {isVIP ? (
+                   <div className="flex flex-col space-y-1">
+                     <p className="text-amber-500 font-black text-lg leading-none">VIP: {item.vip_price || item.price} ብር</p>
+                     {item.vip_price && <p className="text-zinc-400 font-bold text-sm leading-none line-through decoration-red-500">መደበኛ: {item.price} ብር</p>}
+                   </div>
+                 ) : (
+                   <div className="flex flex-col space-y-1">
+                     <p className="text-white font-black text-lg leading-none">{item.price} ብር</p>
+                     {item.vip_price && <p className="text-amber-500 font-bold text-sm leading-none">VIP: {item.vip_price} ብር</p>}
+                   </div>
+                 )}
                  
                  {item.options && item.options.length > 0 && (
-                    <div className="mt-2 border-t border-zinc-800 pt-2">
-                       <p className="text-zinc-400 font-bold text-[11px]">{item.options.length} አይነት አማራጮች አሉት</p>
-                    </div>
+                    <p className="text-zinc-400 font-bold text-[11px] mt-2 line-clamp-1">አማራጮች: {item.options.join(", ")}</p>
                  )}
               </div>
             </div>
