@@ -51,12 +51,13 @@ export default function App() {
   const [tapCount, setTapCount] = useState(0);
   
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({ options: [], relatedLinks: [] });
+  const [formData, setFormData] = useState({ options: [], relatedLinks: [], showCategoryTag: true });
   const [existingMainImage, setExistingMainImage] = useState(null);
   const [existingInlineImages, setExistingInlineImages] = useState([]);
   const [mainImageFile, setMainImageFile] = useState(null);
   const [inlineImageFiles, setInlineImageFiles] = useState([]);
   const [productImageFiles, setProductImageFiles] = useState([]);
+  const [selectedMainImgIdx, setSelectedMainImgIdx] = useState(0);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
@@ -536,12 +537,12 @@ export default function App() {
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } 
       else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, brand: item.brand || "", price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], });
+      setFormData({ title: item.name, brand: item.brand || "", price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], showCategoryTag: item.show_category !== false });
     }
-    setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setShowAdmin(true);
+    setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
   
-  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH" }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); };
+  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", showCategoryTag: true }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); };
   const handleSizeChange = (e) => { const value = e.target.value; setFormData((prev) => { const options = prev.options || []; if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) }; return { ...prev, options: [...options, value] }; }); };
   const toggleOptionCategory = (categoryName) => { setExpandedOptionCategories((prev) => ({ ...prev, [categoryName]: !prev[categoryName] })); };
   const handleAddRelated = (e) => { const value = e.target.value; if (!value) return; if (!formData.relatedLinks?.includes(value)) { setFormData(prev => ({ ...prev, relatedLinks: [...(prev.relatedLinks || []), value] })); } };
@@ -557,12 +558,24 @@ export default function App() {
       const payload = { category: formData.postCategory || "ዋና", title: formData.title, subtitle: formData.subtitle, excerpt: formData.excerpt, body: formData.body, author: formData.author || "GOLETH", related_links: formData.relatedLinks || [], image_urls: finalUrls };
       if (editId) { await supabase.from("posts").update(payload).eq("id", editId); } else { await supabase.from("posts").insert([payload]); }
     } else if (adminTab === "products") {
-      if (productImageFiles.length > 0) { for (const file of productImageFiles) { const prodUrl = await uploadFileToSupabase(file); if (prodUrl) finalUrls.push(prodUrl); } }
-      const payload = { name: formData.title, brand: formData.brand, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, };
+      let filesToUpload = [...productImageFiles];
+      
+      if (filesToUpload.length > 1 && selectedMainImgIdx > 0 && selectedMainImgIdx < filesToUpload.length) {
+         const main = filesToUpload.splice(selectedMainImgIdx, 1)[0];
+         filesToUpload.unshift(main);
+      }
+
+      if (filesToUpload.length > 0) { 
+        for (const file of filesToUpload) { 
+          const prodUrl = await uploadFileToSupabase(file); 
+          if (prodUrl) finalUrls.push(prodUrl); 
+        } 
+      }
+      const payload = { name: formData.title, brand: formData.brand, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, show_category: formData.showCategoryTag };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       if (editId) { await supabase.from("products").update(payload).eq("id", editId); } else { await supabase.from("products").insert([payload]); }
     }
-    setFormData({ options: [], relatedLinks: [] }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
+    setFormData({ options: [], relatedLinks: [], showCategoryTag: true }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
   const renderProfileModal = () => (
@@ -927,7 +940,7 @@ export default function App() {
         <div className="p-6">
           <div className="flex items-center space-x-2 mb-2">
              {selectedProduct.brand && <h2 className="text-amber-500 text-[14px] font-black uppercase tracking-widest">{selectedProduct.brand}</h2>}
-             {selectedProduct.category && <span className="text-zinc-200 text-[12px] font-bold bg-zinc-700/80 px-2 py-0.5 rounded">{selectedProduct.category}</span>}
+             {selectedProduct.show_category !== false && selectedProduct.category && <span className="text-zinc-200 text-[12px] font-bold bg-zinc-700/80 px-2 py-0.5 rounded">{selectedProduct.category}</span>}
           </div>
           
           <h1 className="text-[16px] font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
@@ -952,7 +965,7 @@ export default function App() {
                  <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
               </div>
               <div className="mb-4">
-                 <span className="text-zinc-300 text-xs font-bold">አማራጮች: {selectedProduct.options.join(", ")}</span>
+                 <span className="text-zinc-300 text-xs font-bold">{selectedProduct.options.join(", ")}</span>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedProduct.options.map(opt => (
@@ -1080,7 +1093,7 @@ export default function App() {
               <div className="mb-2">
                  <div className="flex items-center space-x-2 mb-1">
                     <p className="text-amber-500 font-black text-[13px] uppercase line-clamp-1">{item.brand || "\u00A0"}</p>
-                    {item.category && <p className="text-zinc-300 text-[11px] font-bold bg-zinc-700/80 px-1.5 py-0.5 rounded">{item.category}</p>}
+                    {item.show_category !== false && item.category && <p className="text-zinc-300 text-[11px] font-bold bg-zinc-700/80 px-1.5 py-0.5 rounded">{item.category}</p>}
                  </div>
                  <h3 className="text-white font-black text-[15px] line-clamp-2 leading-snug">{item.name}</h3>
               </div>
@@ -1111,7 +1124,7 @@ export default function App() {
                  )}
                  
                  {item.options && item.options.length > 0 && (
-                    <p className="text-zinc-400 font-bold text-[11px] mt-2 line-clamp-1">አማራጮች: {item.options.join(", ")}</p>
+                    <p className="text-zinc-400 font-bold text-[11px] mt-2 line-clamp-1">{item.options.join(", ")}</p>
                  )}
               </div>
             </div>
@@ -1488,6 +1501,11 @@ export default function App() {
                     <option value="ሌሎች">ሌሎች</option>
                   </select>
                 </div>
+
+                <label className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 p-3 rounded-lg border border-zinc-800">
+                   <input type="checkbox" checked={formData.showCategoryTag !== false} onChange={e => setFormData({...formData, showCategoryTag: e.target.checked})} className="accent-amber-500 w-5 h-5" />
+                   <span className="text-sm font-bold text-zinc-300">Display Category Tag on Product Cards</span>
+                </label>
                 
                 <div className="relative">
                   <button type="button" onClick={() => setShowSizeDropdown(!showSizeDropdown)} className="w-full bg-zinc-900 border border-zinc-800 text-left p-4 rounded-xl focus:border-amber-500 text-zinc-400 flex justify-between items-center transition-colors">
@@ -1538,7 +1556,24 @@ export default function App() {
 
                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                    <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች (Image Upload)</label>
-                   <input type="file" multiple accept="image/*" onChange={(e) => setProductImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
+                   <input type="file" multiple accept="image/*" onChange={(e) => {
+                     setProductImageFiles(Array.from(e.target.files));
+                     setSelectedMainImgIdx(0);
+                   }} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
+                   
+                   {productImageFiles.length > 0 && (
+                     <div className="mt-4 border-t border-zinc-800 pt-3">
+                       <p className="text-xs text-amber-500 font-bold mb-2">Tap an image to set it as MAIN (Front):</p>
+                       <div className="flex space-x-2 overflow-x-auto pb-2">
+                         {productImageFiles.map((file, idx) => (
+                           <div key={idx} onClick={() => setSelectedMainImgIdx(idx)} className={`relative p-1 shrink-0 rounded-lg cursor-pointer transition-all border-2 ${selectedMainImgIdx === idx ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-zinc-800'}`}>
+                             <img src={URL.createObjectURL(file)} alt={`preview-${idx}`} className="w-16 h-16 object-cover rounded-md" />
+                             {selectedMainImgIdx === idx && <span className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-1 rounded-bl-md z-10">MAIN</span>}
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   )}
                 </div>
               </>
             )}
