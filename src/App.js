@@ -312,7 +312,7 @@ export default function App() {
     }
 
     const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${vipPaymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።`;
+    const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ በጥቂት ሰዓታት ውስጥ የVIP አባልነትዎ ይከፈታል።`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
@@ -371,7 +371,7 @@ export default function App() {
     }
 
     const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ ወዲያውኑ ይጀምራል።`;
+    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
@@ -600,13 +600,9 @@ export default function App() {
         <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
         <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
         <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
-        <p className="text-zinc-300 text-sm leading-loose mb-6">ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል።</p>
-        
-        <a href="https://t.me/goleth_app_bot?start=yes" target="_blank" rel="noreferrer" className="block w-full bg-[#2AABEE] hover:bg-[#229ED9] text-white font-black py-4 rounded-xl transition-colors text-sm shadow-lg mb-4">
-           ክፍያዎ እንዲረጋገጥ እዚህ ተጭነው START ይበሉ
-        </a>
+        <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል። ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።</p>
 
-        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-transparent border border-zinc-700 text-zinc-400 hover:bg-zinc-800 font-bold py-3 rounded-xl transition-colors text-sm">ዝጋ (Close)</button>
+        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-colors text-lg shadow-lg">እሺ (OK)</button>
       </div>
     </div>
   );
@@ -931,19 +927,23 @@ export default function App() {
         )}
 
         <div className="p-6">
-          {selectedProduct.brand && <h2 className="text-zinc-400 text-sm font-black uppercase tracking-widest mb-1">{selectedProduct.brand}</h2>}
-          <h1 className="text-2xl font-black text-white mb-4 leading-tight">{selectedProduct.name}</h1>
+          <div className="flex items-center space-x-2 mb-2">
+             {selectedProduct.brand && <h2 className="text-amber-500 text-sm font-black uppercase tracking-widest">{selectedProduct.brand}</h2>}
+             {selectedProduct.category && <span className="text-zinc-500 text-[10px] font-bold bg-zinc-800 px-2 py-0.5 rounded">{selectedProduct.category}</span>}
+          </div>
+          
+          <h1 className="text-2xl font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
 
           <div className="flex space-x-4 items-center bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6 shadow-lg">
              <div className="flex-1">
                 <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
-                <p className={`font-black text-2xl leading-none ${isVIP && selectedProduct.vip_price ? 'text-zinc-300 line-through decoration-red-500 decoration-2' : 'text-white'}`}>{selectedProduct.price} <span className="text-sm">ብር</span></p>
+                <p className={`font-black leading-none ${isVIP && selectedProduct.vip_price ? 'text-zinc-400 text-lg line-through decoration-red-500 decoration-2' : 'text-white text-xl'}`}>{selectedProduct.price} <span className="text-sm">ብር</span></p>
              </div>
 
              {selectedProduct.vip_price && (
                <div className="flex-1 pl-4 border-l border-zinc-800">
                  <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
-                 <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
+                 <p className={`text-amber-500 font-black leading-none ${isVIP ? 'text-xl' : 'text-lg'}`}>{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
                </div>
              )}
           </div>
@@ -952,7 +952,7 @@ export default function App() {
             <div className="mb-8 border-t border-zinc-900 pt-6">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
-                 <span className="text-zinc-300 text-xs font-bold">{selectedProduct.options.length} አማራጮች</span>
+                 <span className="text-zinc-300 text-xs font-bold">{selectedProduct.options.length} አይነት አማራጮች አሉት</span>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedProduct.options.map(opt => (
@@ -1078,16 +1078,14 @@ export default function App() {
             <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl p-3 border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg">
               
               <div className="mb-2">
-                 <p className="text-amber-500 font-black text-[10px] tracking-widest uppercase mb-0.5 line-clamp-1">{item.brand || "\u00A0"}</p>
+                 <div className="flex items-center space-x-2 mb-1">
+                    <p className="text-amber-500 font-black text-sm uppercase line-clamp-1">{item.brand || "\u00A0"}</p>
+                    {item.category && <p className="text-zinc-500 text-[10px] font-bold bg-zinc-800 px-1.5 py-0.5 rounded">{item.category}</p>}
+                 </div>
                  <h3 className="text-white font-black text-base line-clamp-2 leading-snug">{item.name}</h3>
               </div>
 
               <div className="bg-white rounded-xl p-2 mb-3 h-40 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02] overflow-hidden">
-                 <div className="absolute top-0 left-0 w-full flex justify-between p-2 z-10 pointer-events-none">
-                    {item.brand && <span className="bg-black/80 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur shadow-sm">{item.brand}</span>}
-                    {item.category && <span className="bg-amber-500/90 text-black text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur shadow-sm">{item.category}</span>}
-                 </div>
-
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={14}/></button>
@@ -1103,19 +1101,21 @@ export default function App() {
                  <div className="flex justify-between items-center mb-1">
                    {isVIP ? (
                      <>
-                       <p className="text-amber-500 font-black text-lg leading-none">{item.vip_price || item.price} ብር</p>
-                       {item.vip_price && <p className="text-zinc-300 font-bold text-xs leading-none line-through decoration-red-500">{item.price} ብር</p>}
+                       <p className="text-amber-500 font-black text-xl leading-none">{item.vip_price || item.price} ብር</p>
+                       {item.vip_price && <p className="text-zinc-400 font-bold text-lg leading-none line-through decoration-red-500">{item.price} ብር</p>}
                      </>
                    ) : (
                      <>
-                       <p className="text-white font-black text-lg leading-none">{item.price} ብር</p>
-                       {item.vip_price && <p className="text-amber-500 font-bold text-[10px] leading-none bg-amber-500/10 px-1.5 py-0.5 rounded">VIP: {item.vip_price}</p>}
+                       <p className="text-white font-black text-xl leading-none">{item.price} ብር</p>
+                       {item.vip_price && <p className="text-amber-500 font-bold text-lg leading-none">VIP: {item.vip_price} ብር</p>}
                      </>
                    )}
                  </div>
                  
                  {item.options && item.options.length > 0 && (
-                    <p className="text-zinc-500 font-bold text-[10px] mt-1">{item.options.length} አማራጮች (Options)</p>
+                    <div className="mt-2 border-t border-zinc-800 pt-2">
+                       <p className="text-zinc-400 font-bold text-[11px]">{item.options.length} አይነት አማራጮች አሉት</p>
+                    </div>
                  )}
               </div>
             </div>
@@ -1301,7 +1301,7 @@ export default function App() {
 
   const renderAdmin = () => {
     return (
-      <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200 pt-12">
+      <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-amber-500 font-black text-2xl tracking-wide">{editId ? "Edit Listing" : "CEO Dashboard"}</h2>
           <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors">
