@@ -594,13 +594,40 @@ export default function App() {
     setFormData({ options: [], relatedLinks: [], showCategoryTag: true }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
-  const formatOptionDisplay = (optionString) => {
-    if (!optionString.includes(":")) return optionString;
-    const [label, values] = optionString.split(":");
+  // NEW SMART GROUPING FUNCTION
+  const renderGroupedOptions = (options) => {
+    if (!options || options.length === 0) return null;
+    
+    const groups = { Size: [], Colour: [], Other: [] };
+
+    options.forEach(opt => {
+      let placed = false;
+      // If the CEO added a colon prefix manually
+      if (opt.includes(":")) {
+         const [lbl, val] = opt.split(":");
+         const lowerLbl = lbl.toLowerCase();
+         if (lowerLbl.includes("size") || lowerLbl.includes("መጠን")) groups.Size.push(val.trim());
+         else if (lowerLbl.includes("color") || lowerLbl.includes("colour") || lowerLbl.includes("ቀለም")) groups.Colour.push(val.trim());
+         else groups.Other.push(opt.trim()); 
+         placed = true;
+      } else {
+         // Automatically grouping from the predefined checkboxes
+         if (categorizedOptions["የጫማ መጠን (Shoe Sizes)"]?.includes(opt) || categorizedOptions["የልብስ መጠን (Clothing Sizes)"]?.includes(opt)) {
+            groups.Size.push(opt);
+            placed = true;
+         } else if (categorizedOptions["ቀለም (Colors)"]?.includes(opt) || ["ነጭ", "ጥቁር", "ቀይ", "ሰማያዊ", "አረንጓዴ", "ቢጫ", "ቡናማ", "ግራጫ", "ሮዝ", "ሐምራዊ"].includes(opt)) {
+            groups.Colour.push(opt);
+            placed = true;
+         }
+      }
+      if (!placed) groups.Other.push(opt);
+    });
+
     return (
-      <div className="flex flex-col space-y-0.5">
-        <span className="text-[10px] uppercase font-black text-zinc-500">{label.trim()}</span>
-        <span className="text-zinc-300 font-bold text-xs">{values.trim()}</span>
+      <div className="space-y-1">
+        {groups.Size.length > 0 && <p className="text-xs text-zinc-300"><span className="font-bold text-zinc-500 uppercase mr-2">Size:</span> {groups.Size.join("  ")}</p>}
+        {groups.Colour.length > 0 && <p className="text-xs text-zinc-300"><span className="font-bold text-zinc-500 uppercase mr-2">Colour:</span> {groups.Colour.join("  ")}</p>}
+        {groups.Other.length > 0 && <p className="text-xs font-bold text-zinc-300">{groups.Other.join(", ")}</p>}
       </div>
     );
   };
@@ -1003,13 +1030,11 @@ export default function App() {
               <div className="flex justify-between items-center mb-4">
                   <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
               </div>
-              <div className="mb-6 space-y-3">
-                  {selectedProduct.options.map((opt, idx) => (
-                    <div key={idx} className="text-sm font-bold text-zinc-300 border-b border-zinc-800 pb-2">
-                       {formatOptionDisplay(opt)}
-                    </div>
-                  ))}
+              
+              <div className="mb-4 bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
+                 {renderGroupedOptions(selectedProduct.options)}
               </div>
+
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedProduct.options.map(opt => (
                   <button 
@@ -1017,7 +1042,7 @@ export default function App() {
                     onClick={() => { setSelectedOption(opt); setShowInlineCheckout(true); }} 
                     className={`py-3 px-1 text-xs font-bold text-center border rounded-lg transition-all ${selectedOption === opt ? 'border-amber-500 text-amber-500 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : 'border-zinc-700 text-white bg-zinc-900 hover:border-zinc-500'}`}
                   >
-                    {opt.split(":")[1] || opt}
+                    {opt.includes(":") ? opt.split(":")[1].trim() : opt}
                   </button>
                 ))}
               </div>
@@ -1167,10 +1192,8 @@ export default function App() {
                  )}
                  
                  {item.options && item.options.length > 0 && (
-                    <div className="mt-2 border-t border-zinc-800 pt-2 space-y-2">
-                      {item.options.map((opt, idx) => (
-                        <div key={idx} className="text-[11px]">{formatOptionDisplay(opt)}</div>
-                      ))}
+                    <div className="mt-3 border-t border-zinc-800 pt-2">
+                      {renderGroupedOptions(item.options)}
                     </div>
                  )}
               </div>
