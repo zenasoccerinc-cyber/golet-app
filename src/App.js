@@ -60,6 +60,12 @@ export default function App() {
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
+  // Custom Sizes State
+  const [customSizeInput, setCustomSizeInput] = useState("");
+  const [savedCustomSizes, setSavedCustomSizes] = useState(() => {
+    return JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]');
+  });
+
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
 
@@ -72,7 +78,11 @@ export default function App() {
   const [games, setGames] = useState([]);
   const [userPredictions, setUserPredictions] = useState({});
   const [predictionInputs, setPredictionInputs] = useState({});
-  const [newGame, setNewGame] = useState({ team_a: '', team_b: '', team_a_logo: '', team_b_logo: '' });
+  
+  // Games files
+  const [newGame, setNewGame] = useState({ team_a: '', team_b: '' });
+  const [teamAFile, setTeamAFile] = useState(null);
+  const [teamBFile, setTeamBFile] = useState(null);
   const [scoresToUpdate, setScoresToUpdate] = useState({});
   
   const [vipPaymentType, setVipPaymentType] = useState("ሀገር ውስጥ"); 
@@ -85,24 +95,23 @@ export default function App() {
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
   const categorizedOptions = {
-    "ጫማ (Shoes)": ["38", "39", "40", "41", "42", "43", "44", "45"],
-    "የልጆች ልብስ (Kids Clothing)": ["Kids 0-3m", "Kids 3-6m", "Kids 6-12m", "Kids 1-2Y", "Kids 2-4Y", "Kids 4-6Y", "Kids 6-8Y", "Kids 8-10Y", "Kids 10-12Y"],
-    "የልጆች ጫማ (Kids Shoes)": ["Kids Shoe 20-25", "Kids Shoe 26-30", "Kids Shoe 31-35"],
-    "ልብስ (Clothing)": ["XS", "S", "M", "L", "XL", "XXL"],
-    "ክብደት/መጠን (Weights/Liquids)": ["50g", "100g", "250g", "500g", "1kg", "250ml", "500ml", "1L"],
-    "ስልክ/ኤሌክትሮኒክስ (Electronics)": ["64GB", "128GB", "256GB", "512GB", "1TB"]
+    "ወንድ (Men)": ["S", "M", "L", "XL", "XXL", "38", "39", "40", "41", "42", "43", "44", "45"],
+    "ሴት (Women)": ["XS", "S", "M", "L", "XL", "35", "36", "37", "38", "39", "40", "41"],
+    "ትላልቅ ልጆች (Big Kids)": ["8-10Y", "10-12Y", "12-14Y", "Shoe 31", "Shoe 32", "Shoe 33", "Shoe 34", "Shoe 35"],
+    "ትናንሽ ልጆች (Small Kids)": ["0-3m", "3-6m", "6-12m", "1-2Y", "2-4Y", "4-6Y", "6-8Y", "Shoe 20-25", "Shoe 26-30"],
+    "ክብደት/መጠን (Measurements)": ["50g", "100g", "250g", "500g", "1kg", "250ml", "500ml", "1L"],
+    "የእርስዎ (Custom)": savedCustomSizes
   };
 
   useEffect(() => {
     fetchData();
     fetchGames(); 
     
-    // Check local storage for persistent login
     const savedUserStr = localStorage.getItem('goleth_user');
     if (savedUserStr) {
       const savedUser = JSON.parse(savedUserStr);
       setCurrentUser(savedUser);
-      handleTelegramLogin(savedUser); // Silent re-auth to fetch latest VIP status
+      handleTelegramLogin(savedUser); 
     }
 
     const handlePopState = () => {
@@ -303,7 +312,7 @@ export default function App() {
     }
 
     const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${vipPaymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።\nማሳሰቢያ: መልዕክት እንዲደርስዎ @goleth_app_bot ን START ማለቶን ያረጋግጡ።`;
+    const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ከ24 ሰዓት ባነሰ ጊዜ ውስጥ የVIP አባልነትዎ ይከፈታል።`;
     
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
@@ -323,7 +332,6 @@ export default function App() {
 
     const isGettingVipPrice = isVIP || includeVipSignup;
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
-    const roundedWeight = Math.ceil(selectedProduct.weight_kg || 1.0); 
     
     let finalPrice = basePrice; 
     let nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
@@ -354,7 +362,6 @@ export default function App() {
         payment_type: userRegion, 
         receipt_url: receiptUrl,
         shipping_speed: checkoutShipping,
-        total_weight_kg: roundedWeight,
         is_new_vip_signup: includeVipSignup 
       }]);
 
@@ -465,9 +472,20 @@ export default function App() {
   };
 
   const createGame = async () => {
-    await supabase.from('games').insert([newGame]);
-    setNewGame({ team_a: '', team_b: '', team_a_logo: '', team_b_logo: '' });
-    fetchGames(); alert("ጨዋታው ታትሟል!");
+    setUploading(true);
+    let a_url = '', b_url = '';
+    
+    if (teamAFile) a_url = await uploadFileToSupabase(teamAFile);
+    if (teamBFile) b_url = await uploadFileToSupabase(teamBFile);
+
+    await supabase.from('games').insert([{...newGame, team_a_logo: a_url, team_b_logo: b_url}]);
+    
+    setNewGame({ team_a: '', team_b: '' });
+    setTeamAFile(null);
+    setTeamBFile(null);
+    setUploading(false);
+    fetchGames(); 
+    alert("ጨዋታው ታትሟል!");
   };
 
   const updateFinalScore = async (gameId) => {
@@ -492,9 +510,26 @@ export default function App() {
     }
   };
 
+  const handleAddCustomSize = () => {
+    if(!customSizeInput.trim()) return;
+    
+    if(!formData.options.includes(customSizeInput)) {
+      setFormData(prev => ({ ...prev, options: [...(prev.options || []), customSizeInput] }));
+    }
+    
+    if(!savedCustomSizes.includes(customSizeInput)) {
+      const newSaved = [...savedCustomSizes, customSizeInput];
+      setSavedCustomSizes(newSaved);
+      localStorage.setItem('goleth_custom_sizes', JSON.stringify(newSaved));
+    }
+    
+    setCustomSizeInput("");
+  };
+
   const openPost = (post) => { window.history.pushState({ postId: post.id }, "", `#article-${post.id}`); setActivePost(post); };
   const openProduct = (prod) => { window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`); setSelectedProduct(prod); setCurrentImgIndex(0); setSelectedOption(null); setShowInlineCheckout(false); };
   const handleDelete = async (table, id) => { if (window.confirm("እርግጠኛ ነዎት?")) { await supabase.from(table).delete().eq("id", id); if (table === "games") fetchGames(); else fetchData(); if (activePost || selectedProduct) window.history.back(); } };
+  
   const handleEdit = (type, item) => {
     setAdminTab(type); setEditId(item.id);
     if (type === "posts") {
@@ -502,15 +537,17 @@ export default function App() {
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } 
       else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, brand: item.brand || "", price: item.price, vipPrice: item.vip_price || "", weight_kg: item.weight_kg || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], });
+      setFormData({ title: item.name, brand: item.brand || "", price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setShowAdmin(true);
   };
+  
   const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH" }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); };
   const handleSizeChange = (e) => { const value = e.target.value; setFormData((prev) => { const options = prev.options || []; if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) }; return { ...prev, options: [...options, value] }; }); };
   const toggleOptionCategory = (categoryName) => { setExpandedOptionCategories((prev) => ({ ...prev, [categoryName]: !prev[categoryName] })); };
   const handleAddRelated = (e) => { const value = e.target.value; if (!value) return; if (!formData.relatedLinks?.includes(value)) { setFormData(prev => ({ ...prev, relatedLinks: [...(prev.relatedLinks || []), value] })); } };
   const removeRelated = (linkToRemove) => { setFormData(prev => ({ ...prev, relatedLinks: prev.relatedLinks.filter(l => l !== linkToRemove) })); };
+  
   const handleAdminSubmit = async (e) => {
     e.preventDefault(); setUploading(true); let finalUrls = [];
     if (adminTab === "posts") {
@@ -522,7 +559,7 @@ export default function App() {
       if (editId) { await supabase.from("posts").update(payload).eq("id", editId); } else { await supabase.from("posts").insert([payload]); }
     } else if (adminTab === "products") {
       if (productImageFiles.length > 0) { for (const file of productImageFiles) { const prodUrl = await uploadFileToSupabase(file); if (prodUrl) finalUrls.push(prodUrl); } }
-      const payload = { name: formData.title, brand: formData.brand, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, weight_kg: formData.weight_kg ? Number(formData.weight_kg) : 1.0, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, };
+      const payload = { name: formData.title, brand: formData.brand, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       if (editId) { await supabase.from("products").update(payload).eq("id", editId); } else { await supabase.from("products").insert([payload]); }
     }
@@ -563,8 +600,13 @@ export default function App() {
         <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
         <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
         <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
-        <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል። ሂደቱ ወዲያውኑ ይጀምራል።</p>
-        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-2xl transition-colors text-lg shadow-lg">እሺ (OK)</button>
+        <p className="text-zinc-300 text-sm leading-loose mb-6">ማረጋገጫዎ በተሳካ ሁኔታ ተልኳል።</p>
+        
+        <a href="https://t.me/goleth_app_bot?start=yes" target="_blank" rel="noreferrer" className="block w-full bg-[#2AABEE] hover:bg-[#229ED9] text-white font-black py-4 rounded-xl transition-colors text-sm shadow-lg mb-4">
+           ክፍያዎ እንዲረጋገጥ እዚህ ተጭነው START ይበሉ
+        </a>
+
+        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-transparent border border-zinc-700 text-zinc-400 hover:bg-zinc-800 font-bold py-3 rounded-xl transition-colors text-sm">ዝጋ (Close)</button>
       </div>
     </div>
   );
@@ -889,18 +931,18 @@ export default function App() {
         )}
 
         <div className="p-6">
-          {selectedProduct.brand && <h2 className="text-zinc-400 text-sm font-black uppercase tracking-widest mb-2">{selectedProduct.brand}</h2>}
-          <h1 className="text-2xl font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
+          {selectedProduct.brand && <h2 className="text-zinc-400 text-sm font-black uppercase tracking-widest mb-1">{selectedProduct.brand}</h2>}
+          <h1 className="text-2xl font-black text-white mb-4 leading-tight">{selectedProduct.name}</h1>
 
-          <div className="flex justify-between items-center bg-zinc-900 p-5 rounded-2xl border border-zinc-800 mb-8 shadow-lg">
-             <div className={isVIP && selectedProduct.vip_price ? 'opacity-50' : ''}>
+          <div className="flex space-x-4 items-center bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6 shadow-lg">
+             <div className="flex-1">
                 <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
-                <p className={`text-white font-black text-2xl leading-none ${isVIP && selectedProduct.vip_price ? 'line-through decoration-red-500 decoration-2' : ''}`}>{selectedProduct.price} <span className="text-sm">ብር</span></p>
+                <p className={`font-black text-2xl leading-none ${isVIP && selectedProduct.vip_price ? 'text-zinc-300 line-through decoration-red-500 decoration-2' : 'text-white'}`}>{selectedProduct.price} <span className="text-sm">ብር</span></p>
              </div>
 
              {selectedProduct.vip_price && (
-               <div className="text-right pl-4 border-l border-zinc-800">
-                 <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center justify-end">👑 VIP ዋጋ</p>
+               <div className="flex-1 pl-4 border-l border-zinc-800">
+                 <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
                  <p className="text-amber-500 font-black text-2xl leading-none">{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
                </div>
              )}
@@ -1033,16 +1075,21 @@ export default function App() {
 
         <div className="grid grid-cols-2 gap-4 mt-2">
           {filtered.map((item) => (
-            <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl p-3 border border-zinc-800 hover:border-zinc-700 transition-colors">
+            <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl p-3 border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg">
               
               <div className="mb-2">
-                 <p className="text-white font-black text-[13px] tracking-widest uppercase mb-0.5 line-clamp-1">{item.brand}</p>
-                 <h3 className="text-zinc-300 font-bold text-sm line-clamp-2 leading-snug">{item.name}</h3>
+                 <p className="text-amber-500 font-black text-[10px] tracking-widest uppercase mb-0.5 line-clamp-1">{item.brand || "\u00A0"}</p>
+                 <h3 className="text-white font-black text-base line-clamp-2 leading-snug">{item.name}</h3>
               </div>
 
-              <div className="bg-white rounded-xl p-2 mb-3 h-36 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02]">
+              <div className="bg-white rounded-xl p-2 mb-3 h-40 flex items-center justify-center relative shadow-sm transition-transform duration-300 group-hover:scale-[1.02] overflow-hidden">
+                 <div className="absolute top-0 left-0 w-full flex justify-between p-2 z-10 pointer-events-none">
+                    {item.brand && <span className="bg-black/80 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur shadow-sm">{item.brand}</span>}
+                    {item.category && <span className="bg-amber-500/90 text-black text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur shadow-sm">{item.category}</span>}
+                 </div>
+
                  {isCEO && (
-                    <div className="absolute top-2 right-2 flex space-x-1 z-10">
+                    <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={14}/></button>
                       <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={14}/></button>
                     </div>
@@ -1057,7 +1104,7 @@ export default function App() {
                    {isVIP ? (
                      <>
                        <p className="text-amber-500 font-black text-lg leading-none">{item.vip_price || item.price} ብር</p>
-                       {item.vip_price && <p className="text-zinc-500 font-bold text-xs leading-none line-through decoration-red-500">{item.price} ብር</p>}
+                       {item.vip_price && <p className="text-zinc-300 font-bold text-xs leading-none line-through decoration-red-500">{item.price} ብር</p>}
                      </>
                    ) : (
                      <>
@@ -1068,7 +1115,7 @@ export default function App() {
                  </div>
                  
                  {item.options && item.options.length > 0 && (
-                    <p className="text-zinc-500 font-bold text-[10px]">{item.options.length} አማራጮች (Options)</p>
+                    <p className="text-zinc-500 font-bold text-[10px] mt-1">{item.options.length} አማራጮች (Options)</p>
                  )}
               </div>
             </div>
@@ -1254,8 +1301,8 @@ export default function App() {
 
   const renderAdmin = () => {
     return (
-      <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200">
-        <div className="flex justify-between items-center mb-6 mt-4">
+      <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in duration-200 pt-12">
+        <div className="flex justify-between items-center mb-6">
           <h2 className="text-amber-500 font-black text-2xl tracking-wide">{editId ? "Edit Listing" : "CEO Dashboard"}</h2>
           <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors">
             <X className="text-white w-6 h-6" />
@@ -1278,11 +1325,22 @@ export default function App() {
               <h3 className="text-amber-500 font-bold mb-4">Post New Game</h3>
               <div className="space-y-3">
                 <input type="text" placeholder="Team A Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_a} onChange={e => setNewGame({...newGame, team_a: e.target.value})} />
-                <input type="text" placeholder="Team A Logo URL" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_a_logo} onChange={e => setNewGame({...newGame, team_a_logo: e.target.value})} />
-                <div className="border-b border-zinc-800 my-2"></div>
+                <div>
+                   <label className="block text-zinc-400 text-xs font-bold mb-1">Team A Logo (Image File)</label>
+                   <input type="file" accept="image/*" onChange={(e) => setTeamAFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                </div>
+                
+                <div className="border-b border-zinc-800 my-4"></div>
+                
                 <input type="text" placeholder="Team B Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_b} onChange={e => setNewGame({...newGame, team_b: e.target.value})} />
-                <input type="text" placeholder="Team B Logo URL" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_b_logo} onChange={e => setNewGame({...newGame, team_b_logo: e.target.value})} />
-                <button onClick={createGame} className="w-full bg-amber-500 text-black p-4 rounded-xl mt-4 font-black hover:bg-amber-400">Publish Game</button>
+                <div>
+                   <label className="block text-zinc-400 text-xs font-bold mb-1">Team B Logo (Image File)</label>
+                   <input type="file" accept="image/*" onChange={(e) => setTeamBFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                </div>
+
+                <button onClick={createGame} disabled={uploading || !newGame.team_a || !newGame.team_b} className="w-full bg-amber-500 disabled:bg-zinc-800 text-black p-4 rounded-xl mt-4 font-black hover:bg-amber-400">
+                  {uploading ? "Publishing..." : "Publish Game"}
+                </button>
               </div>
             </div>
 
@@ -1291,7 +1349,11 @@ export default function App() {
               {games.map(game => (
                 <div key={game.id} className="border-t border-zinc-800 py-4 flex flex-col space-y-3">
                   <div className="flex justify-between items-center text-sm font-bold text-white">
-                    <span>{game.team_a} vs {game.team_b}</span>
+                    <span className="flex items-center space-x-2">
+                       {game.team_a_logo && <img src={game.team_a_logo} className="w-6 h-6 object-contain" alt="A" />}
+                       <span>{game.team_a} vs {game.team_b}</span>
+                       {game.team_b_logo && <img src={game.team_b_logo} className="w-6 h-6 object-contain" alt="B" />}
+                    </span>
                     <button onClick={() => handleDelete("games", game.id)} className="text-red-500 p-1"><Trash2 size={16}/></button>
                   </div>
                   {game.status !== 'finished' ? (
@@ -1414,8 +1476,6 @@ export default function App() {
                   <input required value={formData.price || ""} type="number" placeholder="ዋጋ" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
                   <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
                 </div>
-                
-                <input value={formData.weight_kg || ""} type="number" step="0.1" placeholder="ክብደት በኪሎግራም (Weight in KG - Default 1.0)" onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
 
                 <div className="grid grid-cols-2 gap-4">
                   <select required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
@@ -1440,7 +1500,16 @@ export default function App() {
                   </button>
                   
                   {showSizeDropdown && (
-                    <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-80 overflow-y-auto p-4 shadow-2xl">
+                    <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-[400px] overflow-y-auto p-4 shadow-2xl">
+                      
+                      <div className="mb-4 bg-black p-3 rounded-xl border border-amber-500/30">
+                         <label className="block text-amber-500 text-xs font-bold mb-2">አዲስ መጠን / ቀለም ያስገቡ (Add Custom Size/Option)</label>
+                         <div className="flex space-x-2">
+                           <input type="text" value={customSizeInput} onChange={(e) => setCustomSizeInput(e.target.value)} placeholder="e.g. Red, 4XL, 100ml..." className="flex-1 bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-sm focus:border-amber-500 outline-none" />
+                           <button type="button" onClick={handleAddCustomSize} className="bg-amber-500 text-black px-3 py-2 rounded-lg font-bold text-sm hover:bg-amber-400">Add</button>
+                         </div>
+                      </div>
+
                       <div className="space-y-3">
                         {Object.entries(categorizedOptions).map(([categoryName, sizes]) => (
                           <div key={categoryName} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700">
@@ -1453,9 +1522,10 @@ export default function App() {
                               <span>{expandedOptionCategories[categoryName] ? "▲" : "▼"}</span>
                             </button>
                             {expandedOptionCategories[categoryName] && (
-                              <div className="p-4 grid grid-cols-2 gap-2 bg-black border-t border-zinc-700">
+                              <div className="p-4 flex flex-wrap gap-2 bg-black border-t border-zinc-700">
+                                {sizes.length === 0 && <p className="text-xs text-zinc-500">ምንም የለም</p>}
                                 {sizes.map(size => (
-                                  <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors">
+                                  <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors border border-zinc-800">
                                     <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500 w-4 h-4" />
                                     <span className="text-xs font-bold">{size}</span>
                                   </label>
@@ -1471,7 +1541,7 @@ export default function App() {
                 </div>
 
                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                   <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች</label>
+                   <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች (Image Upload)</label>
                    <input type="file" multiple accept="image/*" onChange={(e) => setProductImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
                 </div>
               </>
