@@ -34,6 +34,12 @@ export default function App() {
   const [orderAddress, setOrderAddress] = useState("");
   const [orderFile, setOrderFile] = useState(null);
   
+  // Custom Sourcing Specific States
+  const [reqProductName, setReqProductName] = useState("");
+  const [reqStoreName, setReqStoreName] = useState("");
+  const [reqProductLink, setReqProductLink] = useState("");
+  const [reqImage, setReqImage] = useState(null);
+
   // Gift States
   const [isGift, setIsGift] = useState(false);
   const [recipientName, setRecipientName] = useState("");
@@ -406,6 +412,14 @@ export default function App() {
     setShowSuccessModal(true);
   };
 
+  const handleOpenSourcing = () => {
+    setReqProductName("");
+    setReqStoreName("");
+    setReqProductLink("");
+    setReqImage(null);
+    setShowOrderForm(true);
+  };
+
   const submitOrderForm = async (e) => {
     e.preventDefault();
     if (!currentUser) {
@@ -417,16 +431,11 @@ export default function App() {
 
     const name = orderName;
     const phone = vipPhone;
-    const productName = e.target.productName.value;
-    const storeName = e.target.storeName.value;
-    const productLink = e.target.productLink.value;
+    const productName = reqProductName;
+    const storeName = reqStoreName;
+    const productLink = reqProductLink;
+    const imageFile = reqImage;
     const shipping = e.target.shipping.value;
-    const imageFile = e.target.orderImage.files[0];
-
-    if (!productName && !productLink && !imageFile) {
-       alert("እባክዎ ቢያንስ የእቃውን ስም፣ ሊንክ ወይም ምስል ያስገቡ።");
-       setUploading(false); return;
-    }
 
     let imageUrl = "";
     if (imageFile) {
@@ -681,83 +690,87 @@ export default function App() {
     </div>
   );
 
-  const renderOrderForm = () => (
-    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-4 animate-in fade-in zoom-in duration-200 justify-center">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 relative shadow-2xl max-w-md mx-auto w-full">
-        <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
-        
-        {!currentUser ? (
-          <div className="text-center py-6">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
-            <h3 className="text-white font-black mb-3">ለማዘዝ ይግቡ (Login required)</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ።</p>
-            <div ref={telegramSourcingRef} className="flex justify-center min-h-[50px]"></div>
-          </div>
-        ) : (
-          <>
-            <h2 className="text-2xl font-black text-amber-500 mb-2">ልዩ ዕቃ ማዘዣ</h2>
-            <p className="text-zinc-300 text-sm mb-4">ምን ማምጣት እንድንልዎት ይፈልጋሉ? ከታች ካሉት አማራጮች ቢያንስ አንዱን ያስገቡ።</p>
-            
-            <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg mb-6 text-xs text-zinc-300">
-              {isVIP 
-                ? <><span className="text-amber-500 font-bold">የVIP ጥቅም:</span> መደበኛ ማጓጓዣ (3-5 ቀናት) ነፃ ነው! የአገልግሎት ክፍያ ብቻ ይከፍላሉ።</>
-                : <><span className="font-bold">ማሳሰቢያ:</span> ልዩ ማዘዣ የአገልግሎት ክፍያ እና የማጓጓዣ ክፍያዎችን ያካትታል።</>
-              }
-            </div>
+  const renderOrderForm = () => {
+    // Determine if at least 2 sourcing inputs are filled
+    const isSourcingValid = ((reqProductName.trim() ? 1 : 0) + (reqStoreName.trim() ? 1 : 0) + (reqProductLink.trim() ? 1 : 0) + (reqImage ? 1 : 0)) >= 2;
 
-            <form onSubmit={submitOrderForm} className="space-y-4">
-              <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-              <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
+    return (
+      <div className="fixed inset-0 bg-zinc-900 z-[60] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+        <div className="relative w-full min-h-full flex flex-col px-6 pt-12 pb-24 max-w-lg mx-auto shadow-2xl">
+          <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-10">
+            <X className="text-white w-6 h-6" />
+          </button>
+          
+          {!currentUser ? (
+            <div className="text-center py-20 flex-1 flex flex-col justify-center">
+              <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
+              <h3 className="text-white font-black mb-3">ለማዘዝ ይግቡ (Login required)</h3>
+              <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ።</p>
+              <div ref={telegramSourcingRef} className="flex justify-center min-h-[50px]"></div>
+            </div>
+          ) : (
+            <div className="flex-1 w-full flex flex-col">
+              <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">ልዩ እቃ ማዘዣ</h2>
+              <p className="text-zinc-300 text-sm text-center mb-2">ምን እቃ እንድንገዛ እና እንድንልክሎት ይፈልጋሉ? ከታች ካሉት የእቃው አማራጮች ቢያንስ <span className="font-bold text-white">ሁለቱን</span> ያስገቡ።</p>
               
-              <div className="border-t border-zinc-800 my-4 pt-4 space-y-3">
-                 <input name="productName" placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                 <input name="storeName" placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                 <input name="productLink" type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                 
-                 <div>
-                    <label className="block text-zinc-400 text-sm mb-1.5 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)፦</label>
-                    <input type="file" name="orderImage" accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
-                 </div>
+              <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg mb-6 text-center">
+                <span className="text-amber-500 font-bold text-xs">የVIP አባል ከሆኑ የነጻ አገልግሎት! የማጓጓዣ ብቻ ይከፍላሉ።</span>
               </div>
 
-              <label className="flex items-center space-x-3 text-zinc-300 mt-4 bg-black p-4 rounded-xl border border-zinc-800 cursor-pointer">
-                <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
-                <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው? (Is this a gift?)</span>
-              </label>
-
-              {isGift && (
-                <div className="p-4 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-2">የተቀባዩ መረጃ (Recipient Info)</h4>
-                  <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                  <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
-                  <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+              <form onSubmit={submitOrderForm} className="space-y-4">
+                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
+                
+                <div className="border-t border-zinc-800 my-4 pt-4 space-y-3">
+                   <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                   <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                   <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                   
+                   <div>
+                      <label className="block text-zinc-400 text-sm mb-1.5 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)፦</label>
+                      <input type="file" onChange={e => setReqImage(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                   </div>
                 </div>
-              )}
-              
-              <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-4">
-                <option value="">ማጓጓዣ ይምረጡ</option>
-                <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
-                <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
-              </select>
-              
-              <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-4 flex items-center justify-center transition-colors text-lg">
-                {uploading ? "በመላክ ላይ..." : <><Send size={20} className="mr-2" /> ትዕዛዙን ላክ</>}
-              </button>
-            </form>
-          </>
-        )}
+
+                <label className="flex items-center space-x-3 text-zinc-300 mt-4 bg-black p-4 rounded-xl border border-zinc-800 cursor-pointer">
+                  <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
+                  <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው? (Is this a gift?)</span>
+                </label>
+
+                {isGift && (
+                  <div className="p-4 bg-black border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-2">የተቀባዩ መረጃ (Recipient Info)</h4>
+                    <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                    <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                    <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+                  </div>
+                )}
+                
+                <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-4">
+                  <option value="">ማጓጓዣ ይምረጡ</option>
+                  <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
+                  <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
+                </select>
+                
+                <button type="submit" disabled={uploading || !isSourcingValid} className={`w-full font-black py-4 rounded-xl mt-6 flex items-center justify-center transition-colors text-lg ${(!isSourcingValid || uploading) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg'}`}>
+                  {uploading ? "በመላክ ላይ..." : <><Send size={20} className="mr-2" /> ትዕዛዙን ላክ</>}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderOrderBanner = () => (
-    <button onClick={() => setShowOrderForm(true)} className="col-span-2 w-full text-left bg-gradient-to-br from-zinc-900 to-black rounded-xl p-4 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-6 mt-2 hover:border-amber-500/50 transition-all group">
-      <div className="relative z-10">
-        <h3 className="text-amber-500 font-black text-sm tracking-wide mb-1 drop-shadow-md">ልዩ ዕቃ ማዘዝ ይፈልጋሉ?</h3>
-        <p className="text-zinc-400 text-[10px] font-bold">ከማንኛውም ቦታ፡ እኛ እናመጣሎታለን!</p>
+    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-xl p-4 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-6 mt-2 hover:border-amber-500/50 transition-all group">
+      <div className="flex-1 flex flex-col items-center text-center">
+        <h3 className="text-amber-500 font-black text-lg tracking-wide drop-shadow-md leading-tight mb-1">ልዩ እቃ ማዘዝ ይፈልጋሉ?</h3>
+        <p className="text-zinc-300 text-sm font-bold">ከየትም ቦታ : የፈለጉበት ቦታ እናመጣሎታለን!</p>
       </div>
-      <div className="bg-amber-500/10 p-2 rounded-full shadow-inner border border-amber-500/30 group-hover:bg-amber-500/20 transition-colors">
-         <PlusCircle className="text-amber-500 drop-shadow-lg" size={20} />
+      <div className="bg-amber-500/10 p-2.5 rounded-full shadow-inner border border-amber-500/30 group-hover:bg-amber-500/20 transition-colors shrink-0 ml-2">
+         <PlusCircle className="text-amber-500 drop-shadow-lg" size={28} />
       </div>
     </button>
   );
@@ -974,97 +987,6 @@ export default function App() {
             </button>
           </form>
         )}
-      </div>
-    ) : null;
-
-    return (
-      <div className="fixed inset-0 z-[60] bg-black overflow-y-auto pb-24 animate-in slide-in-from-bottom duration-300">
-        <div className="sticky top-0 z-10 flex justify-between items-center p-4">
-          <button onClick={() => window.history.back()} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white"><ChevronLeft size={24} /></button>
-          {isCEO && (
-             <div className="flex space-x-2">
-               <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-white"><Edit2 size={18} /></button>
-               <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2 rounded-full border border-zinc-800 text-red-500"><Trash2 size={18} /></button>
-             </div>
-          )}
-        </div>
-
-        {hasImages ? (
-          <div className="relative w-full h-[40vh] bg-white flex items-center justify-center -mt-16 pt-16">
-            <img src={selectedProduct.image_urls[currentImgIndex]} alt={selectedProduct.name} className="max-h-full object-contain p-8 mix-blend-multiply" />
-            
-            {selectedProduct.image_urls.length > 1 && (
-              <>
-                <button onClick={() => setCurrentImgIndex(prev => prev > 0 ? prev - 1 : selectedProduct.image_urls.length - 1)} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-black/5 rounded-full hover:bg-black/10 transition-colors"><ChevronLeft size={24} className="text-black" /></button>
-                <button onClick={() => setCurrentImgIndex(prev => prev < selectedProduct.image_urls.length - 1 ? prev + 1 : 0)} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-black/5 rounded-full hover:bg-black/10 transition-colors"><ChevronRight size={24} className="text-black" /></button>
-                <div className="absolute bottom-4 flex space-x-2">
-                  {selectedProduct.image_urls.map((_, idx) => (
-                    <div key={idx} onClick={() => setCurrentImgIndex(idx)} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === currentImgIndex ? 'bg-black w-4' : 'bg-gray-300'}`} />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="w-full h-[30vh] bg-zinc-900 flex items-center justify-center -mt-16 pt-16">
-             <span className="text-zinc-600 font-bold">ምስል የለም</span>
-          </div>
-        )}
-
-        <div className="p-6">
-          <div className="flex items-center space-x-2 mb-2">
-             {selectedProduct.brand && <h2 className="text-amber-500 text-[14px] font-black uppercase tracking-widest">{selectedProduct.brand}</h2>}
-             {selectedProduct.show_category !== false && selectedProduct.category && <span className="text-zinc-200 text-[12px] font-bold bg-zinc-700/80 px-2 py-0.5 rounded">{selectedProduct.category}</span>}
-          </div>
-          
-          <h1 className="text-[16px] font-black text-white mb-6 leading-tight">{selectedProduct.name}</h1>
-
-          <div className="flex space-x-4 items-center bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6 shadow-lg">
-             <div className="flex-1">
-                <p className="text-zinc-400 text-[10px] font-bold uppercase mb-1">መደበኛ ዋጋ</p>
-                <p className={`font-black leading-none ${isVIP && selectedProduct.vip_price ? 'text-zinc-400 text-lg line-through decoration-red-500 decoration-2' : 'text-white text-xl'}`}>{selectedProduct.price} <span className="text-sm">ብር</span></p>
-             </div>
-
-             {selectedProduct.vip_price && (
-               <div className="flex-1 pl-4 border-l border-zinc-800">
-                 <p className="text-amber-500 text-[10px] font-bold uppercase mb-1 flex items-center">👑 VIP ዋጋ</p>
-                 <p className={`text-amber-500 font-black leading-none ${isVIP ? 'text-xl' : 'text-lg'}`}>{selectedProduct.vip_price} <span className="text-sm">ብር</span></p>
-               </div>
-             )}
-          </div>
-
-          {!showInlineCheckout && selectedProduct.options && selectedProduct.options.length > 0 && (
-            <div className="mb-8 border-t border-zinc-900 pt-6">
-              <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-white font-bold text-sm tracking-wide">አማራጭ ይምረጡ (ወደ ክፍያ ለመሄድ)</h3>
-              </div>
-              
-              <div className="mb-4 bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
-                 {renderGroupedOptions(selectedProduct.options)}
-              </div>
-
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {selectedProduct.options.map(opt => (
-                  <button 
-                    key={opt} 
-                    onClick={() => { setSelectedOption(opt); setShowInlineCheckout(true); }} 
-                    className={`py-3 px-1 text-xs font-bold text-center border rounded-lg transition-all ${selectedOption === opt ? 'border-amber-500 text-amber-500 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : 'border-zinc-700 text-white bg-zinc-900 hover:border-zinc-500'}`}
-                  >
-                    {opt.includes(":") ? opt.split(":")[1].trim() : opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!showInlineCheckout && (!selectedProduct.options || selectedProduct.options.length === 0) && (
-             <button onClick={() => setShowInlineCheckout(true)} className="w-full bg-amber-500 text-black font-black py-4 rounded-xl text-lg flex justify-center items-center mt-6 shadow-lg">
-                አሁን ይግዙ (Buy Now)
-             </button>
-          )}
-
-          {inlineCheckoutUI}
-        </div>
       </div>
     );
   };
@@ -1473,6 +1395,7 @@ export default function App() {
 
                 <select required value={formData.author || ""} onChange={(e) => setFormData({ ...formData, author: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-amber-500 font-bold p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
                   <option value="">ጸሐፊ (Author) ይምረጡ</option>
+                  <option value="">GOLETH</option>
                   {authorList.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
 
