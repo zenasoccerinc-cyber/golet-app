@@ -594,7 +594,17 @@ export default function App() {
     setFormData({ options: [], relatedLinks: [], showCategoryTag: true }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
-  // NEW SMART GROUPING FUNCTION
+  const formatOptionDisplay = (optionString) => {
+    if (!optionString.includes(":")) return optionString;
+    const [label, values] = optionString.split(":");
+    return (
+      <div className="flex flex-col space-y-0.5">
+        <span className="text-[10px] uppercase font-black text-zinc-500">{label.trim()}</span>
+        <span className="text-zinc-300 font-bold text-xs">{values.trim()}</span>
+      </div>
+    );
+  };
+
   const renderGroupedOptions = (options) => {
     if (!options || options.length === 0) return null;
     
@@ -602,7 +612,6 @@ export default function App() {
 
     options.forEach(opt => {
       let placed = false;
-      // If the CEO added a colon prefix manually
       if (opt.includes(":")) {
          const [lbl, val] = opt.split(":");
          const lowerLbl = lbl.toLowerCase();
@@ -611,7 +620,6 @@ export default function App() {
          else groups.Other.push(opt.trim()); 
          placed = true;
       } else {
-         // Automatically grouping from the predefined checkboxes
          if (categorizedOptions["የጫማ መጠን (Shoe Sizes)"]?.includes(opt) || categorizedOptions["የልብስ መጠን (Clothing Sizes)"]?.includes(opt)) {
             groups.Size.push(opt);
             placed = true;
@@ -625,9 +633,9 @@ export default function App() {
 
     return (
       <div className="space-y-1">
-        {groups.Size.length > 0 && <p className="text-xs text-zinc-300"><span className="font-bold text-zinc-500 uppercase mr-2">Size:</span> {groups.Size.join("  ")}</p>}
-        {groups.Colour.length > 0 && <p className="text-xs text-zinc-300"><span className="font-bold text-zinc-500 uppercase mr-2">Colour:</span> {groups.Colour.join("  ")}</p>}
-        {groups.Other.length > 0 && <p className="text-xs font-bold text-zinc-300">{groups.Other.join(", ")}</p>}
+        {groups.Size.length > 0 && <p className="text-xs text-zinc-300"><span className="font-bold text-zinc-500 uppercase mr-2">Size:</span> {groups.Size.join(" : ")}</p>}
+        {groups.Colour.length > 0 && <p className="text-xs text-zinc-300"><span className="font-bold text-zinc-500 uppercase mr-2">Colour:</span> {groups.Colour.join(" : ")}</p>}
+        {groups.Other.length > 0 && <p className="text-xs font-bold text-zinc-300">{groups.Other.join(" : ")}</p>}
       </div>
     );
   };
