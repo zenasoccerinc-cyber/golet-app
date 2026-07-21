@@ -9,9 +9,9 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Telegram Configuration
-const TELEGRAM_BOT_TOKEN = "8726960567:AAGx_RJag33dBAjlQdGkJhgYEbzdVrBAlHU"; 
-const TELEGRAM_CHAT_ID = "813725953"; 
+// Secure Telegram Configuration
+const TELEGRAM_BOT_TOKEN = process.env.REACT_APP_TELEGRAM_BOT_TOKEN; 
+const TELEGRAM_CHAT_ID = process.env.REACT_APP_TELEGRAM_CHAT_ID; 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("ዋና");
@@ -54,7 +54,6 @@ export default function App() {
   
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
-  const [tapCount, setTapCount] = useState(0);
   
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [], relatedLinks: [], showCategoryTag: true });
@@ -237,6 +236,9 @@ export default function App() {
       const userRecord = data[0];
       setCurrentUserProfile(userRecord);
       localStorage.setItem('goleth_profile', JSON.stringify(userRecord));
+
+      // SECURE ADMIN CHECK: Rely on database role instead of hardcoded password
+      setIsCEO(Boolean(userRecord.is_admin));
 
       if (!userRecord.full_name || !userRecord.phone_number) {
         setShowProfileModal(true);
@@ -542,18 +544,11 @@ export default function App() {
     fetchGames(); alert("ጨዋታው ተጠናቆ ውጤቱ ተመዝግቧል!");
   };
 
+  // Securely removed tap count backdoor
   const handleLogoTap = () => {
     setActiveTab("ዋና");
     if (activePost) window.history.back(); 
-    const newCount = tapCount + 1;
-    setTapCount(newCount);
-    setTimeout(() => setTapCount(0), 3000);
-
-    if (newCount >= 5) {
-      const password = window.prompt("የአስተዳዳሪ የይለፍ ቃል ያስገቡ:");
-      if (password === "admin123") { setIsCEO(true); setShowAdmin(true); }
-      setTapCount(0);
-    }
+    window.scrollTo(0,0);
   };
 
   const handleAddCustomSize = () => {
@@ -1008,6 +1003,92 @@ export default function App() {
             </button>
           </form>
         )}
+      </div>
+    ) : null;
+
+    return (
+      <div className="fixed inset-0 bg-black z-50 overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-24">
+        <div className="relative">
+          <button onClick={() => window.history.back()} className="absolute top-4 left-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-10">
+            <ChevronLeft className="text-white w-6 h-6" />
+          </button>
+          {isCEO && (
+             <div className="absolute top-4 left-16 flex space-x-2 z-10">
+                <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-white"><Edit2 size={20}/></button>
+                <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-red-500"><Trash2 size={20}/></button>
+             </div>
+          )}
+
+          {hasImages ? (
+            <div className="relative w-full aspect-square bg-white flex items-center justify-center">
+              <img src={selectedProduct.image_urls[currentImgIndex]} alt={selectedProduct.name} className="w-full h-full object-contain mix-blend-multiply" />
+              {selectedProduct.image_urls.length > 1 && (
+                <div className="absolute bottom-4 flex justify-center w-full space-x-2 z-10">
+                  {selectedProduct.image_urls.map((_, idx) => (
+                    <button key={idx} onClick={() => setCurrentImgIndex(idx)} className={`w-2.5 h-2.5 rounded-full transition-colors shadow-sm ${currentImgIndex === idx ? 'bg-amber-500 scale-125' : 'bg-zinc-300'}`} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="w-full aspect-square bg-zinc-900 flex items-center justify-center border-b border-zinc-800">
+              <span className="text-zinc-500 font-bold text-sm">ምስል የለም</span>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+               <p className="text-amber-500 font-black text-sm uppercase tracking-wider mb-1">{selectedProduct.brand}</p>
+               <h1 className="text-2xl font-black text-white leading-tight">{selectedProduct.name}</h1>
+            </div>
+            {selectedProduct.show_category !== false && selectedProduct.category && <span className="bg-zinc-800 text-zinc-300 text-xs font-bold px-2.5 py-1 rounded-md shrink-0 ml-4 border border-zinc-700">{selectedProduct.category}</span>}
+          </div>
+
+          <div className="mt-6 border-b border-zinc-800 pb-6">
+            {isVIP ? (
+               <div className="flex flex-col space-y-1">
+                 <p className="text-amber-500 font-black text-3xl">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
+                 {selectedProduct.vip_price && <p className="text-zinc-400 font-bold text-lg line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>}
+               </div>
+            ) : (
+               <div className="flex flex-col space-y-1">
+                 <p className="text-white font-black text-3xl">{selectedProduct.price} ብር</p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-bold text-lg">VIP ዋጋ: {selectedProduct.vip_price} ብር</p>}
+               </div>
+            )}
+          </div>
+
+          {selectedProduct.options && selectedProduct.options.length > 0 && (
+            <div className="mt-6 border-b border-zinc-800 pb-6">
+              <h3 className="text-white font-black mb-3">አማራጭ ይምረጡ (Select Option)</h3>
+              <div className="flex flex-wrap gap-2">
+                {selectedProduct.options.map((opt) => (
+                  <button key={opt} onClick={() => setSelectedOption(opt)} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedOption === opt ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-black text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
+                    {formatOptionDisplay(opt)}
+                  </button>
+                ))}
+              </div>
+              {!selectedOption && showInlineCheckout && <p className="text-red-500 text-xs mt-2 font-bold animate-pulse">እባክዎ ከመግዛትዎ በፊት አማራጭ ይምረጡ!</p>}
+            </div>
+          )}
+
+          {!showInlineCheckout && (
+             <button onClick={() => {
+                if (selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption) {
+                   alert("እባክዎ ከመግዛትዎ በፊት አማራጭ ይምረጡ! (Please select an option first)");
+                   return;
+                }
+                setShowInlineCheckout(true);
+             }} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-8 flex justify-center items-center">
+               <ShoppingBag className="mr-2" /> አሁን ይግዙ
+             </button>
+          )}
+
+          {inlineCheckoutUI}
+
+        </div>
       </div>
     );
   };
