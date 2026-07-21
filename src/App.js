@@ -56,7 +56,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({ options: [], relatedLinks: [], showCategoryTag: true });
+  const [formData, setFormData] = useState({ options: [], relatedLinks: [] });
   const [existingMainImage, setExistingMainImage] = useState(null);
   const [existingInlineImages, setExistingInlineImages] = useState([]);
   const [mainImageFile, setMainImageFile] = useState(null);
@@ -576,12 +576,12 @@ export default function App() {
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } 
       else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], showCategoryTag: item.show_category !== false });
+      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [] });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
   
-  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", showCategoryTag: true }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); };
+  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH" }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); };
   const handleSizeChange = (e) => { const value = e.target.value; setFormData((prev) => { const options = prev.options || []; if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) }; return { ...prev, options: [...options, value] }; }); };
   const toggleOptionCategory = (categoryName) => { setExpandedOptionCategories((prev) => ({ ...prev, [categoryName]: !prev[categoryName] })); };
   const handleAddRelated = (e) => { const value = e.target.value; if (!value) return; if (!formData.relatedLinks?.includes(value)) { setFormData(prev => ({ ...prev, relatedLinks: [...(prev.relatedLinks || []), value] })); } };
@@ -610,11 +610,11 @@ export default function App() {
           if (prodUrl) finalUrls.push(prodUrl); 
         } 
       }
-      const payload = { name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, show_category: formData.showCategoryTag };
+      const payload = { name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       if (editId) { await supabase.from("products").update(payload).eq("id", editId); } else { await supabase.from("products").insert([payload]); }
     }
-    setFormData({ options: [], relatedLinks: [], showCategoryTag: true }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
+    setFormData({ options: [], relatedLinks: [] }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
   const formatOptionDisplay = (optionString) => {
@@ -634,10 +634,10 @@ export default function App() {
         <h2 className="text-2xl font-black text-amber-500 mb-2">እንኳን ደህና መጡ!</h2>
         <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ይሙሉ (ይህ አንዴ ብቻ የሚጠየቅ ነው)።</p>
         <form onSubmit={saveUserProfile} className="space-y-4">
-          <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (Full Name)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none" />
-          <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none font-mono" />
+          <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (Full Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+          <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
           
-          <select required name="location" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none font-bold">
+          <select required name="location" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-bold">
             <option value="">የት ሀገር ነዎት? (Location)</option>
             <option value="Ethiopia">Ethiopia (ኢትዮጵያ)</option>
             <option value="USA">USA</option>
@@ -648,7 +648,7 @@ export default function App() {
             <option value="Other">Other (ሌላ)</option>
           </select>
 
-          <button type="submit" disabled={uploading} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl shadow-lg transition-colors mt-4">
+          <button type="submit" disabled={uploading} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
             {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
           </button>
         </form>
@@ -695,14 +695,14 @@ export default function App() {
                 <span className="text-amber-500 font-bold text-xs">የVIP አባል ከሆኑ የነጻ አገልግሎት! የማጓጓዣ ብቻ ይከፍላሉ።</span>
               </div>
 
-              <form onSubmit={submitOrderForm} className="space-y-4">
-                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
+              <form onSubmit={submitOrderForm} className="space-y-3">
+                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
                 
-                <div className="border-t border-zinc-800 my-4 pt-4 space-y-3">
-                   <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                   <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                   <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                <div className="border-t border-zinc-800 my-3 pt-3 space-y-3">
+                   <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                   <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                   <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
                    
                    <div>
                       <label className="block text-zinc-400 text-sm mb-1.5 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)</label>
@@ -710,27 +710,27 @@ export default function App() {
                    </div>
                 </div>
 
-                <label className="flex items-center space-x-3 text-zinc-300 mt-4 bg-black p-4 rounded-xl border border-zinc-800 cursor-pointer">
+                <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
                   <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
                   <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው?</span>
                 </label>
 
                 {isGift && (
-                  <div className="p-4 bg-black border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-2">የተቀባዩ መረጃ</h4>
+                  <div className="p-3 bg-black border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
                     <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
                     <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
                     <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
                   </div>
                 )}
                 
-                <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-4">
+                <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-2">
                   <option value="">ማጓጓዣ ይምረጡ</option>
                   <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
                   <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
                 </select>
                 
-                <button type="submit" disabled={uploading || !isSourcingValid} className={`w-full font-black py-4 rounded-xl mt-6 flex items-center justify-center transition-colors text-lg ${(!isSourcingValid || uploading) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg'}`}>
+                <button type="submit" disabled={uploading || !isSourcingValid} className={`w-full font-black py-4 rounded-xl mt-4 flex items-center justify-center transition-colors text-lg ${(!isSourcingValid || uploading) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg'}`}>
                   {uploading ? "በመላክ ላይ..." : <><Send size={20} className="mr-2" /> ትዕዛዙን ላክ</>}
                 </button>
               </form>
@@ -742,7 +742,7 @@ export default function App() {
   };
 
   const renderOrderBanner = () => (
-    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-xl p-4 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-6 mt-2 hover:border-amber-500/50 transition-all group">
+    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-xl p-3 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-3 mt-1 hover:border-amber-500/50 transition-all group">
       <div className="flex-1 flex flex-col items-center text-center">
         <h3 className="text-amber-500 font-black text-lg tracking-wide drop-shadow-md leading-tight mb-1">ልዩ እቃ ማዘዝ ይፈልጋሉ?</h3>
         <p className="text-zinc-300 text-sm font-bold">ከየትም ቦታ : የፈለጉበት ቦታ እናመጣሎታለን!</p>
@@ -876,7 +876,7 @@ export default function App() {
     const dynamicTotal = basePrice + nextDayBirr + vipSignupBirr;
 
     const inlineCheckoutUI = showInlineCheckout ? (
-      <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-5 mt-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
+      <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-4 mt-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
         {!currentUser ? (
           <div className="text-center">
             <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
@@ -885,11 +885,11 @@ export default function App() {
             <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
           </div>
         ) : (
-          <form onSubmit={handleProductOrderSubmit} className="space-y-4">
-            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-4">የእርስዎ መረጃ</h3>
+          <form onSubmit={handleProductOrderSubmit} className="space-y-3">
+            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-2">የእርስዎ መረጃ</h3>
             
             {!isVIP && selectedProduct.vip_price && (
-              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl flex items-start space-x-3 mb-6">
+              <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
                 <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
                 <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
                   <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '$10 USD' : '100 ብር'})</span>
@@ -898,41 +898,41 @@ export default function App() {
               </div>
             )}
 
-            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" />
-            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
-            <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base"></textarea>
+            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base" />
+            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
+            <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base"></textarea>
 
-            <label className="flex items-center space-x-3 text-zinc-300 mt-4 bg-black p-4 rounded-xl border border-zinc-800 cursor-pointer">
+            <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
               <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
               <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው?</span>
             </label>
 
             {isGift && (
-              <div className="p-4 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-2">የተቀባዩ መረጃ</h4>
+              <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
+                <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
                 <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
                 <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
                 <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
               </div>
             )}
 
-            <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-bold mt-4">
+            <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base font-bold mt-2">
               <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
               <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
             </select>
 
-            <div className="bg-black p-4 rounded-xl border border-zinc-800 text-sm mt-6 mb-6">
-               <h4 className="text-amber-500 font-black mb-3 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር</h4>
+            <div className="bg-black p-3 rounded-xl border border-zinc-800 text-sm mt-4 mb-4">
+               <h4 className="text-amber-500 font-black mb-2 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር</h4>
                <div className="flex justify-between mb-1"><span className="text-zinc-400">የእቃው ዋጋ:</span> <span className="text-white font-bold">{basePrice} ብር</span></div>
                {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ 850 ብር ($10)</span></div>}
                {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '850 ብር ($10)' : '100 ብር'}</span></div>}
                
-               <div className="flex justify-between mt-3 pt-2 border-t border-zinc-800">
+               <div className="flex justify-between mt-2 pt-2 border-t border-zinc-800">
                  <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
                  <span className="text-amber-500 font-black text-lg">{dynamicTotal} ብር</span>
                </div>
 
-               <div className="mt-4 bg-zinc-900 p-3 rounded-lg border border-amber-500/20">
+               <div className="mt-3 bg-zinc-900 p-3 rounded-lg border border-amber-500/20">
                  {userRegion === "ሀገር ውስጥ" ? (
                    <>
                      <p className="font-bold text-amber-500 mb-1">🏦 የባንክ ማስተላለፊያ</p>
@@ -951,10 +951,10 @@ export default function App() {
 
             <div className="pt-2 border-t border-zinc-800">
               <label className="block text-zinc-400 text-xs font-bold mb-2">⚠️ ክፍያ ከፈጸሙ በኋላ ደረሰኙን እዚህ ያያይዙ፦</label>
-              <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-300 file:mr-3 file:py-3 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
+              <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
             </div>
             
-            <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6">
+            <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-4">
               {uploading ? "በመላክ ላይ..." : "ይዘዙ"}
             </button>
           </form>
@@ -976,8 +976,8 @@ export default function App() {
           )}
 
           {hasImages ? (
-            <div className="relative w-full aspect-square bg-white flex items-center justify-center">
-              <img src={selectedProduct.image_urls[currentImgIndex]} alt={selectedProduct.name} className="w-full h-full object-contain mix-blend-multiply" />
+            <div className="relative w-full max-h-72 bg-white flex items-center justify-center rounded-xl overflow-hidden mb-4">
+              <img src={selectedProduct.image_urls[currentImgIndex]} alt={selectedProduct.name} className="max-h-full w-auto object-contain mix-blend-multiply" />
               {selectedProduct.image_urls.length > 1 && (
                 <div className="absolute bottom-4 flex justify-center w-full space-x-2 z-10">
                   {selectedProduct.image_urls.map((_, idx) => (
@@ -987,7 +987,7 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div className="w-full aspect-square bg-zinc-900 flex items-center justify-center border-b border-zinc-800">
+            <div className="w-full max-h-72 bg-zinc-900 flex items-center justify-center rounded-xl overflow-hidden mb-4 border border-zinc-800">
               <span className="text-zinc-500 font-bold text-sm">ምስል የለም</span>
             </div>
           )}
@@ -996,21 +996,20 @@ export default function App() {
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
             <div>
-               <h1 className="text-2xl font-black text-white leading-tight">{selectedProduct.name}</h1>
+               <h1 className="text-xl font-black text-white leading-tight">{selectedProduct.name}</h1>
             </div>
-            {selectedProduct.show_category !== false && selectedProduct.category && <span className="bg-zinc-800 text-zinc-300 text-xs font-bold px-2.5 py-1 rounded-md shrink-0 ml-4 border border-zinc-700">{selectedProduct.category}</span>}
           </div>
 
           <div className="mt-4 border-b border-zinc-800 pb-4">
             {isVIP ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-bold text-xl line-through decoration-red-500">መደበኛ ዋጋ: {selectedProduct.price} ብር</p>
-                 <p className="text-amber-500 font-black text-4xl">VIP ዋጋ: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
+                 <p className="text-zinc-400 font-bold text-lg line-through decoration-red-500">መደበኛ ዋጋ: {selectedProduct.price} ብር</p>
+                 <p className="text-amber-500 font-black text-3xl">VIP ዋጋ: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
-                 <p className="text-white font-black text-4xl">{selectedProduct.price} ብር</p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-2xl">VIP ዋጋ: {selectedProduct.vip_price} ብር</p>}
+                 <p className="text-white font-black text-3xl">{selectedProduct.price} ብር</p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-xl">VIP ዋጋ: {selectedProduct.vip_price} ብር</p>}
                </div>
             )}
           </div>
@@ -1036,7 +1035,7 @@ export default function App() {
                    return;
                 }
                 setShowInlineCheckout(true);
-             }} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-8 flex justify-center items-center">
+             }} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6 flex justify-center items-center">
                <ShoppingBag className="mr-2" /> አሁን ይግዙ
              </button>
           )}
@@ -1123,7 +1122,7 @@ export default function App() {
 
     return (
       <div className="pb-24">
-        <div className="flex space-x-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
+        <div className="flex flex-wrap gap-2 pb-4 mb-2">
           {allPrimary.map(cat => (
             <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
               className={`px-5 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${shopCategory === cat ? "bg-amber-500 text-black shadow-lg" : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white"}`}>
@@ -1137,7 +1136,7 @@ export default function App() {
         </div>
 
         {shopCategory !== "ሁሉም" && shopCategory !== "መድሀኒት" && allSecondary.length > 1 && (
-           <div className="flex space-x-2 overflow-x-auto pb-6 mb-2 no-scrollbar">
+           <div className="flex flex-wrap gap-2 pb-6 mb-2">
            {allSecondary.map(cat => (
              <button key={cat} onClick={() => setShopSubCategory(cat)} 
                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${shopSubCategory === cat ? "bg-zinc-300 text-black" : "bg-zinc-800 text-zinc-400 hover:text-white"}`}>
@@ -1161,7 +1160,6 @@ export default function App() {
                  {item.image_urls && item.image_urls.length > 0 ? (
                     <img src={item.image_urls[0]} alt={item.name} className="w-full h-full object-cover mix-blend-multiply transition-transform duration-300 group-hover:scale-105" />
                  ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
-                 {item.show_category !== false && item.category && <span className="absolute top-2 left-2 bg-zinc-900/90 text-white text-[10px] font-bold px-2 py-1 rounded border border-zinc-700">{item.category}</span>}
               </div>
 
               <div className="p-3 flex flex-col flex-grow">
@@ -1365,6 +1363,13 @@ export default function App() {
   };
 
   const renderAdmin = () => {
+    // Generate dynamic category lists for quick-select chips
+    const defaultPrimary = ["ሁሉም", "ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"];
+    const allPrimary = [...new Set([...defaultPrimary, ...products.map(p => p.category).filter(Boolean)])].filter(c => c !== "ሁሉም");
+
+    const defaultSecondary = ["ልብስ", "ጫማ", "ሌሎች"];
+    const allSecondary = [...new Set([...defaultSecondary, ...products.map(p => p.subcategory).filter(Boolean)])].filter(c => c !== "ሁሉም");
+
     return (
       <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
         <div className="flex justify-between items-center mb-6">
@@ -1542,47 +1547,38 @@ export default function App() {
                   <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                   <div className="relative">
+                    <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድብ (Primary Category)</label>
                     <input 
                       required 
-                      list="shop-categories" 
                       value={formData.shopCat || ""} 
                       onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} 
-                      placeholder="ዋና ምድብ (Category)"
-                      className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" 
+                      placeholder="Type or select a category..."
+                      className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" 
                     />
-                    <datalist id="shop-categories">
-                      <option value="ወንድ" />
-                      <option value="ሴት" />
-                      <option value="ልጅ" />
-                      <option value="መድሀኒት" />
-                      <option value="ጤና እና ውበት" />
-                      {products.map(p => p.category).filter((v, i, a) => v && a.indexOf(v) === i).map(c => <option key={c} value={c} />)}
-                    </datalist>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                       {allPrimary.map(c => (
+                         <button key={c} type="button" onClick={() => setFormData({ ...formData, shopCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>
+                       ))}
+                    </div>
                   </div>
 
-                  <div className="relative">
+                  <div className="relative border-t border-zinc-800 pt-4 mt-2">
+                    <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድብ (Subcategory)</label>
                     <input 
-                      list="shop-subcategories" 
                       value={formData.shopSubCat || ""} 
                       onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} 
-                      placeholder="ንዑስ ምድብ (Subcategory)"
-                      className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" 
+                      placeholder="Type or select a subcategory..."
+                      className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" 
                     />
-                    <datalist id="shop-subcategories">
-                      <option value="ልብስ" />
-                      <option value="ጫማ" />
-                      <option value="ሌሎች" />
-                      {products.map(p => p.subcategory).filter((v, i, a) => v && a.indexOf(v) === i).map(c => <option key={c} value={c} />)}
-                    </datalist>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                       {allSecondary.map(c => (
+                         <button key={c} type="button" onClick={() => setFormData({ ...formData, shopSubCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>
+                       ))}
+                    </div>
                   </div>
                 </div>
-
-                <label className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 p-3 rounded-lg border border-zinc-800">
-                   <input type="checkbox" checked={formData.showCategoryTag !== false} onChange={e => setFormData({...formData, showCategoryTag: e.target.checked})} className="accent-amber-500 w-5 h-5" />
-                   <span className="text-sm font-bold text-zinc-300">Display Category Tag on Product Cards</span>
-                </label>
                 
                 <div className="relative">
                   <button type="button" onClick={() => setShowSizeDropdown(!showSizeDropdown)} className="w-full bg-zinc-900 border border-zinc-800 text-left p-4 rounded-xl focus:border-amber-500 text-zinc-400 flex justify-between items-center transition-colors">
