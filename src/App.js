@@ -9,7 +9,6 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Secure Telegram Configuration
 const TELEGRAM_BOT_TOKEN = process.env.REACT_APP_TELEGRAM_BOT_TOKEN; 
 const TELEGRAM_CHAT_ID = process.env.REACT_APP_TELEGRAM_CHAT_ID; 
 
@@ -20,27 +19,23 @@ export default function App() {
   const [shopCategory, setShopCategory] = useState("ሁሉም");
   const [shopSubCategory, setShopSubCategory] = useState("ሁሉም");
 
-  // Shopping States
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [showInlineCheckout, setShowInlineCheckout] = useState(false);
   const [includeVipSignup, setIncludeVipSignup] = useState(false);
   
-  // Checkout & Sourcing Form States
   const [userRegion, setUserRegion] = useState("ሀገር ውስጥ");
   const [checkoutShipping, setCheckoutShipping] = useState("standard");
   const [orderName, setOrderName] = useState("");
   const [orderAddress, setOrderAddress] = useState("");
   const [orderFile, setOrderFile] = useState(null);
   
-  // Custom Sourcing Specific States
   const [reqProductName, setReqProductName] = useState("");
   const [reqStoreName, setReqStoreName] = useState("");
   const [reqProductLink, setReqProductLink] = useState("");
   const [reqImage, setReqImage] = useState(null);
 
-  // Gift States
   const [isGift, setIsGift] = useState(false);
   const [recipientName, setRecipientName] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
@@ -58,7 +53,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({ options: [], relatedLinks: [], isSale: false });
+  const [formData, setFormData] = useState({ options: [], relatedLinks: [], isSale: false, shopCat: [], shopSubCat: [] });
   const [existingMainImage, setExistingMainImage] = useState(null);
   const [existingInlineImages, setExistingInlineImages] = useState([]);
   const [mainImageFile, setMainImageFile] = useState(null);
@@ -68,13 +63,11 @@ export default function App() {
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
-  // Dynamic CEO Configurations
   const [customSizeInput, setCustomSizeInput] = useState("");
   const [newCatInput, setNewCatInput] = useState("");
   const [newSubCatInput, setNewSubCatInput] = useState("");
   const [selectedPrimaryForSub, setSelectedPrimaryForSub] = useState("");
   
-  // Inline edit states for categories
   const [editCatIndex, setEditCatIndex] = useState(null);
   const [editCatValue, setEditCatValue] = useState("");
   const [editSubCatIndex, setEditSubCatIndex] = useState(null);
@@ -89,10 +82,8 @@ export default function App() {
   const [userOrders, setUserOrders] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
 
-  // Admin Order Edit States
   const [orderUpdateData, setOrderUpdateData] = useState({});
 
-  // --- VIP & GAMES STATE ---
   const [currentUser, setCurrentUser] = useState(null);
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [isVIP, setIsVIP] = useState(false);
@@ -102,7 +93,6 @@ export default function App() {
   const [userPredictions, setUserPredictions] = useState({});
   const [predictionInputs, setPredictionInputs] = useState({});
   
-  // Games files
   const [newGame, setNewGame] = useState({ team_a: '', team_b: '' });
   const [teamAFile, setTeamAFile] = useState(null);
   const [teamBFile, setTeamBFile] = useState(null);
@@ -127,6 +117,31 @@ export default function App() {
     "የእርስዎ (Custom)": savedCustomSizes
   };
 
+  const isFullNameValid = (nameStr) => nameStr.trim().split(/\s+/).length > 1;
+
+  const calculateAutomatedPrice = (cadCost, weightKg, specialFee) => {
+    if (!cadCost || isNaN(cadCost)) return { regular: 0, vip: 0 };
+    
+    // Core Math: CAD + 13% Tax -> + 18% Markup -> * 130 Rate
+    const costWithTax = Number(cadCost) * 1.13;
+    const costWithMarkup = costWithTax * 1.18;
+    const baseBirr = costWithMarkup * 130;
+    
+    // Freight Math: Minimum 1kg * 1500, OR use special fee
+    let freightBirr = 0;
+    if (specialFee && !isNaN(specialFee)) {
+      freightBirr = Number(specialFee);
+    } else {
+      const weight = weightKg && !isNaN(weightKg) ? Math.max(Number(weightKg), 1) : 1;
+      freightBirr = weight * 1500;
+    }
+    
+    const totalRegular = Math.round(baseBirr + freightBirr);
+    const totalVip = Math.round(totalRegular * 0.90); // 10% VIP discount baked in
+    
+    return { regular: totalRegular, vip: totalVip };
+  };
+
   useEffect(() => {
     fetchData();
     fetchGames(); 
@@ -142,13 +157,20 @@ export default function App() {
           setCurrentUser(savedUser);
           handleTelegramLogin(savedUser); 
         }
-      } catch (e) { console.error("Error parsing saved user", e); }
+      } catch (e) {}
     }
 
     const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); setShowAccountMenu(false); setQuantity(1); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (adminTab === "products") {
+      const prices = calculateAutomatedPrice(formData.cadCost, formData.weightKg, formData.specialFreightFee);
+      setFormData(prev => ({ ...prev, price: prices.regular, vipPrice: prices.vip }));
+    }
+  }, [formData.cadCost, formData.weightKg, formData.specialFreightFee, adminTab]);
 
   const fetchGlobalCategories = async () => {
     try {
@@ -157,11 +179,11 @@ export default function App() {
         if (data.primary_categories) { setCustomCategories(data.primary_categories); localStorage.setItem('goleth_categories', JSON.stringify(data.primary_categories)); }
         if (data.subcategories_map) { setCustomSubCats(data.subcategories_map); localStorage.setItem('goleth_subcats_map', JSON.stringify(data.subcategories_map)); }
       }
-    } catch (err) { console.log("Settings table not found yet. Using local storage fallback."); }
+    } catch (err) {}
   };
 
   const syncCategoriesToDB = async (primaries, subcats) => {
-    try { await supabase.from('app_settings').upsert({ id: 1, primary_categories: primaries, subcategories_map: subcats }); } catch (e) { console.error("Failed to sync to DB."); }
+    try { await supabase.from('app_settings').upsert({ id: 1, primary_categories: primaries, subcategories_map: subcats }); } catch (e) {}
   };
 
   const injectTelegramScript = (refElement, callback = () => {}) => {
@@ -200,7 +222,7 @@ export default function App() {
       const { data: postsData } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
       const { data: productsData } = await supabase.from("products").select("*").order("created_at", { ascending: false });
       setPosts(postsData || []); setProducts(productsData || []);
-    } catch (error) { console.error("Fetch error:", error); }
+    } catch (error) {}
   };
 
   const fetchGames = async () => {
@@ -213,14 +235,14 @@ export default function App() {
     try {
       const { data } = await supabase.from('product_orders').select('*').eq('telegram_id', telegramId).order('created_at', { ascending: false });
       if (data) setUserOrders(data);
-    } catch (e) { console.error("Error fetching user orders"); }
+    } catch (e) {}
   };
 
   const fetchAllOrders = async () => {
     try {
       const { data } = await supabase.from('product_orders').select('*').order('created_at', { ascending: false });
       if (data) setAllOrders(data);
-    } catch (e) { console.error("Error fetching all orders"); }
+    } catch (e) {}
   };
 
   const fetchUserPredictions = async (telegramId) => {
@@ -250,7 +272,7 @@ export default function App() {
       localStorage.setItem('goleth_profile', JSON.stringify(userRecord));
       setIsCEO(Boolean(userRecord.is_admin));
 
-      if (!userRecord.full_name || !userRecord.phone_number) setShowProfileModal(true);
+      if (!userRecord.full_name || !isFullNameValid(userRecord.full_name) || !userRecord.phone_number) setShowProfileModal(true);
 
       let currentStatus = "none";
       let activeVip = Boolean(userRecord.is_vip);
@@ -299,8 +321,6 @@ export default function App() {
 
   const handleVipPaymentSubmit = async (e) => {
     e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
-    if (vipPhone.length !== 10 || !vipReceiptFile) { alert("እባክዎ መረጃዎችን በትክክል ያስገቡ።"); setUploading(false); return; }
-
     const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
     const { error: dbError } = await supabase.from("vip_payments").insert([{ telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }]);
 
@@ -320,7 +340,6 @@ export default function App() {
     const hasVipAccess = isVIP || isCEO;
     const isGettingVipPrice = hasVipAccess || includeVipSignup;
     
-    // Apply VIP bulk logic - Max 3 at VIP price
     let totalItemsPrice = 0;
     if (isGettingVipPrice) {
       if (quantity <= 3) {
@@ -332,19 +351,17 @@ export default function App() {
       totalItemsPrice = selectedProduct.price * quantity;
     }
 
-    const nextDayBirr = checkoutShipping === "next_day" ? 850 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
+    const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 1300) : 0;
     const finalPrice = totalItemsPrice + nextDayBirr + vipSignupBirr;
 
-    let orderNotes = checkoutShipping === "next_day" ? `+ ${850 * quantity} ETB (Next Day)` : "Standard Shipping";
+    let orderNotes = checkoutShipping === "next_day" ? `+ ${1300 * quantity} ETB (Next Day)` : "Standard Shipping";
     if (includeVipSignup) orderNotes += ` | +VIP Signup`;
     
     let finalDeliveryAddress = orderAddress;
     if (isGift) { orderNotes += ` | 🎁 GIFT ORDER`; finalDeliveryAddress = `[GIFT FOR: ${recipientName} | Ph: ${recipientPhone}] ${recipientAddress}`; }
 
     const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
-    
-    // Calculate total weight to send to backend for logistics tracking
     const orderWeight = (selectedProduct.weight_kg || 1.0) * quantity;
 
     const { error: dbError } = await supabase.from("product_orders").insert([{ 
@@ -370,7 +387,7 @@ export default function App() {
   const handleOpenSourcing = () => { setReqProductName(""); setReqStoreName(""); setReqProductLink(""); setReqImage(null); setShowOrderForm(true); };
 
   const submitOrderForm = async (e) => {
-    e.preventDefault(); if (!currentUser?.id) { alert("እባክዎ ትዕዛዝዎን ለመላክ መጀመሪያ በቴሌግራም ይግቡ።"); return; }
+    e.preventDefault(); if (!currentUser?.id) return;
     setUploading(true);
 
     const imageUrl = reqImage ? await uploadFileToSupabase(reqImage) : "";
@@ -389,7 +406,7 @@ export default function App() {
   const submitPrediction = async (gameId) => {
     if (!currentUser?.id) return;
     const scoreA = predictionInputs[gameId]?.a; const scoreB = predictionInputs[gameId]?.b;
-    if (scoreA === undefined || scoreB === undefined || scoreA === "" || scoreB === "") { alert("እባክዎ ሁለቱንም ውጤቶች ያስገቡ።"); return; }
+    if (scoreA === undefined || scoreB === undefined || scoreA === "" || scoreB === "") return;
     const { error } = await supabase.from('predictions').insert([{ telegram_id: currentUser.id.toString(), game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }]);
     if (!error) { alert("ውጤቱ ተመዝግቧል!"); fetchUserPredictions(currentUser.id); } else { alert("ውጤቱን ቀድመው ገምተዋል።"); }
   };
@@ -421,8 +438,8 @@ export default function App() {
     const { error } = await supabase.from('product_orders').update(payload).eq('id', orderId);
     if (!error) {
       alert("Order updated successfully!");
+      setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...payload } : o));
       
-      // Send Telegram notification if status or tracking changed
       let statusAmharic = "";
       if (update.status === 'approved') statusAmharic = "ተቀባይነት አግኝቷል (Approved) ✅";
       if (update.status === 'shipped') statusAmharic = "በመንገድ ላይ ነው (Shipped) 🚚";
@@ -432,10 +449,8 @@ export default function App() {
          let msg = `📦 <b>የትዕዛዝ መረጃ (Order Update)</b>\n\n<b>እቃ:</b> ${productName}`;
          if (statusAmharic) msg += `\n<b>ሁኔታ:</b> ${statusAmharic}`;
          if (update.tracking) msg += `\n<b>ትራኪንግ (Tracking #):</b> <code>${update.tracking}</code>`;
-         
          try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: telegramId, text: msg, parse_mode: "HTML" }) }); } catch (err) {}
       }
-      fetchAllOrders();
     } else { alert("Failed to update order."); }
     setUploading(false);
   };
@@ -479,11 +494,9 @@ export default function App() {
       localStorage.setItem('goleth_categories', JSON.stringify(updated)); 
       syncCategoriesToDB(updated, customSubCats);
       if (selectedPrimaryForSub === val) setSelectedPrimaryForSub(updated[0] || "");
-    } 
-    else { 
+    } else { 
       const currentArr = customSubCats[selectedPrimaryForSub] || [];
-      const filtered = currentArr.filter(c => c !== val);
-      const updated = { ...customSubCats, [selectedPrimaryForSub]: filtered };
+      const updated = { ...customSubCats, [selectedPrimaryForSub]: currentArr.filter(c => c !== val) };
       setCustomSubCats(updated); 
       localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
       syncCategoriesToDB(customCategories, updated);
@@ -496,14 +509,10 @@ export default function App() {
     else if (direction === 1 && index < arr.length - 1) { [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; }
     
     if (type === 'primary') { 
-      setCustomCategories(arr); 
-      localStorage.setItem('goleth_categories', JSON.stringify(arr)); 
-      syncCategoriesToDB(arr, customSubCats);
+      setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); syncCategoriesToDB(arr, customSubCats);
     } else { 
       const updated = { ...customSubCats, [selectedPrimaryForSub]: arr };
-      setCustomSubCats(updated); 
-      localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
-      syncCategoriesToDB(customCategories, updated);
+      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); syncCategoriesToDB(customCategories, updated);
     }
   };
 
@@ -511,16 +520,12 @@ export default function App() {
     const arr = type === 'primary' ? [...customCategories] : [...(customSubCats[selectedPrimaryForSub] || [])];
     if (type === 'primary') {
       if (editCatValue.trim()) arr[editCatIndex] = editCatValue.trim();
-      setCustomCategories(arr); 
-      localStorage.setItem('goleth_categories', JSON.stringify(arr)); 
-      syncCategoriesToDB(arr, customSubCats);
+      setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); syncCategoriesToDB(arr, customSubCats);
       setEditCatIndex(null); setEditCatValue("");
     } else {
       if (editSubCatValue.trim()) arr[editSubCatIndex] = editSubCatValue.trim();
       const updated = { ...customSubCats, [selectedPrimaryForSub]: arr };
-      setCustomSubCats(updated); 
-      localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
-      syncCategoriesToDB(customCategories, updated);
+      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); syncCategoriesToDB(customCategories, updated);
       setEditSubCatIndex(null); setEditSubCatValue("");
     }
   };
@@ -541,9 +546,14 @@ export default function App() {
       setFormData({ postCategory: item.category, title: item.title, subtitle: item.subtitle || "", excerpt: item.excerpt || "", body: item.body || "", author: item.author || "GOLETH", relatedLinks: item.related_links || [] });
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
+      // Handle legacy single-string categories converting to arrays
+      let parsedCat = []; let parsedSubCat = [];
+      if (Array.isArray(item.category)) parsedCat = item.category; else if (item.category) parsedCat = [item.category];
+      if (Array.isArray(item.subcategory)) parsedSubCat = item.subcategory; else if (item.subcategory) parsedSubCat = [item.subcategory];
+      
       setFormData({ 
         title: item.name, price: item.price, vipPrice: item.vip_price || "", 
-        shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], 
+        shopCat: parsedCat, shopSubCat: parsedSubCat, options: item.options || [], 
         sourceUrl: item.source_link || "", description: item.description || "", isSale: item.is_sale || false,
         cadCost: item.cost_cad || "", stockQty: item.stock_quantity || 0, weightKg: item.weight_kg || 1.0, specialFreightFee: item.special_freight_fee || ""
       });
@@ -552,7 +562,7 @@ export default function App() {
   };
   
   const openNewPost = (type) => { 
-    setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", isSale: false }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); 
+    setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", isSale: false, shopCat: [], shopSubCat: [] }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); 
     if (type === 'orders') fetchAllOrders();
   };
   
@@ -571,16 +581,15 @@ export default function App() {
       const payload = { category: formData.postCategory || "ዋና", title: formData.title, subtitle: formData.subtitle, excerpt: formData.excerpt, body: formData.body, author: formData.author || "GOLETH", related_links: formData.relatedLinks || [], image_urls: finalUrls };
       
       if (editId) { 
-        const { error } = await supabase.from("posts").update(payload).eq("id", editId); 
-        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
+        await supabase.from("posts").update(payload).eq("id", editId); 
       } else { 
-        const { error } = await supabase.from("posts").insert([payload]); 
-        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
+        await supabase.from("posts").insert([payload]); 
       }
     } else if (adminTab === "products") {
       let filesToUpload = [...productImageFiles];
       if (filesToUpload.length > 1 && selectedMainImgIdx > 0 && selectedMainImgIdx < filesToUpload.length) { const main = filesToUpload.splice(selectedMainImgIdx, 1)[0]; filesToUpload.unshift(main); }
       if (filesToUpload.length > 0) { for (const file of filesToUpload) { const prodUrl = await uploadFileToSupabase(file); if (prodUrl) finalUrls.push(prodUrl); } }
+      
       const payload = { 
         name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, 
         category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, 
@@ -590,14 +599,12 @@ export default function App() {
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       
       if (editId) { 
-        const { error } = await supabase.from("products").update(payload).eq("id", editId); 
-        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
+        await supabase.from("products").update(payload).eq("id", editId); 
       } else { 
-        const { error } = await supabase.from("products").insert([payload]); 
-        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
+        await supabase.from("products").insert([payload]); 
       }
     }
-    setFormData({ options: [], relatedLinks: [], isSale: false }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
+    setFormData({ options: [], relatedLinks: [], isSale: false, shopCat: [], shopSubCat: [] }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
   const formatOptionDisplay = (optionString) => {
@@ -617,7 +624,7 @@ export default function App() {
         <h2 className="text-2xl font-black text-amber-500 mb-2">እንኳን ደህና መጡ!</h2>
         <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ይሙሉ (ይህ አንዴ ብቻ የሚጠየቅ ነው)።</p>
         <form onSubmit={saveUserProfile} className="space-y-4">
-          <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (Full Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+          <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.') }} />
           <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
           <select required name="location" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-bold">
             <option value="">የት ሀገር ነዎት? (Location)</option>
@@ -629,7 +636,7 @@ export default function App() {
             <option value="South America">South America</option>
             <option value="Other">Other (ሌላ)</option>
           </select>
-          <button type="submit" disabled={uploading} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
+          <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
             {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
           </button>
         </form>
@@ -652,17 +659,26 @@ export default function App() {
        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowAccountMenu(false)}></div>
        <div className="relative w-full max-w-sm bg-zinc-950 h-full overflow-y-auto border-l border-zinc-800 animate-in slide-in-from-right duration-300 p-6 flex flex-col">
           <div className="flex justify-between items-center mb-6">
-             <h2 className="text-xl font-black text-white flex items-center"><User className="mr-2 text-amber-500" size={24}/> የእኔ አካውንት (My Account)</h2>
+             <h2 className="text-xl font-black text-white flex items-center"><User className="mr-2 text-amber-500" size={24}/> የእኔ አካውንት</h2>
              <button onClick={() => setShowAccountMenu(false)} className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition-colors"><X size={20}/></button>
           </div>
 
-          {/* Digital VIP Card */}
-          {isVIP && (
+          <button onClick={handleLogout} className="mb-6 w-full py-3 bg-red-900/20 text-red-500 border border-red-900/50 rounded-xl font-bold flex items-center justify-center hover:bg-red-900/40 transition-colors">
+             <LogOut size={16} className="mr-2"/> ዘግተህ ውጣ (Sign Out)
+          </button>
+
+          {isCEO && (
+             <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 border border-amber-500/30 p-5 rounded-2xl mb-8 shadow-lg text-white">
+                <h3 className="font-black text-lg uppercase tracking-widest mb-1 text-amber-500">CEO Admin Badge</h3>
+                <p className="font-bold text-sm opacity-90">{currentUserProfile?.full_name}</p>
+             </div>
+          )}
+
+          {isVIP && !isCEO && (
              <div className="bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-600 p-5 rounded-2xl mb-8 shadow-[0_0_30px_rgba(245,158,11,0.2)] text-black relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-20"><Target size={80}/></div>
                 <h3 className="font-black text-lg uppercase tracking-widest mb-1 relative z-10">Goleth VIP Member</h3>
                 <p className="font-bold text-sm opacity-90 mb-6 relative z-10">{currentUserProfile?.full_name}</p>
-                
                 <div className="flex justify-between items-end relative z-10">
                    <div>
                       <p className="text-[10px] uppercase font-black opacity-70">Status</p>
@@ -676,7 +692,6 @@ export default function App() {
              </div>
           )}
 
-          {/* Profile Details Edit */}
           <div className="mb-8">
              <div className="flex justify-between items-center mb-3">
                <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider">የግል መረጃ (Details)</h3>
@@ -689,7 +704,6 @@ export default function App() {
              </div>
           </div>
 
-          {/* Order History */}
           <div className="flex-1">
              <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider mb-4 flex items-center"><Package className="mr-2" size={16}/> የትዕዛዝ ታሪክ (Order History)</h3>
              {userOrders.length === 0 ? (
@@ -703,7 +717,6 @@ export default function App() {
                             {getStatusBadge(order.status)}
                          </div>
                          <p className="text-xs text-zinc-500 mb-2">{new Date(order.created_at).toLocaleDateString()}</p>
-                         
                          {order.tracking_number && (
                             <div className="mt-3 bg-black border border-amber-500/20 p-2.5 rounded-lg">
                                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1">Tracking Number</p>
@@ -715,10 +728,6 @@ export default function App() {
                 </div>
              )}
           </div>
-
-          <button onClick={handleLogout} className="mt-8 w-full py-4 bg-red-900/20 text-red-500 border border-red-900/50 rounded-xl font-bold flex items-center justify-center hover:bg-red-900/40 transition-colors">
-             <LogOut size={18} className="mr-2"/> ዘግተህ ውጣ (Sign Out)
-          </button>
        </div>
     </div>
   );
@@ -736,7 +745,7 @@ export default function App() {
   );
 
   const renderOrderForm = () => {
-    const isSourcingValid = ((reqProductName.trim() ? 1 : 0) + (reqStoreName.trim() ? 1 : 0) + (reqProductLink.trim() ? 1 : 0) + (reqImage ? 1 : 0)) >= 2;
+    const isSourcingValid = ((reqProductName.trim() ? 1 : 0) + (reqStoreName.trim() ? 1 : 0) + (reqProductLink.trim() ? 1 : 0) + (reqImage ? 1 : 0)) >= 2 && isFullNameValid(orderName) && vipPhone.length === 10;
 
     return (
       <div className="fixed inset-0 bg-zinc-900 z-[60] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
@@ -763,13 +772,12 @@ export default function App() {
 
               <form onSubmit={submitOrderForm} className="space-y-3">
                 <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
-                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-mono" />
+                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-mono" />
                 
                 <div className="border-t border-zinc-800 my-2 pt-3 space-y-2">
                    <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
                    <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
                    <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
-                   
                    <div>
                       <label className="block text-zinc-400 text-xs mb-1 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)</label>
                       <input type="file" onChange={e => setReqImage(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
@@ -785,7 +793,7 @@ export default function App() {
                   <div className="p-3 bg-black border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
                     <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
                     <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                    <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                    <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value.replace(/\D/g, ""))} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
                     <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
                   </div>
                 )}
@@ -863,7 +871,6 @@ export default function App() {
       }
       return null;
     });
-
     return (
       <div className="mt-10 border-t border-zinc-800 pt-6">
         <h3 className="text-amber-500 font-black text-sm mb-4">ተያያዥ</h3>
@@ -877,18 +884,15 @@ export default function App() {
       <button onClick={() => window.history.back()} className="flex items-center text-zinc-400 mb-6 hover:text-amber-500 transition-colors font-bold text-sm">
         <ChevronLeft size={20} className="mr-1" /> ወደ ኋላ ተመለስ
       </button>
-      
       {isCEO && (
         <div className="flex space-x-2 mb-6 w-full">
           <button onClick={() => handleEdit("posts", activePost)} className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors border border-zinc-700"><Edit2 size={14} className="mr-1" /> አስተካክል</button>
           <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 hover:text-red-400 border border-red-900 p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors"><Trash2 size={14} className="mr-1" /> ሰርዝ</button>
         </div>
       )}
-
       {(!activePost.body || !/\[image\s*\d+\]/i.test(activePost.body)) && activePost.image_urls && activePost.image_urls[0] && (
         <img src={activePost.image_urls[0]} alt={activePost.title} className="w-full aspect-[1.91/1] object-cover rounded-xl mb-6 shadow-2xl border border-zinc-800" />
       )}
-      
       <h1 className="text-2xl font-black text-white mb-2 leading-tight">{activePost.title}</h1>
       {activePost.subtitle && <h2 className="text-base text-amber-500 font-bold mb-4">{activePost.subtitle}</h2>}
       <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-8 border-b border-zinc-800 pb-4">{activePost.author}</div>
@@ -902,11 +906,9 @@ export default function App() {
   const renderProductDetail = () => {
     if (!selectedProduct) return null;
     const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
-
     const hasVipAccess = isVIP || isCEO;
     const isGettingVipPrice = hasVipAccess || includeVipSignup;
     
-    // Apply VIP discount cap of 3
     let totalItemsPrice = 0;
     if (isGettingVipPrice) {
       if (quantity <= 3) {
@@ -918,9 +920,11 @@ export default function App() {
       totalItemsPrice = selectedProduct.price * quantity;
     }
 
-    const nextDayBirr = checkoutShipping === "next_day" ? 850 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
+    const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 1300) : 0;
     const dynamicTotal = totalItemsPrice + nextDayBirr + vipSignupBirr;
+    
+    const checkoutReady = isFullNameValid(orderName) && vipPhone.length === 10 && orderFile;
 
     const inlineCheckoutUI = showInlineCheckout ? (
       <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-4 mt-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
@@ -939,14 +943,14 @@ export default function App() {
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
                 <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
                 <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
-                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '$10 USD' : '100 ብር'})</span>
+                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '1300 ብር ($10)' : '100 ብር'})</span>
                   ይህንን በመጫን የVIP አባልነት ይግዙና እቃውን በVIP ዋጋ ይውሰዱ።
                 </label>
               </div>
             )}
 
             <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
-            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
             <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
 
             <div className="bg-black border border-zinc-800 rounded-xl p-3 flex justify-between items-center mb-3">
@@ -967,22 +971,24 @@ export default function App() {
               <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
                 <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
                 <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value.replace(/\D/g, ""))} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
                 <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
               </div>
             )}
 
             <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-bold mt-2">
               <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
-              <option value="next_day">በሚቀጥለው ቀን (+{850 * quantity} ETB አስቸኳይ)</option>
+              <option value="next_day">በሚቀጥለው ቀን (+{1300 * quantity} ETB አስቸኳይ)</option>
             </select>
 
             <div className="bg-black p-3 rounded-xl border border-zinc-800 text-sm mt-4 mb-4">
                <h4 className="text-amber-500 font-black mb-2 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር</h4>
                <div className="flex justify-between mb-1"><span className="text-zinc-400">የእቃው ዋጋ (x{quantity}):</span> <span className="text-white font-bold">{totalItemsPrice} ብር</span></div>
-               {isGettingVipPrice && quantity > 3 && <div className="text-[10px] text-zinc-500 mb-2">VIP discount capped at 3 items. Item {quantity} charged at regular price.</div>}
-               {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ {850 * quantity} ብር</span></div>}
-               {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '850 ብር ($10)' : '100 ብር'}</span></div>}
+               
+               {isGettingVipPrice && quantity > 3 && <div className="text-[10px] text-zinc-300 font-bold bg-amber-500/10 border border-amber-500/30 p-2 rounded mt-1 mb-2">💡 Note: VIP discount applies to the first 3 items. Regular price applies to item 4+.</div>}
+               
+               {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ {1300 * quantity} ብር</span></div>}
+               {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '1300 ብር ($10)' : '100 ብር'}</span></div>}
                
                <div className="flex justify-between mt-2 pt-2 border-t border-zinc-800">
                  <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
@@ -1011,7 +1017,7 @@ export default function App() {
               <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
             </div>
             
-            <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors mt-4">
+            <button type="submit" disabled={uploading || !checkoutReady} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors mt-4">
               {uploading ? "በመላክ ላይ..." : "ይዘዙ"}
             </button>
           </form>
@@ -1088,9 +1094,7 @@ export default function App() {
               </div>
             </div>
           )}
-
           {inlineCheckoutUI}
-
         </div>
       </div>
     );
@@ -1112,7 +1116,6 @@ export default function App() {
       <div className="space-y-3 pb-24">
         <div className="grid grid-cols-2 gap-3">
           {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderOrderBanner()}
-          
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
             if (index === 0) {
@@ -1159,8 +1162,18 @@ export default function App() {
     const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
     let filtered = products;
-    if (shopCategory !== "ሁሉም") filtered = filtered.filter(p => p.category === shopCategory);
-    if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") filtered = filtered.filter(p => p.subcategory === shopSubCategory);
+    if (shopCategory !== "ሁሉም") {
+      filtered = filtered.filter(p => {
+        const catList = Array.isArray(p.category) ? p.category : (p.category ? [p.category] : []);
+        return catList.includes(shopCategory);
+      });
+    }
+    if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") {
+      filtered = filtered.filter(p => {
+        const subCatList = Array.isArray(p.subcategory) ? p.subcategory : (p.subcategory ? [p.subcategory] : []);
+        return subCatList.includes(shopSubCategory);
+      });
+    }
 
     const hasVipAccess = isVIP || isCEO;
 
@@ -1251,9 +1264,22 @@ export default function App() {
     const renderVipBenefits = () => (
       <div className="text-left space-y-3 mb-8 bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-xl">
         <h3 className="text-amber-500 font-black mb-3">የVIP አባልነት ጥቅሞች</h3>
-        <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">የስፖርት ትንበያዎችን ያግኙ</span></div>
-        <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">በእቃዎች ላይ ከፍተኛ የVIP ቅናሽ (እስከ 3 እቃዎች)</span></div>
-        <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">ልዩ የእቃ ማዘዣ ቅድሚያ እና ነፃ ማጓጓዣ</span></div>
+        
+        <div className="flex items-start space-x-3 mt-4">
+           <div className="bg-amber-500/20 p-1 rounded"><Target className="text-amber-500 w-4 h-4 shrink-0" /></div>
+           <div>
+              <p className="text-sm font-bold text-amber-500">ሀገር ውስጥ VIP (Local)</p>
+              <p className="text-xs text-zinc-400 leading-relaxed">የስፖርት ትንበያ፣ ልዩ የሱቅ ቅናሽ (እስከ 3 እቃዎች) እና የቀደመ መረጃ። (በወር 100 ብር)</p>
+           </div>
+        </div>
+        
+        <div className="flex items-start space-x-3 mt-4">
+           <div className="bg-blue-500/20 p-1 rounded"><Package className="text-blue-500 w-4 h-4 shrink-0" /></div>
+           <div>
+              <p className="text-sm font-bold text-blue-500">ዳያስፖራ VIP (Diaspora)</p>
+              <p className="text-xs text-zinc-400 leading-relaxed">የ"Gift-a-Local" አገልግሎት፣ Next-day መላኪያ ትዕዛዝ እና ልዩ የሱቅ ቅናሽ። (በወር 1300 ብር / $10)</p>
+           </div>
+        </div>
       </div>
     );
 
@@ -1287,6 +1313,7 @@ export default function App() {
     }
 
     if (!isCEO && (!isVIP || vipStatus === "expired" || vipStatus === "none")) {
+      const isPaymentValid = isFullNameValid(orderName) && vipPhone.length === 10 && vipReceiptFile;
       return (
         <div className="pb-24 pt-6">
           <div className="max-w-md mx-auto mb-8">
@@ -1313,7 +1340,7 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">$10 USD</span></div>
+                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">$10 USD (1300 ብር)</span></div>
                       <p className="font-bold text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
                       <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg">demo@goleth.com</span></p>
                     </>
@@ -1329,7 +1356,7 @@ export default function App() {
                   <input required type="file" name="receiptFile" onChange={(e) => setVipReceiptFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                 </div>
                 
-                <button type="submit" disabled={uploading || vipPhone.length !== 10 || !vipReceiptFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
+                <button type="submit" disabled={uploading || !isPaymentValid} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
                   {uploading ? "በመላክ ላይ..." : "ላክ"}
                 </button>
               </form>
@@ -1401,9 +1428,6 @@ export default function App() {
   };
 
   const renderAdmin = () => {
-    const safePrimaryOptions = [...new Set([...customCategories, ...(formData.shopCat ? [formData.shopCat] : [])])].filter(Boolean);
-    const safeSecondaryOptions = [...new Set([...(customSubCats[formData.shopCat] || []), ...(formData.shopSubCat ? [formData.shopSubCat] : [])])].filter(Boolean);
-
     return (
       <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
         <div className="flex justify-between items-center mb-6">
@@ -1682,36 +1706,57 @@ export default function App() {
 
                 <input required value={formData.title || ""} placeholder="የእቃው ስም" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <input required value={formData.price || ""} type="number" placeholder="መሸጫ ዋጋ (Birr)" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ (Birr)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <input required value={formData.cadCost || ""} type="number" step="0.01" placeholder="Base Cost (CAD) - Backend" onChange={(e) => setFormData({ ...formData, cadCost: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <input required value={formData.stockQty || ""} type="number" placeholder="Local Shop Stock Qty" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <input required value={formData.cadCost || ""} type="number" step="0.01" placeholder="Base Cost (CAD)" onChange={(e) => setFormData({ ...formData, cadCost: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <input required value={formData.stockQty || ""} type="number" placeholder="Stock Qty (Single units)" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mt-4 mb-4">
+                <div className="grid grid-cols-2 gap-4 mt-4">
                   <input required value={formData.weightKg || ""} type="number" step="0.1" placeholder="Weight (kg)" onChange={(e) => setFormData({ ...formData, weightKg: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <input value={formData.specialFreightFee || ""} type="number" placeholder="Special Freight Fee (Birr) - Optional" onChange={(e) => setFormData({ ...formData, specialFreightFee: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <input value={formData.specialFreightFee || ""} type="number" placeholder="Special Freight Fee (ETB)" onChange={(e) => setFormData({ ...formData, specialFreightFee: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-4 mb-4 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Calculated Regular Price</label>
+                    <input readOnly value={formData.price || ""} type="number" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-lg outline-none opacity-80 font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">Calculated VIP Price</label>
+                    <input readOnly value={formData.vipPrice || ""} type="number" className="w-full bg-black border border-amber-500/50 text-amber-500 p-3 rounded-lg outline-none opacity-80 font-mono font-bold" />
+                  </div>
+                  <p className="col-span-2 text-[10px] text-zinc-500 leading-tight mt-1">Pricing is auto-calculated: (CAD + 13% Tax) + 18% Markup * 130 Rate + Freight.</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                   <div className="relative">
-                    <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድብ (Primary Category)</label>
-                    <select required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value, shopSubCat: "" })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors">
-                       <option value="">ምረጥ (Select...)</option>
-                       {safePrimaryOptions.map(c => <option key={`p_opt_${c}`} value={c}>{c}</option>)}
-                    </select>
+                    <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድቦች (Primary Categories) - Select multiple</label>
+                    <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
+                       {customCategories.map(c => (
+                         <label key={c} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
+                           <input type="checkbox" checked={formData.shopCat?.includes(c)} onChange={(e) => {
+                             const newCats = e.target.checked ? [...formData.shopCat, c] : formData.shopCat.filter(cat => cat !== c);
+                             setFormData({...formData, shopCat: newCats});
+                           }} className="accent-amber-500" />
+                           <span className="text-sm">{c}</span>
+                         </label>
+                       ))}
+                    </div>
                   </div>
 
                   <div className="relative border-t border-zinc-800 pt-4 mt-2">
-                    <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድብ (Subcategory)</label>
-                    <select value={formData.shopSubCat || ""} onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors">
-                       <option value="">ምንም (None)</option>
-                       {safeSecondaryOptions.map(c => <option key={`s_opt_${c}`} value={c}>{c}</option>)}
-                    </select>
+                    <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድቦች (Subcategories) - Select multiple</label>
+                    <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
+                       {Object.values(customSubCats).flat().map((c, i, self) => self.indexOf(c) === i ? (
+                         <label key={c} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
+                           <input type="checkbox" checked={formData.shopSubCat?.includes(c)} onChange={(e) => {
+                             const newSubCats = e.target.checked ? [...formData.shopSubCat, c] : formData.shopSubCat.filter(cat => cat !== c);
+                             setFormData({...formData, shopSubCat: newSubCats});
+                           }} className="accent-amber-500" />
+                           <span className="text-sm">{c}</span>
+                         </label>
+                       ) : null)}
+                    </div>
                   </div>
                 </div>
                 
