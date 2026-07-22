@@ -80,8 +80,6 @@ export default function App() {
   
   const [savedCustomSizes, setSavedCustomSizes] = useState(() => JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]'));
   const [customCategories, setCustomCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_categories') || '["ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"]'));
-  
-  // Subcategories are now mapped to specific primary categories
   const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcats_map') || '{"ወንድ":["ልብስ","ጫማ"],"ሴት":["ልብስ","ጫማ"]}'));
 
   const [posts, setPosts] = useState([]);
@@ -451,7 +449,14 @@ export default function App() {
       if (inlineImageFiles.length > 0) { for (const file of inlineImageFiles) { const inlineUrl = await uploadFileToSupabase(file); if (inlineUrl) uploadedInlineUrls.push(inlineUrl); } }
       if (uploadedInlineUrls.length > 0) { finalUrls = [...finalUrls, ...uploadedInlineUrls]; } else { finalUrls = [...finalUrls, ...existingInlineImages]; }
       const payload = { category: formData.postCategory || "ዋና", title: formData.title, subtitle: formData.subtitle, excerpt: formData.excerpt, body: formData.body, author: formData.author || "GOLETH", related_links: formData.relatedLinks || [], image_urls: finalUrls };
-      if (editId) { await supabase.from("posts").update(payload).eq("id", editId); } else { await supabase.from("posts").insert([payload]); }
+      
+      if (editId) { 
+        const { error } = await supabase.from("posts").update(payload).eq("id", editId); 
+        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
+      } else { 
+        const { error } = await supabase.from("posts").insert([payload]); 
+        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
+      }
     } else if (adminTab === "products") {
       let filesToUpload = [...productImageFiles];
       if (filesToUpload.length > 1 && selectedMainImgIdx > 0 && selectedMainImgIdx < filesToUpload.length) { const main = filesToUpload.splice(selectedMainImgIdx, 1)[0]; filesToUpload.unshift(main); }
@@ -462,7 +467,14 @@ export default function App() {
         source_url: formData.sourceUrl || null, description: formData.description || null
       };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
-      if (editId) { await supabase.from("products").update(payload).eq("id", editId); } else { await supabase.from("products").insert([payload]); }
+      
+      if (editId) { 
+        const { error } = await supabase.from("products").update(payload).eq("id", editId); 
+        if (error) { alert("Database Error: " + error.message + " (Did you forget to add the 'description' and 'source_url' columns in Supabase?)"); setUploading(false); return; }
+      } else { 
+        const { error } = await supabase.from("products").insert([payload]); 
+        if (error) { alert("Database Error: " + error.message + " (Did you forget to add the 'description' and 'source_url' columns in Supabase?)"); setUploading(false); return; }
+      }
     }
     setFormData({ options: [], relatedLinks: [] }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
@@ -911,10 +923,10 @@ export default function App() {
   };
 
   const renderShop = () => {
-    // Strictly follow CEO mapped categories. Do NOT dynamically append based on products.
+    // Strictly follow CEO mapped categories.
     const uniquePrimary = ["ሁሉም", ...customCategories];
 
-    // Only fetch subcategories that the CEO explicitly mapped to the currently selected primary category.
+    // Only fetch subcategories mapped to the currently selected primary category.
     const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []);
     const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
@@ -1160,6 +1172,10 @@ export default function App() {
   };
 
   const renderAdmin = () => {
+    // Determine dynamic options based ONLY on existing explicit custom map + existing products map.
+    const safePrimaryOptions = [...new Set([...customCategories, ...(formData.shopCat ? [formData.shopCat] : [])])].filter(Boolean);
+    const safeSecondaryOptions = [...new Set([...(customSubCats[formData.shopCat] || []), ...(formData.shopSubCat ? [formData.shopSubCat] : [])])].filter(Boolean);
+
     return (
       <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
         <div className="flex justify-between items-center mb-6">
@@ -1187,7 +1203,7 @@ export default function App() {
                </div>
                <div className="flex flex-col gap-2">
                  {customCategories.map((c, index) => (
-                   <div key={c} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                   <div key={`prim_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
                      {editCatIndex === index ? (
                        <input autoFocus type="text" value={editCatValue} onChange={e => setEditCatValue(e.target.value)} onBlur={() => saveCategoryEdit('primary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
                      ) : (
@@ -1223,7 +1239,7 @@ export default function App() {
                    <div className="flex flex-col gap-2">
                      {(customSubCats[selectedPrimaryForSub] || []).length === 0 && <span className="text-xs text-zinc-500 italic">ምንም የለም</span>}
                      {(customSubCats[selectedPrimaryForSub] || []).map((c, index) => (
-                       <div key={c} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                       <div key={`sec_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
                          {editSubCatIndex === index ? (
                            <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
                          ) : (
@@ -1395,7 +1411,7 @@ export default function App() {
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድብ (Primary Category)</label>
                     <select required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value, shopSubCat: "" })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors">
                        <option value="">ምረጥ (Select...)</option>
-                       {customCategories.map(c => <option key={`p_opt_${c}`} value={c}>{c}</option>)}
+                       {safePrimaryOptions.map(c => <option key={`p_opt_${c}`} value={c}>{c}</option>)}
                     </select>
                   </div>
 
@@ -1403,7 +1419,7 @@ export default function App() {
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድብ (Subcategory)</label>
                     <select value={formData.shopSubCat || ""} onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors">
                        <option value="">ምንም (None)</option>
-                       {(customSubCats[formData.shopCat] || []).map(c => <option key={`s_opt_${c}`} value={c}>{c}</option>)}
+                       {safeSecondaryOptions.map(c => <option key={`s_opt_${c}`} value={c}>{c}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1480,7 +1496,7 @@ export default function App() {
             )}
             
             <button disabled={uploading} type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-4 transition-colors">
-              {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል" : "አትም")}
+              {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል (Update)" : "አትም (Publish)")}
             </button>
           </form>
         )}
