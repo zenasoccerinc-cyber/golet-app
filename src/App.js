@@ -23,7 +23,6 @@ export default function App() {
   // Shopping States
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
-  const [currentImgIndex, setCurrentImgIndex] = useState(0);
   const [showInlineCheckout, setShowInlineCheckout] = useState(false);
   const [includeVipSignup, setIncludeVipSignup] = useState(false);
   
@@ -51,6 +50,7 @@ export default function App() {
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
@@ -66,11 +66,14 @@ export default function App() {
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const [expandedOptionCategories, setExpandedOptionCategories] = useState({});
 
-  // Custom Sizes State
+  // Dynamic CEO Configurations
   const [customSizeInput, setCustomSizeInput] = useState("");
-  const [savedCustomSizes, setSavedCustomSizes] = useState(() => {
-    return JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]');
-  });
+  const [newCatInput, setNewCatInput] = useState("");
+  const [newSubCatInput, setNewSubCatInput] = useState("");
+  
+  const [savedCustomSizes, setSavedCustomSizes] = useState(() => JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]'));
+  const [customCategories, setCustomCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_categories') || '["ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"]'));
+  const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcategories') || '["ልብስ", "ጫማ", "ሌሎች"]'));
 
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -98,6 +101,7 @@ export default function App() {
   const telegramWrapperRef = useRef(null); 
   const telegramCheckoutRef = useRef(null);
   const telegramSourcingRef = useRef(null);
+  const telegramHeaderLoginRef = useRef(null);
 
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
@@ -135,10 +139,9 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  useEffect(() => {
-    if (activeTab === "ቪአይፒ" && !currentUser && telegramWrapperRef.current) {
-      if (telegramWrapperRef.current.innerHTML !== '') return; 
-      window.onTelegramAuth = (user) => { handleTelegramLogin(user); };
+  const injectTelegramScript = (refElement, callback = () => {}) => {
+    if (refElement && refElement.innerHTML === '') {
+      window.onTelegramAuth = (user) => { handleTelegramLogin(user); callback(); };
       const script = document.createElement("script");
       script.src = "https://telegram.org/js/telegram-widget.js?22";
       script.setAttribute("data-telegram-login", "goleth_app_bot");
@@ -146,39 +149,14 @@ export default function App() {
       script.setAttribute("data-request-access", "write");
       script.setAttribute("data-onauth", "onTelegramAuth(user)");
       script.async = true;
-      telegramWrapperRef.current.appendChild(script);
+      refElement.appendChild(script);
     }
-  }, [activeTab, currentUser]);
+  };
 
-  useEffect(() => {
-    if (showInlineCheckout && !currentUser && telegramCheckoutRef.current) {
-      if (telegramCheckoutRef.current.innerHTML !== '') return; 
-      window.onTelegramAuth = (user) => { handleTelegramLogin(user); };
-      const script = document.createElement("script");
-      script.src = "https://telegram.org/js/telegram-widget.js?22";
-      script.setAttribute("data-telegram-login", "goleth_app_bot");
-      script.setAttribute("data-size", "large");
-      script.setAttribute("data-request-access", "write");
-      script.setAttribute("data-onauth", "onTelegramAuth(user)");
-      script.async = true;
-      telegramCheckoutRef.current.appendChild(script);
-    }
-  }, [showInlineCheckout, currentUser]);
-
-  useEffect(() => {
-    if (showOrderForm && !currentUser && telegramSourcingRef.current) {
-      if (telegramSourcingRef.current.innerHTML !== '') return; 
-      window.onTelegramAuth = (user) => { handleTelegramLogin(user); };
-      const script = document.createElement("script");
-      script.src = "https://telegram.org/js/telegram-widget.js?22";
-      script.setAttribute("data-telegram-login", "goleth_app_bot");
-      script.setAttribute("data-size", "large");
-      script.setAttribute("data-request-access", "write");
-      script.setAttribute("data-onauth", "onTelegramAuth(user)");
-      script.async = true;
-      telegramSourcingRef.current.appendChild(script);
-    }
-  }, [showOrderForm, currentUser]);
+  useEffect(() => { if (activeTab === "ቪአይፒ" && !currentUser) injectTelegramScript(telegramWrapperRef.current); }, [activeTab, currentUser]);
+  useEffect(() => { if (showInlineCheckout && !currentUser) injectTelegramScript(telegramCheckoutRef.current); }, [showInlineCheckout, currentUser]);
+  useEffect(() => { if (showOrderForm && !currentUser) injectTelegramScript(telegramSourcingRef.current); }, [showOrderForm, currentUser]);
+  useEffect(() => { if (showLoginModal && !currentUser) injectTelegramScript(telegramHeaderLoginRef.current, () => setShowLoginModal(false)); }, [showLoginModal, currentUser]);
 
   useEffect(() => {
     if (currentUserProfile) {
@@ -299,24 +277,15 @@ export default function App() {
     const region = ["USA", "Canada", "Europe", "Australia", "South America"].includes(loc) ? 'Diaspora' : 'Local';
 
     try {
-      const { data, error } = await supabase.from('vip_users').update({ 
-        full_name: name, 
-        phone_number: phone, 
-        region: region 
-      }).eq('telegram_id', currentUser.id.toString()).select('*');
-
+      const { data, error } = await supabase.from('vip_users').update({ full_name: name, phone_number: phone, region: region }).eq('telegram_id', currentUser.id.toString()).select('*');
       if (error) throw error;
-
       if (data && data[0]) {
         setCurrentUserProfile(data[0]);
         localStorage.setItem('goleth_profile', JSON.stringify(data[0]));
         setShowProfileModal(false); 
       }
-    } catch (err) {
-      alert("መረጃውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ።");
-    } finally {
-      setUploading(false);
-    }
+    } catch (err) { alert("መረጃውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ።"); } 
+    finally { setUploading(false); }
   };
 
   const uploadFileToSupabase = async (file) => {
@@ -334,7 +303,6 @@ export default function App() {
   const handleVipPaymentSubmit = async (e) => {
     e.preventDefault();
     if (!currentUser?.id) return;
-    
     setUploading(true);
 
     if (vipPhone.length !== 10 || !vipReceiptFile) {
@@ -343,15 +311,11 @@ export default function App() {
     }
 
     const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
-
     const { error: dbError } = await supabase.from("vip_payments").insert([
       { telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }
     ]);
 
-    if (dbError) {
-      alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
-      setUploading(false); return;
-    }
+    if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
 
     const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${vipPaymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ በጥቂት ሰዓታት ውስጥ የVIP አባልነትዎ ይከፈታል።`;
@@ -361,27 +325,17 @@ export default function App() {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
 
-    setUploading(false);
-    setHasPendingVip(true);
-    setActiveTab("ዋና");
-    window.scrollTo(0,0);
-    setShowSuccessModal(true);
+    setUploading(false); setHasPendingVip(true); setActiveTab("ዋና"); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
   const handleProductOrderSubmit = async (e) => {
     e.preventDefault();
     if (!currentUser?.id) return;
-    
     setUploading(true);
 
     const isGettingVipPrice = isVIP || includeVipSignup;
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
-    
-    let finalPrice = basePrice; 
-    let nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
-    let vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
-    
-    finalPrice = finalPrice + nextDayBirr + vipSignupBirr;
+    let finalPrice = basePrice + (checkoutShipping === "next_day" ? 850 : 0) + (includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0);
 
     let orderNotes = checkoutShipping === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard Shipping";
     if (includeVipSignup) orderNotes += ` | +VIP Membership Signup (${userRegion})`;
@@ -393,26 +347,13 @@ export default function App() {
     }
 
     const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
-
     const { error: dbError } = await supabase.from("product_orders").insert([{ 
-        telegram_id: currentUser.id.toString(), 
-        full_name: orderName, 
-        phone_number: vipPhone, 
-        delivery_address: finalDeliveryAddress,
-        product_id: selectedProduct.id,
-        product_name: selectedProduct.name,
-        selected_option: selectedOption || "N/A",
-        price: finalPrice,
-        payment_type: userRegion, 
-        receipt_url: receiptUrl,
-        shipping_speed: checkoutShipping,
-        is_new_vip_signup: includeVipSignup 
+        telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, delivery_address: finalDeliveryAddress,
+        product_id: selectedProduct.id, product_name: selectedProduct.name, selected_option: selectedOption || "N/A", price: finalPrice,
+        payment_type: userRegion, receipt_url: receiptUrl, shipping_speed: checkoutShipping, is_new_vip_signup: includeVipSignup 
       }]);
 
-    if (dbError) {
-      alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
-      setUploading(false); return;
-    }
+    if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
 
     const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
@@ -422,161 +363,100 @@ export default function App() {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
 
-    setUploading(false);
-    setShowInlineCheckout(false);
-    setSelectedProduct(null);
-    setSelectedOption(null);
-    setIncludeVipSignup(false);
-    setIsGift(false);
-    setOrderFile(null);
-    setActiveTab("ሱቅ");
-    window.scrollTo(0,0);
-    setShowSuccessModal(true);
+    setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); setActiveTab("ሱቅ"); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
-  const handleOpenSourcing = () => {
-    setReqProductName("");
-    setReqStoreName("");
-    setReqProductLink("");
-    setReqImage(null);
-    setShowOrderForm(true);
-  };
+  const handleOpenSourcing = () => { setReqProductName(""); setReqStoreName(""); setReqProductLink(""); setReqImage(null); setShowOrderForm(true); };
 
   const submitOrderForm = async (e) => {
     e.preventDefault();
-    if (!currentUser?.id) {
-      alert("እባክዎ ትዕዛዝዎን ለመላክ መጀመሪያ በቴሌግራም ይግቡ።");
-      return;
-    }
-    
+    if (!currentUser?.id) { alert("እባክዎ ትዕዛዝዎን ለመላክ መጀመሪያ በቴሌግራም ይግቡ።"); return; }
     setUploading(true);
 
-    const name = orderName;
-    const phone = vipPhone;
-    const productName = reqProductName;
-    const storeName = reqStoreName;
-    const productLink = reqProductLink;
-    const imageFile = reqImage;
-    const shipping = e.target.shipping.value;
-
-    let imageUrl = "";
-    if (imageFile) {
-       const uploadedUrl = await uploadFileToSupabase(imageFile);
-       if (uploadedUrl) imageUrl = uploadedUrl;
-    }
-
-    let extraNotes = "";
-    if (isGift) {
-      extraNotes = `\n🎁 <b>GIFT TO:</b> ${recipientName} | Ph: ${recipientPhone} | Addr: ${recipientAddress}`;
-    }
+    const imageUrl = reqImage ? await uploadFileToSupabase(reqImage) : "";
+    const extraNotes = isGift ? `\n🎁 <b>GIFT TO:</b> ${recipientName} | Ph: ${recipientPhone} | Addr: ${recipientAddress}` : "";
 
     const { error: dbError } = await supabase.from("sourcing_requests").insert([{
-      telegram_id: currentUser.id.toString(),
-      full_name: name,
-      phone_number: phone,
-      product_name: productName || null,
-      store_name: storeName || null,
-      product_link: productLink || null,
-      image_url: imageUrl || null,
-      shipping_speed: shipping
+      telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, product_name: reqProductName || null, store_name: reqStoreName || null, product_link: reqProductLink || null, image_url: imageUrl || null, shipping_speed: e.target.shipping.value
     }]);
 
-    if (dbError) {
-      alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።");
-      setUploading(false); return;
-    }
+    if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
 
-    const message = `🛍 <b>አዲስ ልዩ የእቃ ማዘዣ!</b>\n\n👤 <b>ስም:</b> ${name}\n📞 <b>ስልክ:</b> ${phone}\n📦 <b>የእቃው ስም:</b> ${productName || "አልተገለጸም"}\n🏪 <b>የሱቁ ስም:</b> ${storeName || "አልተገለጸም"}\n🔗 <b>ሊንክ:</b> ${productLink || "አልተገለጸም"}\n🚚 <b>አቅርቦት:</b> ${shipping}${extraNotes}\n🖼️ <b>ምስል:</b> ${imageUrl || "ምንም ምስል አልተያያዘም"}`;
+    const message = `🛍 <b>አዲስ ልዩ የእቃ ማዘዣ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📦 <b>የእቃው ስም:</b> ${reqProductName || "አልተገለጸም"}\n🏪 <b>የሱቁ ስም:</b> ${reqStoreName || "አልተገለጸም"}\n🔗 <b>ሊንክ:</b> ${reqProductLink || "አልተገለጸም"}\n🚚 <b>አቅርቦት:</b> ${e.target.shipping.value}${extraNotes}\n🖼️ <b>ምስል:</b> ${imageUrl || "ምንም ምስል አልተያያዘም"}`;
     
-    try {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "HTML" })
-      });
-    } catch (err) { console.log(err); }
+    try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "HTML" }) }); } catch (err) {}
 
-    setUploading(false);
-    setIsGift(false);
-    alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!");
-    setShowOrderForm(false);
-    if(activePost) window.history.back(); 
-    setActiveTab("ሱቅ");
-    window.scrollTo(0,0);
+    setUploading(false); setIsGift(false); alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!"); setShowOrderForm(false); if(activePost) window.history.back(); setActiveTab("ሱቅ"); window.scrollTo(0,0);
   };
 
   const submitPrediction = async (gameId) => {
     if (!currentUser?.id) return;
-    const scoreA = predictionInputs[gameId]?.a;
-    const scoreB = predictionInputs[gameId]?.b;
-
+    const scoreA = predictionInputs[gameId]?.a; const scoreB = predictionInputs[gameId]?.b;
     if (scoreA === undefined || scoreB === undefined || scoreA === "" || scoreB === "") { alert("እባክዎ ሁለቱንም ውጤቶች ያስገቡ።"); return; }
     
-    const { error } = await supabase.from('predictions').insert([
-      { telegram_id: currentUser.id.toString(), game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }
-    ]);
-
-    if (!error) { alert("ውጤቱ ተመዝግቧል!"); fetchUserPredictions(currentUser.id); } 
-    else { alert("ውጤቱን ቀድመው ገምተዋል።"); }
+    const { error } = await supabase.from('predictions').insert([{ telegram_id: currentUser.id.toString(), game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }]);
+    if (!error) { alert("ውጤቱ ተመዝግቧል!"); fetchUserPredictions(currentUser.id); } else { alert("ውጤቱን ቀድመው ገምተዋል።"); }
   };
 
   const createGame = async () => {
     setUploading(true);
-    let a_url = '', b_url = '';
-    
-    if (teamAFile) a_url = await uploadFileToSupabase(teamAFile);
-    if (teamBFile) b_url = await uploadFileToSupabase(teamBFile);
-
+    const a_url = teamAFile ? await uploadFileToSupabase(teamAFile) : '';
+    const b_url = teamBFile ? await uploadFileToSupabase(teamBFile) : '';
     await supabase.from('games').insert([{...newGame, team_a_logo: a_url, team_b_logo: b_url}]);
-    
-    setNewGame({ team_a: '', team_b: '' });
-    setTeamAFile(null);
-    setTeamBFile(null);
-    setUploading(false);
-    fetchGames(); 
-    alert("ጨዋታው ታትሟል!");
+    setNewGame({ team_a: '', team_b: '' }); setTeamAFile(null); setTeamBFile(null); setUploading(false); fetchGames(); alert("ጨዋታው ታትሟል!");
   };
 
   const updateFinalScore = async (gameId) => {
     const scores = scoresToUpdate[gameId];
     if (!scores || scores.a === undefined || scores.b === undefined) return;
-
     await supabase.from('games').update({ final_score_a: parseInt(scores.a), final_score_b: parseInt(scores.b), status: 'finished' }).eq('id', gameId);
     fetchGames(); alert("ጨዋታው ተጠናቆ ውጤቱ ተመዝግቧል!");
   };
 
-  const handleLogoTap = () => {
-    setActiveTab("ዋና");
-    if (activePost) window.history.back(); 
-    window.scrollTo(0,0);
-  };
+  const handleLogoTap = () => { setActiveTab("ዋና"); if (activePost) window.history.back(); window.scrollTo(0,0); };
 
   const handleAddCustomSize = () => {
     if(!customSizeInput.trim()) return;
-    
-    if(!formData.options.includes(customSizeInput)) {
-      setFormData(prev => ({ ...prev, options: [...(prev.options || []), customSizeInput] }));
-    }
-    
+    if(!formData.options.includes(customSizeInput)) setFormData(prev => ({ ...prev, options: [...(prev.options || []), customSizeInput] }));
     if(!savedCustomSizes.includes(customSizeInput)) {
       const newSaved = [...savedCustomSizes, customSizeInput];
-      setSavedCustomSizes(newSaved);
-      localStorage.setItem('goleth_custom_sizes', JSON.stringify(newSaved));
+      setSavedCustomSizes(newSaved); localStorage.setItem('goleth_custom_sizes', JSON.stringify(newSaved));
     }
-    
     setCustomSizeInput("");
   };
 
+  // Custom CEO Categories
+  const addCategory = (type) => {
+    if (type === 'primary' && newCatInput.trim() && !customCategories.includes(newCatInput)) {
+      const updated = [...customCategories, newCatInput.trim()]; setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); setNewCatInput("");
+    } else if (type === 'secondary' && newSubCatInput.trim() && !customSubCats.includes(newSubCatInput)) {
+      const updated = [...customSubCats, newSubCatInput.trim()]; setCustomSubCats(updated); localStorage.setItem('goleth_subcategories', JSON.stringify(updated)); setNewSubCatInput("");
+    }
+  };
+  const removeCategory = (type, val) => {
+    if (type === 'primary') { const updated = customCategories.filter(c => c !== val); setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); } 
+    else { const updated = customSubCats.filter(c => c !== val); setCustomSubCats(updated); localStorage.setItem('goleth_subcategories', JSON.stringify(updated)); }
+  };
+
   const openPost = (post) => { window.history.pushState({ postId: post.id }, "", `#article-${post.id}`); setActivePost(post); };
-  const openProduct = (prod) => { window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`); setSelectedProduct(prod); setCurrentImgIndex(0); setSelectedOption(null); setShowInlineCheckout(false); };
+  
+  // Product Detail Initialization
+  const openProduct = (prod) => { 
+    window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`); 
+    setSelectedProduct(prod); setCurrentImgIndex(0); setSelectedOption(null); 
+    // Auto-open form if no options exist, otherwise hide until selected
+    setShowInlineCheckout(!prod.options || prod.options.length === 0); 
+  };
+  
   const handleDelete = async (table, id) => { if (window.confirm("እርግጠኛ ነዎት?")) { await supabase.from(table).delete().eq("id", id); if (table === "games") fetchGames(); else fetchData(); if (activePost || selectedProduct) window.history.back(); } };
   
   const handleEdit = (type, item) => {
     setAdminTab(type); setEditId(item.id);
     if (type === "posts") {
       setFormData({ postCategory: item.category, title: item.title, subtitle: item.subtitle || "", excerpt: item.excerpt || "", body: item.body || "", author: item.author || "GOLETH", relatedLinks: item.related_links || [] });
-      if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } 
-      else { setExistingMainImage(null); setExistingInlineImages([]); }
+      if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [] });
+      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], sourceUrl: item.source_url || "", description: item.description || "" });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
@@ -598,19 +478,13 @@ export default function App() {
       if (editId) { await supabase.from("posts").update(payload).eq("id", editId); } else { await supabase.from("posts").insert([payload]); }
     } else if (adminTab === "products") {
       let filesToUpload = [...productImageFiles];
-      
-      if (filesToUpload.length > 1 && selectedMainImgIdx > 0 && selectedMainImgIdx < filesToUpload.length) {
-         const main = filesToUpload.splice(selectedMainImgIdx, 1)[0];
-         filesToUpload.unshift(main);
-      }
-
-      if (filesToUpload.length > 0) { 
-        for (const file of filesToUpload) { 
-          const prodUrl = await uploadFileToSupabase(file); 
-          if (prodUrl) finalUrls.push(prodUrl); 
-        } 
-      }
-      const payload = { name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options };
+      if (filesToUpload.length > 1 && selectedMainImgIdx > 0 && selectedMainImgIdx < filesToUpload.length) { const main = filesToUpload.splice(selectedMainImgIdx, 1)[0]; filesToUpload.unshift(main); }
+      if (filesToUpload.length > 0) { for (const file of filesToUpload) { const prodUrl = await uploadFileToSupabase(file); if (prodUrl) finalUrls.push(prodUrl); } }
+      const payload = { 
+        name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, 
+        category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, 
+        source_url: formData.sourceUrl || null, description: formData.description || null
+      };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       if (editId) { await supabase.from("products").update(payload).eq("id", editId); } else { await supabase.from("products").insert([payload]); }
     }
@@ -636,7 +510,6 @@ export default function App() {
         <form onSubmit={saveUserProfile} className="space-y-4">
           <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (Full Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
           <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
-          
           <select required name="location" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-bold">
             <option value="">የት ሀገር ነዎት? (Location)</option>
             <option value="Ethiopia">Ethiopia (ኢትዮጵያ)</option>
@@ -647,7 +520,6 @@ export default function App() {
             <option value="South America">South America</option>
             <option value="Other">Other (ሌላ)</option>
           </select>
-
           <button type="submit" disabled={uploading} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
             {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
           </button>
@@ -663,7 +535,6 @@ export default function App() {
         <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
         <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
         <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በጥሩ ሁኔታ ተልኳል። ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።</p>
-
         <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-colors text-lg shadow-lg">እሺ (OK)</button>
       </div>
     </div>
@@ -696,17 +567,17 @@ export default function App() {
               </div>
 
               <form onSubmit={submitOrderForm} className="space-y-3">
-                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-mono" />
+                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value)} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-mono" />
                 
-                <div className="border-t border-zinc-800 my-3 pt-3 space-y-3">
-                   <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                   <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
-                   <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base" />
+                <div className="border-t border-zinc-800 my-2 pt-3 space-y-2">
+                   <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                   <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                   <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
                    
                    <div>
-                      <label className="block text-zinc-400 text-sm mb-1.5 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)</label>
-                      <input type="file" onChange={e => setReqImage(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                      <label className="block text-zinc-400 text-xs mb-1 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)</label>
+                      <input type="file" onChange={e => setReqImage(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                    </div>
                 </div>
 
@@ -716,22 +587,22 @@ export default function App() {
                 </label>
 
                 {isGift && (
-                  <div className="p-3 bg-black border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
-                    <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                    <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
-                    <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+                  <div className="p-3 bg-black border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
+                    <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                    <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                    <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
                   </div>
                 )}
                 
-                <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-base font-bold mt-2">
+                <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-bold mt-2">
                   <option value="">ማጓጓዣ ይምረጡ</option>
                   <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
                   <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
                 </select>
                 
-                <button type="submit" disabled={uploading || !isSourcingValid} className={`w-full font-black py-4 rounded-xl mt-4 flex items-center justify-center transition-colors text-lg ${(!isSourcingValid || uploading) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg'}`}>
-                  {uploading ? "በመላክ ላይ..." : <><Send size={20} className="mr-2" /> ትዕዛዙን ላክ</>}
+                <button type="submit" disabled={uploading || !isSourcingValid} className={`w-full font-black py-3 rounded-xl mt-4 flex items-center justify-center transition-colors text-base ${(!isSourcingValid || uploading) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg'}`}>
+                  {uploading ? "በመላክ ላይ..." : <><Send size={18} className="mr-2" /> ትዕዛዙን ላክ</>}
                 </button>
               </form>
             </div>
@@ -742,7 +613,7 @@ export default function App() {
   };
 
   const renderOrderBanner = () => (
-    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-xl p-3 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-3 mt-1 hover:border-amber-500/50 transition-all group">
+    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-xl p-3 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-2 mt-0 hover:border-amber-500/50 transition-all group">
       <div className="flex-1 flex flex-col items-center text-center">
         <h3 className="text-amber-500 font-black text-lg tracking-wide drop-shadow-md leading-tight mb-1">ልዩ እቃ ማዘዝ ይፈልጋሉ?</h3>
         <p className="text-zinc-300 text-sm font-bold">ከየትም ቦታ : የፈለጉበት ቦታ እናመጣሎታለን!</p>
@@ -761,46 +632,30 @@ export default function App() {
     let match;
 
     while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(text.substring(lastIndex, match.index));
-      }
+      if (match.index > lastIndex) { parts.push(text.substring(lastIndex, match.index)); }
       const imgNumber = parseInt(match[1], 10);
-      if (urls && urls[imgNumber]) {
-         parts.push(<img key={match.index} src={urls[imgNumber]} alt="Article Content" className="w-full h-auto rounded-xl my-6 shadow-lg object-cover border border-zinc-800" />);
-      }
+      if (urls && urls[imgNumber]) { parts.push(<img key={match.index} src={urls[imgNumber]} alt="Article Content" className="w-full h-auto rounded-xl my-6 shadow-lg object-cover border border-zinc-800" />); }
       lastIndex = regex.lastIndex;
     }
     if (lastIndex < text.length) { parts.push(text.substring(lastIndex)); }
-
-    return (
-      <div className="text-zinc-300 text-sm leading-loose whitespace-pre-wrap">
-        {parts.length > 0 ? parts : text}
-      </div>
-    );
+    return <div className="text-zinc-300 text-sm leading-loose whitespace-pre-wrap">{parts.length > 0 ? parts : text}</div>;
   };
 
   const renderRelatedItems = () => {
     if (!activePost || !activePost.related_links || activePost.related_links.length === 0) return null;
-
     const relatedCards = activePost.related_links.map(link => {
-      const [type, idStr] = link.split('_');
-      const id = parseInt(idStr, 10);
-
+      const [type, idStr] = link.split('_'); const id = parseInt(idStr, 10);
       if (type === 'post') {
-        const p = posts.find(post => post.id === id);
-        if (!p) return null;
+        const p = posts.find(post => post.id === id); if (!p) return null;
         const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
         return (
           <div key={`post_${p.id}`} onClick={() => { setActiveTab(p.category); openPost(p); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col hover:border-amber-500/30 transition-colors">
             {img && <img src={img} alt={p.title} className="w-full aspect-[1.91/1] object-cover" />}
-            <div className="p-3">
-              <h4 className="text-white text-xs font-bold line-clamp-2">{p.title}</h4>
-            </div>
+            <div className="p-3"><h4 className="text-white text-xs font-bold line-clamp-2">{p.title}</h4></div>
           </div>
         );
       } else if (type === 'product') {
-        const p = products.find(prod => prod.id === id);
-        if (!p) return null;
+        const p = products.find(prod => prod.id === id); if (!p) return null;
         const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
         return (
           <div key={`prod_${p.id}`} onClick={() => { setActivePost(null); openProduct(p); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-amber-500/50 hover:border-amber-500 cursor-pointer flex flex-col items-center p-3 relative transition-colors">
@@ -817,9 +672,7 @@ export default function App() {
     return (
       <div className="mt-10 border-t border-zinc-800 pt-6">
         <h3 className="text-amber-500 font-black text-sm mb-4">ተያያዥ</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {relatedCards}
-        </div>
+        <div className="grid grid-cols-2 gap-3">{relatedCards}</div>
       </div>
     );
   };
@@ -832,12 +685,8 @@ export default function App() {
       
       {isCEO && (
         <div className="flex space-x-2 mb-6 w-full">
-          <button onClick={() => handleEdit("posts", activePost)} className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors border border-zinc-700">
-            <Edit2 size={14} className="mr-1" /> አስተካክል
-          </button>
-          <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 hover:text-red-400 border border-red-900 p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors">
-            <Trash2 size={14} className="mr-1" /> ሰርዝ
-          </button>
+          <button onClick={() => handleEdit("posts", activePost)} className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors border border-zinc-700"><Edit2 size={14} className="mr-1" /> አስተካክል</button>
+          <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 hover:text-red-400 border border-red-900 p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors"><Trash2 size={14} className="mr-1" /> ሰርዝ</button>
         </div>
       )}
 
@@ -847,20 +696,11 @@ export default function App() {
       
       <h1 className="text-2xl font-black text-white mb-2 leading-tight">{activePost.title}</h1>
       {activePost.subtitle && <h2 className="text-base text-amber-500 font-bold mb-4">{activePost.subtitle}</h2>}
-      
-      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-8 border-b border-zinc-800 pb-4">
-        {activePost.author}
-      </div>
-
+      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-8 border-b border-zinc-800 pb-4">{activePost.author}</div>
       {activePost.excerpt && <p className="text-sm text-white font-medium mb-8 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
-      
       {renderBodyWithImages(activePost.body, activePost.image_urls)}
-
       {renderRelatedItems()}
-
-      <div className="mt-10">
-        {renderOrderBanner()}
-      </div>
+      <div className="mt-10">{renderOrderBanner()}</div>
     </div>
   );
 
@@ -872,7 +712,6 @@ export default function App() {
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
     const nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
     const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
-    
     const dynamicTotal = basePrice + nextDayBirr + vipSignupBirr;
 
     const inlineCheckoutUI = showInlineCheckout ? (
@@ -898,9 +737,9 @@ export default function App() {
               </div>
             )}
 
-            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base" />
-            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
-            <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base"></textarea>
+            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+            <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
 
             <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
               <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
@@ -908,15 +747,15 @@ export default function App() {
             </label>
 
             {isGift && (
-              <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                <h4 className="text-amber-500 font-bold text-xs uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
-                <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
-                <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+              <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
+                <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
+                <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setRecipientPhone(val); }} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
               </div>
             )}
 
-            <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-base font-bold mt-2">
+            <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-bold mt-2">
               <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
               <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
             </select>
@@ -951,10 +790,10 @@ export default function App() {
 
             <div className="pt-2 border-t border-zinc-800">
               <label className="block text-zinc-400 text-xs font-bold mb-2">⚠️ ክፍያ ከፈጸሙ በኋላ ደረሰኙን እዚህ ያያይዙ፦</label>
-              <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
+              <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
             </div>
             
-            <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-4">
+            <button type="submit" disabled={uploading || vipPhone.length !== 10 || !orderFile} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors mt-4">
               {uploading ? "በመላክ ላይ..." : "ይዘዙ"}
             </button>
           </form>
@@ -965,79 +804,69 @@ export default function App() {
     return (
       <div className="fixed inset-0 bg-black z-50 overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-24">
         <div className="relative">
-          <button onClick={() => window.history.back()} className="absolute top-4 left-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-10">
+          <button onClick={() => window.history.back()} className="absolute top-4 left-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-20">
             <ChevronLeft className="text-white w-6 h-6" />
           </button>
           {isCEO && (
-             <div className="absolute top-4 left-16 flex space-x-2 z-10">
+             <div className="absolute top-4 left-16 flex space-x-2 z-20">
                 <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-white"><Edit2 size={20}/></button>
                 <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-red-500"><Trash2 size={20}/></button>
              </div>
           )}
 
           {hasImages ? (
-            <div className="relative w-full max-h-72 bg-white flex items-center justify-center rounded-xl overflow-hidden mb-4">
-              <img src={selectedProduct.image_urls[currentImgIndex]} alt={selectedProduct.name} className="max-h-full w-auto object-contain mix-blend-multiply" />
-              {selectedProduct.image_urls.length > 1 && (
-                <div className="absolute bottom-4 flex justify-center w-full space-x-2 z-10">
-                  {selectedProduct.image_urls.map((_, idx) => (
-                    <button key={idx} onClick={() => setCurrentImgIndex(idx)} className={`w-2.5 h-2.5 rounded-full transition-colors shadow-sm ${currentImgIndex === idx ? 'bg-amber-500 scale-125' : 'bg-zinc-300'}`} />
+            <div className="relative w-full bg-white mb-4 border-b border-zinc-800 overflow-hidden">
+               {selectedProduct.image_urls.length > 1 && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-white z-20 flex items-center">← Swipe →</div>}
+               <div className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-64 w-full relative z-10">
+                  {selectedProduct.image_urls.map((url, idx) => (
+                    <img key={idx} src={url} alt={selectedProduct.name} className="w-full h-full object-contain shrink-0 snap-center mix-blend-multiply" />
                   ))}
-                </div>
-              )}
+               </div>
             </div>
           ) : (
-            <div className="w-full max-h-72 bg-zinc-900 flex items-center justify-center rounded-xl overflow-hidden mb-4 border border-zinc-800">
+            <div className="w-full h-64 bg-zinc-900 flex items-center justify-center mb-4 border border-zinc-800">
               <span className="text-zinc-500 font-bold text-sm">ምስል የለም</span>
             </div>
           )}
         </div>
 
-        <div className="p-4">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-               <h1 className="text-xl font-black text-white leading-tight">{selectedProduct.name}</h1>
-            </div>
+        <div className="p-4 pt-0">
+          <div className="flex justify-between items-start mb-1">
+            <h1 className="text-lg font-black text-white leading-tight">{selectedProduct.name}</h1>
           </div>
 
-          <div className="mt-4 border-b border-zinc-800 pb-4">
+          <div className="mt-3 border-b border-zinc-800 pb-4">
             {isVIP ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-bold text-lg line-through decoration-red-500">መደበኛ ዋጋ: {selectedProduct.price} ብር</p>
-                 <p className="text-amber-500 font-black text-3xl">VIP ዋጋ: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
+                 <p className="text-zinc-400 font-bold text-sm line-through decoration-red-500">መደበኛ ዋጋ: {selectedProduct.price} ብር</p>
+                 <p className="text-amber-500 font-black text-2xl">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
-                 <p className="text-white font-black text-3xl">{selectedProduct.price} ብር</p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-xl">VIP ዋጋ: {selectedProduct.vip_price} ብር</p>}
+                 <p className="text-white font-black text-2xl">{selectedProduct.price} ብር</p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-bold text-lg">VIP ዋጋ: {selectedProduct.vip_price} ብር</p>}
                </div>
             )}
           </div>
 
+          {selectedProduct.description && (
+             <div className="mt-4 border-b border-zinc-800 pb-4">
+               <h3 className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-2">ስለ እቃው (Description)</h3>
+               <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedProduct.description}</p>
+             </div>
+          )}
+
           {selectedProduct.options && selectedProduct.options.length > 0 && (
             <div className="mt-4 border-b border-zinc-800 pb-4">
-              <h3 className="text-white font-black mb-3">ምርጫዎትን ይጫኑ (ወደ ማዘዣው ለመሄድ)</h3>
+              <h3 className="text-white font-black text-sm mb-3">ምርጫዎትን ይጫኑ (ወደ ማዘዣው ለመሄድ)</h3>
               <div className="flex flex-wrap gap-2">
                 {selectedProduct.options.map((opt) => (
-                  <button key={opt} onClick={() => setSelectedOption(opt)} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedOption === opt ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-black text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
+                  <button key={opt} onClick={() => { setSelectedOption(opt); setShowInlineCheckout(true); }} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedOption === opt ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-black text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
                     {formatOptionDisplay(opt)}
                   </button>
                 ))}
               </div>
-              {!selectedOption && showInlineCheckout && <p className="text-red-500 text-xs mt-2 font-bold animate-pulse">እባክዎ ከመግዛትዎ በፊት አማራጭ ይምረጡ!</p>}
             </div>
-          )}
-
-          {!showInlineCheckout && (
-             <button onClick={() => {
-                if (selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption) {
-                   alert("እባክዎ ከመግዛትዎ በፊት አማራጭ ይምረጡ! (Please select an option first)");
-                   return;
-                }
-                setShowInlineCheckout(true);
-             }} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-6 flex justify-center items-center">
-               <ShoppingBag className="mr-2" /> አሁን ይግዙ
-             </button>
           )}
 
           {inlineCheckoutUI}
@@ -1060,19 +889,19 @@ export default function App() {
     }
 
     return (
-      <div className="space-y-6 pb-24">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-3 pb-24">
+        <div className="grid grid-cols-2 gap-3">
           {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderOrderBanner()}
           
           {filteredPosts.map((post, index) => {
             const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
             if (index === 0) {
               return (
-                <div key={post.id} onClick={() => openPost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg mb-2 hover:border-zinc-700 transition-colors">
+                <div key={post.id} onClick={() => openPost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg hover:border-zinc-700 transition-colors">
                   {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
-                  <div className="p-5">
+                  <div className="p-4">
                     <h2 className="text-lg font-black text-white mb-2 leading-tight line-clamp-2">{post.title}</h2>
-                    <div className="text-amber-500 text-[10px] font-bold tracking-wider mb-3 uppercase">{post.author}</div>
+                    <div className="text-amber-500 text-[10px] font-bold tracking-wider mb-2 uppercase">{post.author}</div>
                     <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">{post.excerpt || post.body.replace(/\[image\s*\d+\]/gi, '')}</p>
                   </div>
                 </div>
@@ -1090,10 +919,10 @@ export default function App() {
               );
             }
             return (
-              <div key={post.id} onClick={() => openPost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-3 mb-1 hover:border-zinc-700 transition-colors">
-                {firstImg && <img src={firstImg} alt={post.title} className="w-36 shrink-0 aspect-[1.91/1] object-cover rounded-lg border border-zinc-800" />}
-                <div className="pl-4 flex flex-col flex-grow">
-                  <h3 className="text-xs font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
+              <div key={post.id} onClick={() => openPost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-2.5 hover:border-zinc-700 transition-colors">
+                {firstImg && <img src={firstImg} alt={post.title} className="w-24 shrink-0 aspect-square object-cover rounded-lg border border-zinc-800" />}
+                <div className="pl-3 flex flex-col flex-grow">
+                  <h3 className="text-xs font-bold text-white mb-1 line-clamp-2 leading-snug">{post.title}</h3>
                   <div className="text-amber-500 text-[9px] font-bold uppercase">{post.author}</div>
                 </div>
               </div>
@@ -1105,56 +934,52 @@ export default function App() {
   };
 
   const renderShop = () => {
-    // Dynamically generate category tabs from products + defaults
-    const defaultPrimary = ["ሁሉም", "ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"];
-    const allPrimary = [...new Set([...defaultPrimary, ...products.map(p => p.category).filter(Boolean)])];
+    const allPrimary = ["ሁሉም", ...customCategories, ...products.map(p => p.category).filter(Boolean)];
+    const uniquePrimary = [...new Set(allPrimary)];
 
-    const defaultSecondary = ["ሁሉም", "ልብስ", "ጫማ", "ሌሎች"];
     const allSecondary = shopCategory === "ሁሉም" 
-      ? defaultSecondary 
-      : [...new Set([...defaultSecondary, ...products.filter(p => p.category === shopCategory).map(p => p.subcategory).filter(Boolean)])];
+      ? ["ሁሉም", ...customSubCats] 
+      : ["ሁሉም", ...customSubCats, ...products.filter(p => p.category === shopCategory).map(p => p.subcategory).filter(Boolean)];
+    const uniqueSecondary = [...new Set(allSecondary)];
 
     let filtered = products;
     if (shopCategory !== "ሁሉም") filtered = filtered.filter(p => p.category === shopCategory);
-    if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") {
-       filtered = filtered.filter(p => p.subcategory === shopSubCategory);
-    }
+    if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") filtered = filtered.filter(p => p.subcategory === shopSubCategory);
 
     return (
       <div className="pb-24">
-        <div className="flex flex-wrap gap-2 pb-4 mb-2">
-          {allPrimary.map(cat => (
+        <div className="flex flex-wrap gap-2 pb-3 mb-1">
+          {uniquePrimary.map(cat => (
             <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
-              className={`px-5 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${shopCategory === cat ? "bg-amber-500 text-black shadow-lg" : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white"}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${shopCategory === cat ? "bg-amber-500 text-black shadow-lg" : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white"}`}>
               {cat}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           {renderOrderBanner()}
         </div>
 
-        {shopCategory !== "ሁሉም" && shopCategory !== "መድሀኒት" && allSecondary.length > 1 && (
-           <div className="flex flex-wrap gap-2 pb-6 mb-2">
-           {allSecondary.map(cat => (
+        {shopCategory !== "ሁሉም" && uniqueSecondary.length > 1 && (
+           <div className="flex flex-wrap gap-2 pb-4 mb-2">
+           {uniqueSecondary.map(cat => (
              <button key={cat} onClick={() => setShopSubCategory(cat)} 
-               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${shopSubCategory === cat ? "bg-zinc-300 text-black" : "bg-zinc-800 text-zinc-400 hover:text-white"}`}>
+               className={`px-3 py-1 rounded-full text-[10px] font-bold transition-colors ${shopSubCategory === cat ? "bg-zinc-300 text-black" : "bg-zinc-800 text-zinc-400 hover:text-white"}`}>
                {cat}
              </button>
            ))}
          </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4 mt-2">
+        <div className="grid grid-cols-2 gap-3 mt-1">
           {filtered.map((item) => (
             <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg overflow-hidden">
-              
-              <div className="bg-white w-full h-48 flex items-center justify-center relative shadow-sm overflow-hidden">
+              <div className="bg-white w-full h-40 flex items-center justify-center relative shadow-sm overflow-hidden">
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
-                      <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={14}/></button>
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={14}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={12}/></button>
                     </div>
                  )}
                  {item.image_urls && item.image_urls.length > 0 ? (
@@ -1163,18 +988,18 @@ export default function App() {
               </div>
 
               <div className="p-3 flex flex-col flex-grow">
-                 <h3 className="text-zinc-200 font-medium text-[13px] line-clamp-2 leading-snug mb-2">{item.name}</h3>
+                 <h3 className="text-zinc-200 font-bold text-xs line-clamp-2 leading-snug mb-2">{item.name}</h3>
                  
                  <div className="mt-auto">
                     {isVIP ? (
                       <>
-                        <p className="text-amber-500 font-black text-xl leading-none">{item.vip_price || item.price} ብር</p>
-                        {item.vip_price && <p className="text-zinc-500 font-medium text-xs leading-none line-through decoration-red-500 mt-1">መደበኛ: {item.price}</p>}
+                        <p className="text-amber-500 font-black text-lg leading-none">VIP: {item.vip_price || item.price} ብር</p>
+                        {item.vip_price && <p className="text-zinc-400 font-bold text-xs line-through mt-1">መደበኛ: {item.price} ብር</p>}
                       </>
                     ) : (
                       <>
-                        <p className="text-white font-black text-xl leading-none">{item.price} ብር</p>
-                        {item.vip_price && <p className="text-amber-500 font-bold text-xs leading-none mt-1">VIP: {item.vip_price}</p>}
+                        <p className="text-white font-black text-lg leading-none">{item.price} ብር</p>
+                        {item.vip_price && <p className="text-amber-500 font-bold text-sm mt-1">VIP: {item.vip_price} ብር</p>}
                       </>
                     )}
                  </div>
@@ -1219,9 +1044,7 @@ export default function App() {
           <div className="text-center max-w-sm mx-auto mb-8">
             <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
             <h2 className="text-2xl font-black text-white mb-6">ወደ VIP አባልነት</h2>
-            
             {renderVipBenefits()}
-
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
               <p className="text-white text-sm font-bold mb-4">አባል ለመሆን ወይም ለመግባት (Login)፦</p>
               <div ref={telegramWrapperRef} className="flex justify-center min-h-[50px]"></div>
@@ -1307,9 +1130,8 @@ export default function App() {
         )}
         <h2 className="text-2xl font-black text-white mb-6 text-center">የVIP ትንበያ</h2>
         {Array.isArray(games) && games.map(game => {
-          if (!game || !game.id) return null; // Safe guard against empty DB rows
+          if (!game || !game.id) return null;
           const userPred = userPredictions ? userPredictions[game.id] : null;
-          
           return (
             <div key={game.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4 shadow-xl">
               <div className="flex justify-between items-center mb-6">
@@ -1331,27 +1153,19 @@ export default function App() {
                     <span className="font-black text-zinc-500">-</span>
                     <input type="number" value={predictionInputs[game.id]?.b || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), b: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
                   </div>
-                  <button onClick={() => submitPrediction(game.id)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">
-                    ውጤት ላክ
-                  </button>
+                  <button onClick={() => submitPrediction(game.id)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">ውጤት ላክ</button>
                 </div>
               )}
 
               {game.status === 'open' && userPred && (
-                <div className="mt-4 text-center bg-black border border-amber-500/50 text-amber-500 text-sm font-bold p-3 rounded-xl">
-                  🔒 ግምትዎ ተቆልፏል: {String(userPred.predicted_score_a ?? '')} - {String(userPred.predicted_score_b ?? '')}
-                </div>
+                <div className="mt-4 text-center bg-black border border-amber-500/50 text-amber-500 text-sm font-bold p-3 rounded-xl">🔒 ግምትዎ ተቆልፏል: {String(userPred.predicted_score_a ?? '')} - {String(userPred.predicted_score_b ?? '')}</div>
               )}
 
               {game.status === 'finished' && userPred && (
                 <div className="mt-4 text-center border-t border-zinc-800 pt-4">
-                  <div className="text-sm font-bold text-zinc-400 mb-2">
-                    ትክክለኛ ውጤት: <span className="text-white">{String(game.final_score_a ?? '')} - {String(game.final_score_b ?? '')}</span>
-                  </div>
+                  <div className="text-sm font-bold text-zinc-400 mb-2">ትክክለኛ ውጤት: <span className="text-white">{String(game.final_score_a ?? '')} - {String(game.final_score_b ?? '')}</span></div>
                   <div className={`p-3 rounded-xl text-sm font-black text-white ${userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? 'bg-green-600/80 border border-green-500' : 'bg-red-900/50 border border-red-800 text-red-200'}`}>
-                    {userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b 
-                      ? "🎉 አሸናፊ!" 
-                      : `የእርስዎ ግምት: ${String(userPred.predicted_score_a ?? '')} - ${String(userPred.predicted_score_b ?? '')} ❌`}
+                    {userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? "🎉 አሸናፊ!" : `የእርስዎ ግምት: ${String(userPred.predicted_score_a ?? '')} - ${String(userPred.predicted_score_b ?? '')} ❌`}
                   </div>
                 </div>
               )}
@@ -1363,29 +1177,59 @@ export default function App() {
   };
 
   const renderAdmin = () => {
-    // Generate dynamic category lists for quick-select chips
-    const defaultPrimary = ["ሁሉም", "ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"];
-    const allPrimary = [...new Set([...defaultPrimary, ...products.map(p => p.category).filter(Boolean)])].filter(c => c !== "ሁሉም");
-
-    const defaultSecondary = ["ልብስ", "ጫማ", "ሌሎች"];
-    const allSecondary = [...new Set([...defaultSecondary, ...products.map(p => p.subcategory).filter(Boolean)])].filter(c => c !== "ሁሉም");
+    const allPrimaryOptions = [...new Set([...customCategories, ...products.map(p => p.category).filter(Boolean)])];
+    const allSecondaryOptions = [...new Set([...customSubCats, ...products.map(p => p.subcategory).filter(Boolean)])];
 
     return (
       <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-amber-500 font-black text-2xl tracking-wide">{editId ? "Edit Listing" : "CEO Dashboard"}</h2>
-          <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors">
-            <X className="text-white w-6 h-6" />
-          </button>
+          <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors"><X className="text-white w-6 h-6" /></button>
         </div>
 
         {!editId && (
           <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4 overflow-x-auto no-scrollbar">
-            {["posts", "products", "games"].map((tab) => (
-              <button key={tab} onClick={() => openNewPost(tab)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
+            {["posts", "products", "games", "categories"].map((tab) => (
+              <button key={tab} onClick={() => { setAdminTab(tab); openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
                 {tab.toUpperCase()}
               </button>
             ))}
+          </div>
+        )}
+
+        {adminTab === "categories" && (
+          <div className="space-y-6 pb-20">
+            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+               <h3 className="text-amber-500 font-bold mb-4">ዋና ምድቦች (Primary Categories)</h3>
+               <div className="flex space-x-2 mb-4">
+                 <input type="text" value={newCatInput} onChange={e => setNewCatInput(e.target.value)} placeholder="Add new primary..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                 <button onClick={() => addCategory('primary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
+               </div>
+               <div className="flex flex-wrap gap-2">
+                 {customCategories.map(c => (
+                   <span key={c} className="bg-zinc-800 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 text-sm">
+                     <span>{c}</span>
+                     <button onClick={() => removeCategory('primary', c)} className="text-red-500 hover:text-red-400"><X size={14}/></button>
+                   </span>
+                 ))}
+               </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+               <h3 className="text-amber-500 font-bold mb-4">ንዑስ ምድቦች (Subcategories)</h3>
+               <div className="flex space-x-2 mb-4">
+                 <input type="text" value={newSubCatInput} onChange={e => setNewSubCatInput(e.target.value)} placeholder="Add new subcategory..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                 <button onClick={() => addCategory('secondary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
+               </div>
+               <div className="flex flex-wrap gap-2">
+                 {customSubCats.map(c => (
+                   <span key={c} className="bg-zinc-800 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 text-sm">
+                     <span>{c}</span>
+                     <button onClick={() => removeCategory('secondary', c)} className="text-red-500 hover:text-red-400"><X size={14}/></button>
+                   </span>
+                 ))}
+               </div>
+            </div>
           </div>
         )}
 
@@ -1399,18 +1243,13 @@ export default function App() {
                    <label className="block text-zinc-400 text-xs font-bold mb-1">Team A Logo (Image File)</label>
                    <input type="file" accept="image/*" onChange={(e) => setTeamAFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                 </div>
-                
                 <div className="border-b border-zinc-800 my-4"></div>
-                
                 <input type="text" placeholder="Team B Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_b} onChange={e => setNewGame({...newGame, team_b: e.target.value})} />
                 <div>
                    <label className="block text-zinc-400 text-xs font-bold mb-1">Team B Logo (Image File)</label>
                    <input type="file" accept="image/*" onChange={(e) => setTeamBFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                 </div>
-
-                <button onClick={createGame} disabled={uploading || !newGame.team_a || !newGame.team_b} className="w-full bg-amber-500 disabled:bg-zinc-800 text-black p-4 rounded-xl mt-4 font-black hover:bg-amber-400">
-                  {uploading ? "Publishing..." : "Publish Game"}
-                </button>
+                <button onClick={createGame} disabled={uploading || !newGame.team_a || !newGame.team_b} className="w-full bg-amber-500 disabled:bg-zinc-800 text-black p-4 rounded-xl mt-4 font-black hover:bg-amber-400">Publish Game</button>
               </div>
             </div>
 
@@ -1442,7 +1281,7 @@ export default function App() {
           </div>
         )}
 
-        {adminTab !== "games" && (
+        {adminTab !== "games" && adminTab !== "categories" && (
           <form onSubmit={handleAdminSubmit} className="space-y-4 pb-20">
             {adminTab === "posts" && (
               <>
@@ -1484,7 +1323,6 @@ export default function App() {
                    
                    <div className="border-t border-zinc-800 pt-4">
                      <label className="block text-white font-bold text-sm mb-2">2. የጽሑፍ ውስጥ ምስሎች (Inline Images)</label>
-                     
                      {existingInlineImages.length > 0 && (
                         <div className="mb-3 flex gap-2 overflow-x-auto pb-2">
                            {existingInlineImages.map((img, idx) => (
@@ -1495,7 +1333,6 @@ export default function App() {
                            ))}
                         </div>
                      )}
-
                      <p className="text-xs text-zinc-400 mb-3">Upload multiple files at once. They will become <b>[image1]</b>, <b>[image2]</b>, etc.</p>
                      <input type="file" multiple accept="image/*" onChange={(e) => setInlineImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
                      {existingInlineImages.length > 0 && <p className="text-[10px] text-amber-500 mt-2">Warning: Selecting new files will replace all existing inline images.</p>}
@@ -1505,18 +1342,13 @@ export default function App() {
                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                    <label className="block text-white font-bold text-sm mb-2">3. ተያያዥ ጽሑፎች/እቃዎች (Related Items)</label>
                    <p className="text-xs text-zinc-400 mb-3">እነዚህ ጽሑፉ መጨረሻ ላይ ይታያሉ (እስከ 2 መምረጥ ይመከራል)።</p>
-                   
                    <select onChange={handleAddRelated} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-lg mb-3 outline-none focus:border-amber-500">
                       <option value="">+ ምረጥ (Select Related...)</option>
                       <optgroup label="Articles (ዜናዎች)">
-                        {posts.filter(p => p.id !== editId).map(p => (
-                          <option key={`post_${p.id}`} value={`post_${p.id}`}>{p.title}</option>
-                        ))}
+                        {posts.filter(p => p.id !== editId).map(p => <option key={`post_${p.id}`} value={`post_${p.id}`}>{p.title}</option>)}
                       </optgroup>
                       <optgroup label="Shop Items (ሱቅ)">
-                        {products.map(p => (
-                          <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.name}</option>
-                        ))}
+                        {products.map(p => <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.name}</option>)}
                       </optgroup>
                    </select>
 
@@ -1550,32 +1382,17 @@ export default function App() {
                 <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                   <div className="relative">
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድብ (Primary Category)</label>
-                    <input 
-                      required 
-                      value={formData.shopCat || ""} 
-                      onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} 
-                      placeholder="Type or select a category..."
-                      className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" 
-                    />
+                    <input required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} placeholder="Type or select a category..." className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" />
                     <div className="flex flex-wrap gap-2 mt-3">
-                       {allPrimary.map(c => (
-                         <button key={c} type="button" onClick={() => setFormData({ ...formData, shopCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>
-                       ))}
+                       {allPrimaryOptions.map(c => <button key={`p_${c}`} type="button" onClick={() => setFormData({ ...formData, shopCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>)}
                     </div>
                   </div>
 
                   <div className="relative border-t border-zinc-800 pt-4 mt-2">
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድብ (Subcategory)</label>
-                    <input 
-                      value={formData.shopSubCat || ""} 
-                      onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} 
-                      placeholder="Type or select a subcategory..."
-                      className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" 
-                    />
+                    <input value={formData.shopSubCat || ""} onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} placeholder="Type or select a subcategory..." className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" />
                     <div className="flex flex-wrap gap-2 mt-3">
-                       {allSecondary.map(c => (
-                         <button key={c} type="button" onClick={() => setFormData({ ...formData, shopSubCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>
-                       ))}
+                       {allSecondaryOptions.map(c => <button key={`s_${c}`} type="button" onClick={() => setFormData({ ...formData, shopSubCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>)}
                     </div>
                   </div>
                 </div>
@@ -1588,7 +1405,6 @@ export default function App() {
                   
                   {showSizeDropdown && (
                     <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-[400px] overflow-y-auto p-4 shadow-2xl">
-                      
                       <div className="mb-4 bg-black p-3 rounded-xl border border-amber-500/30">
                          <label className="block text-amber-500 text-xs font-bold mb-2">አዲስ መጠን / ቀለም ያስገቡ (Add Custom Size/Option)</label>
                          <div className="flex space-x-2">
@@ -1596,17 +1412,11 @@ export default function App() {
                            <button type="button" onClick={handleAddCustomSize} className="bg-amber-500 text-black px-3 py-2 rounded-lg font-bold text-sm hover:bg-amber-400">Add</button>
                          </div>
                       </div>
-
                       <div className="space-y-3">
                         {Object.entries(categorizedOptions).map(([categoryName, sizes]) => (
                           <div key={categoryName} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700">
-                            <button
-                              type="button"
-                              onClick={() => toggleOptionCategory(categoryName)}
-                              className="w-full text-left px-4 py-3 flex justify-between items-center text-sm font-bold text-amber-500 hover:bg-zinc-800 transition-colors"
-                            >
-                              <span>{categoryName}</span>
-                              <span>{expandedOptionCategories[categoryName] ? "▲" : "▼"}</span>
+                            <button type="button" onClick={() => toggleOptionCategory(categoryName)} className="w-full text-left px-4 py-3 flex justify-between items-center text-sm font-bold text-amber-500 hover:bg-zinc-800 transition-colors">
+                              <span>{categoryName}</span><span>{expandedOptionCategories[categoryName] ? "▲" : "▼"}</span>
                             </button>
                             {expandedOptionCategories[categoryName] && (
                               <div className="p-4 flex flex-wrap gap-2 bg-black border-t border-zinc-700">
@@ -1628,12 +1438,19 @@ export default function App() {
                 </div>
 
                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                   <label className="block text-white font-bold text-sm mb-2">ስለ እቃው (Product Description) - Optional</label>
+                   <textarea value={formData.description || ""} rows="3" placeholder="Write details about the product here..." onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors text-sm"></textarea>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                   <label className="block text-zinc-400 font-bold text-xs mb-2">Private Source URL (Backend Only)</label>
+                   <input type="url" value={formData.sourceUrl || ""} placeholder="https://..." onChange={(e) => setFormData({ ...formData, sourceUrl: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors text-sm" />
+                   <p className="text-[10px] text-zinc-500 mt-2">This link is saved to Supabase but never shown to users.</p>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                    <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች (Image Upload)</label>
-                   <input type="file" multiple accept="image/*" onChange={(e) => {
-                     setProductImageFiles(Array.from(e.target.files));
-                     setSelectedMainImgIdx(0);
-                   }} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
-                   
+                   <input type="file" multiple accept="image/*" onChange={(e) => { setProductImageFiles(Array.from(e.target.files)); setSelectedMainImgIdx(0); }} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
                    {productImageFiles.length > 0 && (
                      <div className="mt-4 border-t border-zinc-800 pt-3">
                        <p className="text-xs text-amber-500 font-bold mb-2">Tap an image to set it as MAIN (Front):</p>
@@ -1688,17 +1505,33 @@ export default function App() {
           )}
           
           <div className="flex items-center space-x-2">
-            <button onClick={() => { setActiveTab("ቪአይፒ"); if(activePost) window.history.back(); window.scrollTo(0,0); }} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
-              {currentUser ? currentUserProfile?.full_name || "VIP" : "ይግቡ"}
-            </button>
-            {currentUser && (
-              <button onClick={handleLogout} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 p-1.5 rounded-full transition-colors" title="Sign Out">
-                <LogOut size={16} />
-              </button>
+            {!currentUser ? (
+               <button onClick={() => setShowLoginModal(true)} className="bg-[#2AABEE] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg hover:bg-[#229ED9] transition-colors">
+                 ይግቡ
+               </button>
+            ) : (
+               <>
+                 <span className="text-white text-xs font-bold px-2">{currentUserProfile?.full_name || "VIP"}</span>
+                 <button onClick={handleLogout} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 p-1.5 rounded-full transition-colors" title="Sign Out">
+                   <LogOut size={16} />
+                 </button>
+               </>
             )}
           </div>
         </div>
       </header>
+
+      {showLoginModal && !currentUser && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl w-full max-w-sm relative shadow-2xl">
+             <button onClick={() => setShowLoginModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
+             <div className="w-16 h-16 bg-[#2AABEE]/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Users className="text-[#2AABEE] w-8 h-8" /></div>
+             <h3 className="text-center font-black text-white text-xl mb-2">ወደ Goleth ይግቡ</h3>
+             <p className="text-center text-zinc-400 text-sm mb-6">በቴሌግራም መለያዎ በቀላሉ ይግቡ።</p>
+             <div ref={telegramHeaderLoginRef} className="flex justify-center min-h-[50px]"></div>
+          </div>
+        </div>
+      )}
 
       <main className="p-4 max-w-lg mx-auto">
         {activePost && !selectedProduct && renderSinglePost()}
