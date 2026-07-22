@@ -393,7 +393,7 @@ export default function App() {
     }
 
     const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 1300) : 0;
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; // Updated VIP inline cost
     const finalPrice = totalItemsPrice + nextDayBirr + vipSignupBirr;
 
     let orderNotes = checkoutShipping === "next_day" ? `+ ${1300 * quantity} ETB (Next Day)` : "Standard Shipping";
@@ -1000,7 +1000,7 @@ export default function App() {
     }
 
     const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 1300) : 0;
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; // Updated VIP inline cost
     const dynamicTotal = totalItemsPrice + nextDayBirr + vipSignupBirr;
     
     const checkoutReady = isFullNameValid(orderName) && vipPhone.length === 10 && orderFile;
@@ -1025,7 +1025,7 @@ export default function App() {
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
                 <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
                 <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
-                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '1300 ብር ($10)' : '100 ብር'})</span>
+                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '1950 ብር ($15)' : '300 ብር'})</span>
                   ይህንን በመጫን የVIP አባልነት ይግዙና እቃውን በVIP ዋጋ ይውሰዱ።
                 </label>
               </div>
@@ -1070,7 +1070,7 @@ export default function App() {
                {isGettingVipPrice && quantity > 3 && <div className="text-[10px] text-zinc-300 font-bold bg-amber-500/10 border border-amber-500/30 p-2 rounded mt-1 mb-2">💡 Note: VIP discount applies to the first 3 items. Regular price applies to item 4+.</div>}
                
                {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ {1300 * quantity} ብር</span></div>}
-               {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '1300 ብር ($10)' : '100 ብር'}</span></div>}
+               {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '1950 ብር ($15)' : '300 ብር'}</span></div>}
                
                <div className="flex justify-between mt-2 pt-2 border-t border-zinc-800">
                  <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
@@ -1345,6 +1345,8 @@ export default function App() {
   );
 
   const renderVIP = () => {
+    const scrollToAction = () => document.getElementById('vip-action-area')?.scrollIntoView({ behavior: 'smooth' });
+
     const renderVipBenefits = () => (
       <div className="text-left mb-8 bg-gradient-to-b from-zinc-900 to-black p-[2px] rounded-2xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Target size={120} /></div>
@@ -1354,26 +1356,34 @@ export default function App() {
           </h3>
           
           <div className="grid grid-cols-1 gap-6">
-            <div className="group relative bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50 hover:border-amber-500/30 transition-all">
-              <div className="flex items-center space-x-3 mb-2">
-                 <div className="bg-amber-500/20 p-2 rounded-lg"><Home className="text-amber-500 w-5 h-5 shrink-0" /></div>
-                 <p className="text-base font-black text-white">ሀገር ውስጥ VIP (Local)</p>
+            <div className="group relative bg-zinc-900/50 p-5 rounded-xl border border-zinc-800/50 hover:border-amber-500/50 transition-all">
+              <div className="flex items-center space-x-4 mb-3">
+                 <div className="bg-amber-500/20 p-3 rounded-xl"><Home className="text-amber-500 w-6 h-6 shrink-0" /></div>
+                 <h4 className="text-lg font-black text-amber-500">የሀገር ውስጥ VIP</h4>
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed pl-12 border-l-2 border-zinc-800 ml-4">
-                 የስፖርት ትንበያ፣ ልዩ የሱቅ ቅናሽ (እስከ 3 እቃዎች) እና የቀደመ መረጃ።
-                 <span className="block mt-2 font-bold text-amber-500">100 ብር / ወር</span>
-              </p>
+              <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
+                 <li>በሳምንት እና በወር የምንለቃቸውን የእግር ኳስ ወይም ሌላ ውድድሮች ላይ በመሳተፍ ሱቅ ውስጥ ካሉ እቃዎችን ያሸንፋሉ</li>
+                 <li>ልዩ ታላቅ የሆነ የዕቃ ቅናሾችን ያገኛሉ</li>
+              </ul>
+              <div className="mt-5 pl-16">
+                 <p className="text-2xl font-black text-white mb-3">300 ብር <span className="text-sm text-zinc-500 font-bold">/ በወር</span></p>
+                 <button onClick={scrollToAction} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
+              </div>
             </div>
             
-            <div className="group relative bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50 hover:border-blue-500/30 transition-all">
-              <div className="flex items-center space-x-3 mb-2">
-                 <div className="bg-blue-500/20 p-2 rounded-lg"><Package className="text-blue-500 w-5 h-5 shrink-0" /></div>
-                 <p className="text-base font-black text-white">ዳያስፖራ VIP (Diaspora)</p>
+            <div className="group relative bg-zinc-900/50 p-5 rounded-xl border border-zinc-800/50 hover:border-amber-500/50 transition-all">
+              <div className="flex items-center space-x-4 mb-3">
+                 <div className="bg-amber-500/20 p-3 rounded-xl"><Package className="text-amber-500 w-6 h-6 shrink-0" /></div>
+                 <h4 className="text-lg font-black text-amber-500">የዳያስፖራ VIP</h4>
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed pl-12 border-l-2 border-zinc-800 ml-4">
-                 የ"Gift-a-Local" አገልግሎት፣ Next-day መላኪያ ትዕዛዝ እና ልዩ የሱቅ ቅናሽ።
-                 <span className="block mt-2 font-bold text-blue-500">1300 ብር ($10) / ወር</span>
-              </p>
+              <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
+                 <li>በወር 2 ግዜ ነጻ የአገልግሎት (የእቃውን ከሱቃችን የሚገዙ ከሆነ የእቃውን እና ማጓጓዣ ብቻ ይከፍላሉ)</li>
+                 <li>በሳምንት እና በወር የምንለቃቸውን የእግር ኳስ ወይም ሌላ ውድድሮች ላይ በመሳተፍ ሱቅ ውስጥ ካሉ እቃዎችን ያሸንፋሉ። ያሸነፉትን እቃ ወደ ኢትዮጲያ መላክ ከፈለጉ የነጻ አገልግሎት ያገኛሉ</li>
+              </ul>
+              <div className="mt-5 pl-16">
+                 <p className="text-2xl font-black text-white mb-3">$15 <span className="text-sm text-zinc-500 font-bold">/ በወር</span></p>
+                 <button onClick={scrollToAction} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1386,7 +1396,7 @@ export default function App() {
           <div className="text-center max-w-sm mx-auto mb-8">
             <h2 className="text-2xl font-black text-white mb-6">ወደ VIP አባልነት</h2>
             {renderVipBenefits()}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+            <div id="vip-action-area" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
               <p className="text-white text-sm font-bold mb-4">አባል ለመሆን ወይም ለመግባት (Login)፦</p>
               <div ref={telegramWrapperRef} className="flex justify-center min-h-[50px]"></div>
             </div>
@@ -1415,7 +1425,7 @@ export default function App() {
           <div className="max-w-md mx-auto mb-8">
             {renderVipBenefits()}
 
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl mt-8">
+            <div id="vip-action-area" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl mt-8">
               <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">
                 {vipStatus === "expired" ? "አባልነትዎ አልቋል (Expired)" : "ወርሃዊ የVIP አባልነት"}
               </h2>
@@ -1430,13 +1440,13 @@ export default function App() {
                 <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
                   {vipPaymentType === "ሀገር ውስጥ" ? (
                     <>
-                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">100 ብር</span></div>
+                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">300 ብር</span></div>
                       <p className="font-bold text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
                       <p>የኢትዮጵያ ንግድ ባንክ (CBE) - <span className="text-amber-500 font-mono font-black text-lg">1000123456789</span></p>
                     </>
                   ) : (
                     <>
-                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">$10 USD (1300 ብር)</span></div>
+                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">$15 USD (1950 ብር)</span></div>
                       <p className="font-bold text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
                       <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg">demo@goleth.com</span></p>
                     </>
