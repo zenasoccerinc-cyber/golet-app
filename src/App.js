@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -49,7 +49,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   
-  const [adminTab, setAdminTab] = useState("posts");
+  const [adminTab, setAdminTab] = useState("overview");
   const [uploading, setUploading] = useState(false);
   
   const [editId, setEditId] = useState(null);
@@ -146,6 +146,14 @@ export default function App() {
     return { regular: totalRegular, vip: totalVip };
   };
 
+  // Automated CEO Financial Metrics
+  const inventoryAssetValueCad = products.reduce((sum, p) => sum + ((p.stock_quantity || 0) * (p.cost_cad || 0)), 0);
+  const activeLocalStock = products.reduce((sum, p) => sum + (p.stock_quantity || 0), 0);
+  const onlineRevenue = allOrders.filter(o => o.status === 'arrived').reduce((sum, o) => sum + (o.price || 0), 0);
+  const offlineRevenue = products.reduce((sum, p) => sum + ((p.offline_sales || 0) * (p.price || 0)), 0);
+  const totalRevenue = onlineRevenue + offlineRevenue;
+  const prizePool = Math.round(totalRevenue * 0.03); // Skimming 3% for contests
+
   useEffect(() => {
     fetchData();
     fetchGames(); 
@@ -168,6 +176,12 @@ export default function App() {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (isCEO) {
+      fetchAllOrders();
+    }
+  }, [isCEO]);
 
   useEffect(() => {
     if (adminTab === "products") {
@@ -404,6 +418,27 @@ export default function App() {
     setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setQuantity(1); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); setActiveTab("ሱቅ"); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
+  const handleOfflineSale = async (product) => {
+    if (product.stock_quantity < 1) return alert("ምንም እቃ የለም! (Out of stock)");
+    if (!window.confirm(`Log 1 physical offline sale for ${product.name}?`)) return;
+
+    setUploading(true);
+    const newStock = product.stock_quantity - 1;
+    const newOfflineSales = (product.offline_sales || 0) + 1;
+
+    const { error } = await supabase.from('products').update({
+      stock_quantity: newStock,
+      offline_sales: newOfflineSales
+    }).eq('id', product.id);
+
+    if (!error) {
+      setProducts(products.map(p => p.id === product.id ? { ...p, stock_quantity: newStock, offline_sales: newOfflineSales } : p));
+    } else {
+      alert("Failed to log sale.");
+    }
+    setUploading(false);
+  };
+
   const handleOpenSourcing = () => { setReqProductName(""); setReqStoreName(""); setReqProductLink(""); setReqImage(null); setShowOrderForm(true); };
 
   const submitOrderForm = async (e) => {
@@ -460,7 +495,6 @@ export default function App() {
       alert("Order updated successfully!");
       setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...payload } : o));
       
-      // Clear staged update to prevent UI from sticking to old state
       setOrderUpdateData(prev => {
         const newState = { ...prev };
         delete newState[orderId];
@@ -641,7 +675,6 @@ export default function App() {
   const renderProfileModal = () => (
     <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
       <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
-        {/* Added X button so users aren't fully trapped if they just want to browse */}
         <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
         <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">እንኳን ደህና መጡ!</h2>
         <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ይሙሉ (ይህ አንዴ ብቻ የሚጠየቅ ነው)።</p>
@@ -793,7 +826,7 @@ export default function App() {
               </div>
 
               <form onSubmit={submitOrderForm} className="space-y-3">
-                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.'); }} />
                 <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-mono" />
                 
                 <div className="border-t border-zinc-800 my-2 pt-3 space-y-2">
@@ -1058,6 +1091,7 @@ export default function App() {
           </button>
           {isCEO && (
              <div className="absolute top-4 left-16 flex space-x-2 z-20">
+                <button onClick={(e) => { e.stopPropagation(); handleOfflineSale(selectedProduct); }} className="bg-amber-500 text-black backdrop-blur p-2.5 rounded-full font-black text-xs shadow-lg"><DollarSign size={20} className="inline mr-1"/> Log Sale</button>
                 <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-white"><Edit2 size={20}/></button>
                 <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-red-500"><Trash2 size={20}/></button>
              </div>
@@ -1234,6 +1268,7 @@ export default function App() {
               <div className="bg-white w-full h-36 flex items-center justify-center relative shadow-sm overflow-hidden">
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
+                      <button onClick={(e) => { e.stopPropagation(); handleOfflineSale(item); }} className="bg-black/80 backdrop-blur p-1.5 rounded-md text-amber-500 font-black text-[10px] flex items-center">-1 ሽያጭ</button>
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
                       <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={12}/></button>
                     </div>
@@ -1462,11 +1497,39 @@ export default function App() {
 
         {!editId && (
           <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4 overflow-x-auto no-scrollbar">
-            {["posts", "products", "games", "categories", "orders"].map((tab) => (
-              <button key={tab} onClick={() => { setAdminTab(tab); openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors capitalize ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
+            {["overview", "posts", "products", "games", "categories", "orders"].map((tab) => (
+              <button key={tab} onClick={() => { setAdminTab(tab); if(tab !== 'overview') openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors capitalize ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
                 {tab}
               </button>
             ))}
+          </div>
+        )}
+
+        {adminTab === "overview" && !editId && (
+          <div className="space-y-4 pb-20 animate-in fade-in duration-200">
+            <h3 className="text-amber-500 font-bold mb-2">Financial Metrics</h3>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Total Revenue</p>
+                  <p className="text-amber-500 font-black text-lg">{totalRevenue.toLocaleString()} ብር</p>
+               </div>
+               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Prize Pool (3%)</p>
+                  <p className="text-[#2AABEE] font-black text-lg">{prizePool.toLocaleString()} ብር</p>
+               </div>
+               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Stock Asset Value</p>
+                  <p className="text-white font-black text-lg">${inventoryAssetValueCad.toLocaleString()} CAD</p>
+               </div>
+               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Active Local Stock</p>
+                  <p className="text-white font-black text-lg">{activeLocalStock} Items</p>
+               </div>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-xs text-zinc-300 leading-relaxed">
+               <span className="font-bold text-amber-500 block mb-1">💡 How it works:</span>
+               To deduct local sales from the Active Local Stock and log it into Total Revenue, click the <span className="bg-black text-amber-500 px-1 py-0.5 rounded font-bold">-1 ሽያጭ</span> button on the main shop feed next to any product.
+            </div>
           </div>
         )}
 
@@ -1638,7 +1701,7 @@ export default function App() {
           </div>
         )}
 
-        {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && (
+        {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && adminTab !== "overview" && (
           <form onSubmit={handleAdminSubmit} className="space-y-4 pb-20">
             {adminTab === "posts" && (
               <>
@@ -1900,7 +1963,7 @@ export default function App() {
             ያግኙን
           </a>
           {isCEO && (
-            <button onClick={() => { openNewPost("posts"); setShowAdmin(true); }} className="bg-amber-500 text-black px-3 py-1.5 rounded-full font-bold text-xs shadow-lg shadow-amber-500/20">
+            <button onClick={() => { openNewPost("overview"); setShowAdmin(true); }} className="bg-amber-500 text-black px-3 py-1.5 rounded-full font-bold text-xs shadow-lg shadow-amber-500/20">
               CEO
             </button>
           )}
