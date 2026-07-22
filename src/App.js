@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -76,6 +76,10 @@ export default function App() {
   const [savedCustomSizes, setSavedCustomSizes] = useState(() => JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]'));
   const [customCategories, setCustomCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_categories') || '["ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"]'));
   const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcats_map') || '{"ወንድ":["ልብስ","ጫማ"],"ሴት":["ልብስ","ጫማ"]}'));
+  
+  // Hide Logic
+  const [hiddenCategories, setHiddenCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_hidden_cats') || '[]'));
+  const [hiddenSubCategories, setHiddenSubCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_hidden_subcats') || '[]'));
 
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -117,17 +121,17 @@ export default function App() {
     "የእርስዎ (Custom)": savedCustomSizes
   };
 
-  const isFullNameValid = (nameStr) => nameStr.trim().split(/\s+/).length > 1;
+  const isFullNameValid = (nameStr) => {
+    if (!nameStr) return false;
+    return nameStr.trim().split(/\s+/).length > 1;
+  };
 
   const calculateAutomatedPrice = (cadCost, weightKg, specialFee) => {
     if (!cadCost || isNaN(cadCost)) return { regular: 0, vip: 0 };
-    
-    // Core Math: CAD + 13% Tax -> + 18% Markup -> * 130 Rate
     const costWithTax = Number(cadCost) * 1.13;
     const costWithMarkup = costWithTax * 1.18;
     const baseBirr = costWithMarkup * 130;
     
-    // Freight Math: Minimum 1kg * 1500, OR use special fee
     let freightBirr = 0;
     if (specialFee && !isNaN(specialFee)) {
       freightBirr = Number(specialFee);
@@ -137,7 +141,7 @@ export default function App() {
     }
     
     const totalRegular = Math.round(baseBirr + freightBirr);
-    const totalVip = Math.round(totalRegular * 0.90); // 10% VIP discount baked in
+    const totalVip = Math.round(totalRegular * 0.90); 
     
     return { regular: totalRegular, vip: totalVip };
   };
@@ -294,18 +298,34 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('goleth_user'); localStorage.removeItem('goleth_profile');
-    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setShowAccountMenu(false); setUserOrders([]);
+    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setShowAccountMenu(false); setUserOrders([]); setShowProfileModal(false);
   };
 
   const saveUserProfile = async (e) => {
-    e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
-    const name = e.target.fullName.value; const phone = e.target.phone.value; const loc = e.target.location.value;
+    e.preventDefault(); 
+    const name = e.target.fullName.value; 
+    
+    if (!isFullNameValid(name)) {
+      alert("እባክዎ የመጀመሪያ እና የአባት ስም በመሃል ክፍተት (Space) ይጻፉ። (First and Last name required)");
+      return;
+    }
+    
+    if (!currentUser?.id) return; 
+    setUploading(true);
+    
+    const phone = e.target.phone.value; const loc = e.target.location.value;
     const region = ["USA", "Canada", "Europe", "Australia", "South America"].includes(loc) ? 'Diaspora' : 'Local';
 
     try {
       const { data, error } = await supabase.from('vip_users').update({ full_name: name, phone_number: phone, region: region }).eq('telegram_id', currentUser.id.toString()).select('*');
       if (error) throw error;
-      if (data && data[0]) { setCurrentUserProfile(data[0]); localStorage.setItem('goleth_profile', JSON.stringify(data[0])); setShowProfileModal(false); }
+      if (data && data[0]) { 
+        setCurrentUserProfile(data[0]); 
+        localStorage.setItem('goleth_profile', JSON.stringify(data[0])); 
+        setOrderName(name);
+        setVipPhone(phone);
+        setShowProfileModal(false); 
+      }
     } catch (err) { alert("መረጃውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ።"); } 
     finally { setUploading(false); }
   };
@@ -433,12 +453,19 @@ export default function App() {
     setUploading(true);
     const payload = {};
     if (update.status) payload.status = update.status;
-    if (update.tracking) payload.tracking_number = update.tracking;
+    if (update.tracking !== undefined) payload.tracking_number = update.tracking;
 
     const { error } = await supabase.from('product_orders').update(payload).eq('id', orderId);
     if (!error) {
       alert("Order updated successfully!");
       setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...payload } : o));
+      
+      // Clear staged update to prevent UI from sticking to old state
+      setOrderUpdateData(prev => {
+        const newState = { ...prev };
+        delete newState[orderId];
+        return newState;
+      });
       
       let statusAmharic = "";
       if (update.status === 'approved') statusAmharic = "ተቀባይነት አግኝቷል (Approved) ✅";
@@ -467,6 +494,16 @@ export default function App() {
     setCustomSizeInput("");
   };
 
+  const toggleHideCategory = (type, val) => {
+    if (type === 'primary') {
+      const updated = hiddenCategories.includes(val) ? hiddenCategories.filter(c => c !== val) : [...hiddenCategories, val];
+      setHiddenCategories(updated); localStorage.setItem('goleth_hidden_cats', JSON.stringify(updated));
+    } else {
+      const updated = hiddenSubCategories.includes(val) ? hiddenSubCategories.filter(c => c !== val) : [...hiddenSubCategories, val];
+      setHiddenSubCategories(updated); localStorage.setItem('goleth_hidden_subcats', JSON.stringify(updated));
+    }
+  };
+
   const addCategory = (type) => {
     if (type === 'primary' && newCatInput.trim() && !customCategories.includes(newCatInput)) {
       const updated = [...customCategories, newCatInput.trim()]; 
@@ -484,22 +521,6 @@ export default function App() {
         syncCategoriesToDB(customCategories, updated);
         setNewSubCatInput("");
       }
-    }
-  };
-  
-  const removeCategory = (type, val) => {
-    if (type === 'primary') { 
-      const updated = customCategories.filter(c => c !== val); 
-      setCustomCategories(updated); 
-      localStorage.setItem('goleth_categories', JSON.stringify(updated)); 
-      syncCategoriesToDB(updated, customSubCats);
-      if (selectedPrimaryForSub === val) setSelectedPrimaryForSub(updated[0] || "");
-    } else { 
-      const currentArr = customSubCats[selectedPrimaryForSub] || [];
-      const updated = { ...customSubCats, [selectedPrimaryForSub]: currentArr.filter(c => c !== val) };
-      setCustomSubCats(updated); 
-      localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
-      syncCategoriesToDB(customCategories, updated);
     }
   };
 
@@ -546,7 +567,6 @@ export default function App() {
       setFormData({ postCategory: item.category, title: item.title, subtitle: item.subtitle || "", excerpt: item.excerpt || "", body: item.body || "", author: item.author || "GOLETH", relatedLinks: item.related_links || [] });
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      // Handle legacy single-string categories converting to arrays
       let parsedCat = []; let parsedSubCat = [];
       if (Array.isArray(item.category)) parsedCat = item.category; else if (item.category) parsedCat = [item.category];
       if (Array.isArray(item.subcategory)) parsedSubCat = item.subcategory; else if (item.subcategory) parsedSubCat = [item.subcategory];
@@ -620,8 +640,10 @@ export default function App() {
 
   const renderProfileModal = () => (
     <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
-      <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl">
-        <h2 className="text-2xl font-black text-amber-500 mb-2">እንኳን ደህና መጡ!</h2>
+      <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+        {/* Added X button so users aren't fully trapped if they just want to browse */}
+        <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
+        <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">እንኳን ደህና መጡ!</h2>
         <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ይሙሉ (ይህ አንዴ ብቻ የሚጠየቅ ነው)።</p>
         <form onSubmit={saveUserProfile} className="space-y-4">
           <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.') }} />
@@ -932,12 +954,15 @@ export default function App() {
           <div className="text-center">
             <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
             <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ።</p>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ。</p>
             <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
           </div>
         ) : (
           <form onSubmit={handleProductOrderSubmit} className="space-y-3">
-            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-2">የእርስዎ መረጃ</h3>
+            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-2 flex items-center">
+              የእርስዎ መረጃ
+              {hasVipAccess && <span className="ml-2 bg-amber-500 text-black px-2 py-0.5 rounded-full text-[9px] font-black tracking-normal">VIP Member</span>}
+            </h3>
             
             {!hasVipAccess && selectedProduct.vip_price && (
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
@@ -949,7 +974,7 @@ export default function App() {
               </div>
             )}
 
-            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.'); }} />
             <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
             <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
 
@@ -1157,8 +1182,8 @@ export default function App() {
   };
 
   const renderShop = () => {
-    const uniquePrimary = ["ሁሉም", ...customCategories];
-    const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []);
+    const uniquePrimary = ["ሁሉም", ...customCategories.filter(c => !hiddenCategories.includes(c))];
+    const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []).filter(c => !hiddenSubCategories.includes(c));
     const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
     let filtered = products;
@@ -1348,8 +1373,8 @@ export default function App() {
                   <p className="text-xs text-zinc-400 pt-2 mt-2">መጀመሪያ ክፍያዎን ያስተላልፉ። በመቀጠል ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
                 </div>
 
-                <input required name="fullName" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" />
-                <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
+                <input required name="fullName" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.'); }} />
+                <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
                 
                 <div>
                   <label className="block text-zinc-400 text-sm font-bold mb-2">የክፍያ ማረጋገጫ ፋይል ያያይዙ፦</label>
@@ -1499,21 +1524,25 @@ export default function App() {
                  <button onClick={() => addCategory('primary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
                </div>
                <div className="flex flex-col gap-2">
-                 {customCategories.map((c, index) => (
+                 {customCategories.map((c, index) => {
+                   const isHidden = hiddenCategories.includes(c);
+                   return (
                    <div key={`prim_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
                      {editCatIndex === index ? (
                        <input autoFocus type="text" value={editCatValue} onChange={e => setEditCatValue(e.target.value)} onBlur={() => saveCategoryEdit('primary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
                      ) : (
-                       <span>{c}</span>
+                       <span className={isHidden ? "text-zinc-500 line-through" : ""}>{c}</span>
                      )}
                      <div className="flex items-center space-x-1">
                        <button onClick={() => { setEditCatIndex(index); setEditCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
                        <button onClick={() => moveCategory('primary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
                        <button onClick={() => moveCategory('primary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
-                       <button onClick={() => removeCategory('primary', c)} className="p-1.5 text-red-500 hover:text-red-400"><X size={16}/></button>
+                       <button onClick={() => toggleHideCategory('primary', c)} className={`p-1.5 ${isHidden ? 'text-amber-500' : 'text-zinc-400 hover:text-amber-500'}`}>
+                         {isHidden ? <EyeOff size={16}/> : <Eye size={16}/>}
+                       </button>
                      </div>
                    </div>
-                 ))}
+                 )})}
                </div>
             </div>
 
@@ -1535,21 +1564,25 @@ export default function App() {
                    </div>
                    <div className="flex flex-col gap-2">
                      {(customSubCats[selectedPrimaryForSub] || []).length === 0 && <span className="text-xs text-zinc-500 italic">ምንም የለም</span>}
-                     {(customSubCats[selectedPrimaryForSub] || []).map((c, index) => (
+                     {(customSubCats[selectedPrimaryForSub] || []).map((c, index) => {
+                       const isHidden = hiddenSubCategories.includes(c);
+                       return (
                        <div key={`sec_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
                          {editSubCatIndex === index ? (
                            <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
                          ) : (
-                           <span>{c}</span>
+                           <span className={isHidden ? "text-zinc-500 line-through" : ""}>{c}</span>
                          )}
                          <div className="flex items-center space-x-1">
                            <button onClick={() => { setEditSubCatIndex(index); setEditSubCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
                            <button onClick={() => moveCategory('secondary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
                            <button onClick={() => moveCategory('secondary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
-                           <button onClick={() => removeCategory('secondary', c)} className="p-1.5 text-red-500 hover:text-red-400"><X size={16}/></button>
+                           <button onClick={() => toggleHideCategory('secondary', c)} className={`p-1.5 ${isHidden ? 'text-amber-500' : 'text-zinc-400 hover:text-amber-500'}`}>
+                             {isHidden ? <EyeOff size={16}/> : <Eye size={16}/>}
+                           </button>
                          </div>
                        </div>
-                     ))}
+                     )})}
                    </div>
                  </>
                )}
@@ -1708,7 +1741,10 @@ export default function App() {
                 
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   <input required value={formData.cadCost || ""} type="number" step="0.01" placeholder="Base Cost (CAD)" onChange={(e) => setFormData({ ...formData, cadCost: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <input required value={formData.stockQty || ""} type="number" placeholder="Stock Qty (Single units)" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <div>
+                    <input required value={formData.stockQty || ""} type="number" placeholder="Stock Qty (Single units)" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                    <p className="text-[10px] text-zinc-500 mt-1 pl-1">Ex: If you bought a 5-pack, enter '5'.</p>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 mt-4">
@@ -1747,15 +1783,17 @@ export default function App() {
                   <div className="relative border-t border-zinc-800 pt-4 mt-2">
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድቦች (Subcategories) - Select multiple</label>
                     <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
-                       {Object.values(customSubCats).flat().map((c, i, self) => self.indexOf(c) === i ? (
-                         <label key={c} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
-                           <input type="checkbox" checked={formData.shopSubCat?.includes(c)} onChange={(e) => {
-                             const newSubCats = e.target.checked ? [...formData.shopSubCat, c] : formData.shopSubCat.filter(cat => cat !== c);
-                             setFormData({...formData, shopSubCat: newSubCats});
-                           }} className="accent-amber-500" />
-                           <span className="text-sm">{c}</span>
-                         </label>
-                       ) : null)}
+                       {Object.entries(customSubCats).flatMap(([prim, subs]) => subs.map(sub => ({prim, sub}))).map(({prim, sub}, i) => {
+                         return (
+                           <label key={`${prim}_${sub}_${i}`} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
+                             <input type="checkbox" checked={formData.shopSubCat?.includes(sub)} onChange={(e) => {
+                               const newSubCats = e.target.checked ? [...formData.shopSubCat, sub] : formData.shopSubCat.filter(cat => cat !== sub);
+                               setFormData({...formData, shopSubCat: newSubCats});
+                             }} className="accent-amber-500" />
+                             <span className="text-sm">{sub} <span className="text-[10px] text-zinc-500 ml-1">({prim})</span></span>
+                           </label>
+                         );
+                       })}
                     </div>
                   </div>
                 </div>
