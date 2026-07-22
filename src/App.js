@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -51,6 +51,7 @@ export default function App() {
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   
   const [adminTab, setAdminTab] = useState("posts");
   const [uploading, setUploading] = useState(false);
@@ -84,6 +85,11 @@ export default function App() {
 
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
+  const [userOrders, setUserOrders] = useState([]);
+  const [allOrders, setAllOrders] = useState([]);
+
+  // Admin Order Edit States
+  const [orderUpdateData, setOrderUpdateData] = useState({});
 
   // --- VIP & GAMES STATE ---
   const [currentUser, setCurrentUser] = useState(null);
@@ -138,35 +144,23 @@ export default function App() {
       } catch (e) { console.error("Error parsing saved user", e); }
     }
 
-    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); };
+    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); setShowAccountMenu(false); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   const fetchGlobalCategories = async () => {
     try {
-      const { data, error } = await supabase.from('app_settings').select('*').eq('id', 1).single();
+      const { data } = await supabase.from('app_settings').select('*').eq('id', 1).single();
       if (data) {
-        if (data.primary_categories) {
-          setCustomCategories(data.primary_categories);
-          localStorage.setItem('goleth_categories', JSON.stringify(data.primary_categories));
-        }
-        if (data.subcategories_map) {
-          setCustomSubCats(data.subcategories_map);
-          localStorage.setItem('goleth_subcats_map', JSON.stringify(data.subcategories_map));
-        }
+        if (data.primary_categories) { setCustomCategories(data.primary_categories); localStorage.setItem('goleth_categories', JSON.stringify(data.primary_categories)); }
+        if (data.subcategories_map) { setCustomSubCats(data.subcategories_map); localStorage.setItem('goleth_subcats_map', JSON.stringify(data.subcategories_map)); }
       }
-    } catch (err) {
-      console.log("Settings table not found yet. Using local storage fallback.");
-    }
+    } catch (err) { console.log("Settings table not found yet. Using local storage fallback."); }
   };
 
   const syncCategoriesToDB = async (primaries, subcats) => {
-    try {
-      await supabase.from('app_settings').upsert({ id: 1, primary_categories: primaries, subcategories_map: subcats });
-    } catch (e) {
-      console.error("Failed to sync to DB. Ensure 'app_settings' table exists.");
-    }
+    try { await supabase.from('app_settings').upsert({ id: 1, primary_categories: primaries, subcategories_map: subcats }); } catch (e) { console.error("Failed to sync to DB."); }
   };
 
   const injectTelegramScript = (refElement, callback = () => {}) => {
@@ -196,6 +190,7 @@ export default function App() {
         setUserRegion(currentUserProfile.region === 'Diaspora' ? 'ዳያስፖራ' : 'ሀገር ውስጥ');
         setVipPaymentType(currentUserProfile.region === 'Diaspora' ? 'ዳያስፖራ' : 'ሀገር ውስጥ');
       }
+      fetchUserOrders(currentUserProfile.telegram_id);
     }
   }, [currentUserProfile]);
 
@@ -210,6 +205,21 @@ export default function App() {
   const fetchGames = async () => {
     const { data } = await supabase.from('games').select('*').order('created_at', { ascending: false });
     if (data) setGames(data);
+  };
+
+  const fetchUserOrders = async (telegramId) => {
+    if (!telegramId) return;
+    try {
+      const { data } = await supabase.from('product_orders').select('*').eq('telegram_id', telegramId).order('created_at', { ascending: false });
+      if (data) setUserOrders(data);
+    } catch (e) { console.error("Error fetching user orders"); }
+  };
+
+  const fetchAllOrders = async () => {
+    try {
+      const { data } = await supabase.from('product_orders').select('*').order('created_at', { ascending: false });
+      if (data) setAllOrders(data);
+    } catch (e) { console.error("Error fetching all orders"); }
   };
 
   const fetchUserPredictions = async (telegramId) => {
@@ -261,7 +271,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('goleth_user'); localStorage.removeItem('goleth_profile');
-    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false);
+    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setShowAccountMenu(false); setUserOrders([]);
   };
 
   const saveUserProfile = async (e) => {
@@ -320,7 +330,7 @@ export default function App() {
     const { error: dbError } = await supabase.from("product_orders").insert([{ 
         telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, delivery_address: finalDeliveryAddress,
         product_id: selectedProduct.id, product_name: selectedProduct.name, selected_option: selectedOption || "N/A", price: finalPrice,
-        payment_type: userRegion, receipt_url: receiptUrl, shipping_speed: checkoutShipping, is_new_vip_signup: includeVipSignup 
+        payment_type: userRegion, receipt_url: receiptUrl, shipping_speed: checkoutShipping, is_new_vip_signup: includeVipSignup, status: 'pending' 
       }]);
 
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
@@ -332,6 +342,7 @@ export default function App() {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
 
+    fetchUserOrders(currentUser.id.toString());
     setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); setActiveTab("ሱቅ"); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
@@ -375,6 +386,37 @@ export default function App() {
     if (!scores || scores.a === undefined || scores.b === undefined) return;
     await supabase.from('games').update({ final_score_a: parseInt(scores.a), final_score_b: parseInt(scores.b), status: 'finished' }).eq('id', gameId);
     fetchGames(); alert("ጨዋታው ተጠናቆ ውጤቱ ተመዝግቧል!");
+  };
+
+  const handleUpdateAdminOrder = async (orderId, telegramId, productName) => {
+    const update = orderUpdateData[orderId];
+    if (!update) return;
+
+    setUploading(true);
+    const payload = {};
+    if (update.status) payload.status = update.status;
+    if (update.tracking) payload.tracking_number = update.tracking;
+
+    const { error } = await supabase.from('product_orders').update(payload).eq('id', orderId);
+    if (!error) {
+      alert("Order updated successfully!");
+      
+      // Send Telegram notification if status or tracking changed
+      let statusAmharic = "";
+      if (update.status === 'approved') statusAmharic = "ተቀባይነት አግኝቷል (Approved) ✅";
+      if (update.status === 'shipped') statusAmharic = "በመንገድ ላይ ነው (Shipped) 🚚";
+      if (update.status === 'arrived') statusAmharic = "እጅዎ ላይ ደርሷል (Arrived/Delivered) 🎉";
+
+      if (statusAmharic || update.tracking) {
+         let msg = `📦 <b>የትዕዛዝ መረጃ (Order Update)</b>\n\n<b>እቃ:</b> ${productName}`;
+         if (statusAmharic) msg += `\n<b>ሁኔታ:</b> ${statusAmharic}`;
+         if (update.tracking) msg += `\n<b>ትራኪንግ (Tracking #):</b> <code>${update.tracking}</code>`;
+         
+         try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: telegramId, text: msg, parse_mode: "HTML" }) }); } catch (err) {}
+      }
+      fetchAllOrders();
+    } else { alert("Failed to update order."); }
+    setUploading(false);
   };
 
   const handleLogoTap = () => { setActiveTab("ዋና"); if (activePost) window.history.back(); window.scrollTo(0,0); };
@@ -483,7 +525,11 @@ export default function App() {
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
   
-  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", isSale: false }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); };
+  const openNewPost = (type) => { 
+    setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", isSale: false }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); 
+    if (type === 'orders') fetchAllOrders();
+  };
+  
   const handleSizeChange = (e) => { const value = e.target.value; setFormData((prev) => { const options = prev.options || []; if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) }; return { ...prev, options: [...options, value] }; }); };
   const toggleOptionCategory = (categoryName) => { setExpandedOptionCategories((prev) => ({ ...prev, [categoryName]: !prev[categoryName] })); };
   const handleAddRelated = (e) => { const value = e.target.value; if (!value) return; if (!formData.relatedLinks?.includes(value)) { setFormData(prev => ({ ...prev, relatedLinks: [...(prev.relatedLinks || []), value] })); } };
@@ -518,10 +564,10 @@ export default function App() {
       
       if (editId) { 
         const { error } = await supabase.from("products").update(payload).eq("id", editId); 
-        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
       } else { 
         const { error } = await supabase.from("products").insert([payload]); 
-        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
       }
     }
     setFormData({ options: [], relatedLinks: [], isSale: false }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
@@ -561,6 +607,92 @@ export default function App() {
           </button>
         </form>
       </div>
+    </div>
+  );
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+       case 'pending': return <span className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] font-black uppercase">Pending</span>;
+       case 'approved': return <span className="bg-blue-900/50 text-blue-400 border border-blue-900 px-2 py-1 rounded text-[10px] font-black uppercase">Approved</span>;
+       case 'shipped': return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/50 px-2 py-1 rounded text-[10px] font-black uppercase">Shipped</span>;
+       case 'arrived': return <span className="bg-green-900/50 text-green-400 border border-green-900 px-2 py-1 rounded text-[10px] font-black uppercase">Arrived</span>;
+       default: return <span className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] font-black uppercase">{status || 'Pending'}</span>;
+    }
+  };
+
+  const renderAccountSlideOver = () => (
+    <div className="fixed inset-0 z-[80] flex justify-end">
+       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowAccountMenu(false)}></div>
+       <div className="relative w-full max-w-sm bg-zinc-950 h-full overflow-y-auto border-l border-zinc-800 animate-in slide-in-from-right duration-300 p-6 flex flex-col">
+          <div className="flex justify-between items-center mb-6">
+             <h2 className="text-xl font-black text-white flex items-center"><User className="mr-2 text-amber-500" size={24}/> የእኔ አካውንት (My Account)</h2>
+             <button onClick={() => setShowAccountMenu(false)} className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition-colors"><X size={20}/></button>
+          </div>
+
+          {/* Digital VIP Card */}
+          {isVIP && (
+             <div className="bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-600 p-5 rounded-2xl mb-8 shadow-[0_0_30px_rgba(245,158,11,0.2)] text-black relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-20"><Target size={80}/></div>
+                <h3 className="font-black text-lg uppercase tracking-widest mb-1 relative z-10">Goleth VIP Member</h3>
+                <p className="font-bold text-sm opacity-90 mb-6 relative z-10">{currentUserProfile?.full_name}</p>
+                
+                <div className="flex justify-between items-end relative z-10">
+                   <div>
+                      <p className="text-[10px] uppercase font-black opacity-70">Status</p>
+                      <p className="font-bold text-sm">Active</p>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-[10px] uppercase font-black opacity-70">Expires</p>
+                      <p className="font-bold font-mono text-sm">{currentUserProfile?.vip_until ? new Date(currentUserProfile.vip_until).toLocaleDateString() : 'Lifetime'}</p>
+                   </div>
+                </div>
+             </div>
+          )}
+
+          {/* Profile Details Edit */}
+          <div className="mb-8">
+             <div className="flex justify-between items-center mb-3">
+               <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider">የግል መረጃ (Details)</h3>
+               <button onClick={() => setShowProfileModal(true)} className="text-xs font-bold text-zinc-400 hover:text-white flex items-center"><Edit2 size={12} className="mr-1"/> አድስ (Edit)</button>
+             </div>
+             <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-sm text-zinc-300 space-y-2">
+                <p><span className="text-zinc-500 mr-2">ስም:</span> {currentUserProfile?.full_name}</p>
+                <p><span className="text-zinc-500 mr-2">ስልክ:</span> {currentUserProfile?.phone_number}</p>
+                <p><span className="text-zinc-500 mr-2">አድራሻ:</span> {currentUserProfile?.region}</p>
+             </div>
+          </div>
+
+          {/* Order History */}
+          <div className="flex-1">
+             <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider mb-4 flex items-center"><Package className="mr-2" size={16}/> የትዕዛዝ ታሪክ (Order History)</h3>
+             {userOrders.length === 0 ? (
+                <p className="text-zinc-500 text-sm text-center py-8">ምንም ትዕዛዝ የለም (No orders yet).</p>
+             ) : (
+                <div className="space-y-3">
+                   {userOrders.map(order => (
+                      <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                         <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-bold text-white text-sm line-clamp-1 flex-1 pr-2">{order.product_name}</h4>
+                            {getStatusBadge(order.status)}
+                         </div>
+                         <p className="text-xs text-zinc-500 mb-2">{new Date(order.created_at).toLocaleDateString()}</p>
+                         
+                         {order.tracking_number && (
+                            <div className="mt-3 bg-black border border-amber-500/20 p-2.5 rounded-lg">
+                               <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1">Tracking Number</p>
+                               <p className="font-mono text-white text-xs font-bold">{order.tracking_number}</p>
+                            </div>
+                         )}
+                      </div>
+                   ))}
+                </div>
+             )}
+          </div>
+
+          <button onClick={handleLogout} className="mt-8 w-full py-4 bg-red-900/20 text-red-500 border border-red-900/50 rounded-xl font-bold flex items-center justify-center hover:bg-red-900/40 transition-colors">
+             <LogOut size={18} className="mr-2"/> ዘግተህ ውጣ (Sign Out)
+          </button>
+       </div>
     </div>
   );
 
@@ -1223,7 +1355,6 @@ export default function App() {
   };
 
   const renderAdmin = () => {
-    // Determine dynamic options based ONLY on existing explicit custom map + existing products map.
     const safePrimaryOptions = [...new Set([...customCategories, ...(formData.shopCat ? [formData.shopCat] : [])])].filter(Boolean);
     const safeSecondaryOptions = [...new Set([...(customSubCats[formData.shopCat] || []), ...(formData.shopSubCat ? [formData.shopSubCat] : [])])].filter(Boolean);
 
@@ -1236,12 +1367,56 @@ export default function App() {
 
         {!editId && (
           <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4 overflow-x-auto no-scrollbar">
-            {["posts", "products", "games", "categories"].map((tab) => (
-              <button key={tab} onClick={() => { setAdminTab(tab); openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
-                {tab.toUpperCase()}
+            {["posts", "products", "games", "categories", "orders"].map((tab) => (
+              <button key={tab} onClick={() => { setAdminTab(tab); openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors capitalize ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
+                {tab}
               </button>
             ))}
           </div>
+        )}
+
+        {adminTab === "orders" && (
+           <div className="space-y-6 pb-20">
+              <h3 className="text-amber-500 font-bold mb-2">Manage Store Orders</h3>
+              {allOrders.length === 0 && <p className="text-zinc-500 text-sm">No orders found.</p>}
+              {allOrders.map(order => {
+                 const currentUpdate = orderUpdateData[order.id] || { status: order.status, tracking: order.tracking_number || "" };
+                 
+                 return (
+                 <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg">
+                    <div className="flex justify-between items-start">
+                       <div>
+                          <p className="text-white font-bold text-sm">{order.full_name}</p>
+                          <p className="text-amber-500 font-black text-sm">{order.product_name} <span className="text-zinc-500 font-normal text-xs">({order.selected_option})</span></p>
+                       </div>
+                       <div className="text-right">
+                          {getStatusBadge(order.status)}
+                          <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
+                       </div>
+                    </div>
+                    
+                    <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
+                       <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
+                          <select value={currentUpdate.status} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
+                             <option value="pending">Pending (በሂደት ላይ)</option>
+                             <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
+                             <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
+                             <option value="arrived">Arrived (ደርሷል)</option>
+                          </select>
+                       </div>
+                       <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Tracking Number</label>
+                          <input type="text" value={currentUpdate.tracking} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, tracking: e.target.value}})} placeholder="Optional tracking link/code" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500" />
+                       </div>
+                       
+                       <button onClick={() => handleUpdateAdminOrder(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-xs hover:bg-amber-400 transition-colors">
+                          Update & Notify User
+                       </button>
+                    </div>
+                 </div>
+              )})}
+           </div>
         )}
 
         {adminTab === "categories" && (
@@ -1359,7 +1534,7 @@ export default function App() {
           </div>
         )}
 
-        {adminTab !== "games" && adminTab !== "categories" && (
+        {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && (
           <form onSubmit={handleAdminSubmit} className="space-y-4 pb-20">
             {adminTab === "posts" && (
               <>
@@ -1596,12 +1771,10 @@ export default function App() {
                  ይግቡ
                </button>
             ) : (
-               <>
-                 <span className="text-white text-xs font-bold px-2">{currentUserProfile?.full_name || "VIP"}</span>
-                 <button onClick={handleLogout} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 p-1.5 rounded-full transition-colors" title="Sign Out">
-                   <LogOut size={16} />
-                 </button>
-               </>
+               <button onClick={() => setShowAccountMenu(true)} className="bg-zinc-900 border border-zinc-800 hover:border-amber-500/50 text-white px-3 py-1.5 rounded-full flex items-center transition-colors shadow-sm">
+                  <User size={14} className="text-amber-500 mr-2" />
+                  <span className="text-xs font-bold max-w-[80px] truncate">{currentUserProfile?.full_name || "Account"}</span>
+               </button>
             )}
           </div>
         </div>
@@ -1618,6 +1791,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {showAccountMenu && renderAccountSlideOver()}
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
         {activePost && !selectedProduct && renderSinglePost()}
