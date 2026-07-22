@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -23,6 +23,7 @@ export default function App() {
   // Shopping States
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
+  const [quantity, setQuantity] = useState(1);
   const [showInlineCheckout, setShowInlineCheckout] = useState(false);
   const [includeVipSignup, setIncludeVipSignup] = useState(false);
   
@@ -144,7 +145,7 @@ export default function App() {
       } catch (e) { console.error("Error parsing saved user", e); }
     }
 
-    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); setShowAccountMenu(false); };
+    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); setShowAccountMenu(false); setQuantity(1); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -316,34 +317,54 @@ export default function App() {
   const handleProductOrderSubmit = async (e) => {
     e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
 
-    const isGettingVipPrice = isVIP || isCEO || includeVipSignup;
-    const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
-    let finalPrice = basePrice + (checkoutShipping === "next_day" ? 850 : 0) + (includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0);
+    const hasVipAccess = isVIP || isCEO;
+    const isGettingVipPrice = hasVipAccess || includeVipSignup;
+    
+    // Apply VIP bulk logic - Max 3 at VIP price
+    let totalItemsPrice = 0;
+    if (isGettingVipPrice) {
+      if (quantity <= 3) {
+        totalItemsPrice = (selectedProduct.vip_price || selectedProduct.price) * quantity;
+      } else {
+        totalItemsPrice = ((selectedProduct.vip_price || selectedProduct.price) * 3) + (selectedProduct.price * (quantity - 3));
+      }
+    } else {
+      totalItemsPrice = selectedProduct.price * quantity;
+    }
 
-    let orderNotes = checkoutShipping === "next_day" ? "+ $10 CAD (Next Day Premium)" : "Standard Shipping";
-    if (includeVipSignup) orderNotes += ` | +VIP Membership Signup (${userRegion})`;
+    const nextDayBirr = checkoutShipping === "next_day" ? 850 * quantity : 0; 
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
+    const finalPrice = totalItemsPrice + nextDayBirr + vipSignupBirr;
+
+    let orderNotes = checkoutShipping === "next_day" ? `+ ${850 * quantity} ETB (Next Day)` : "Standard Shipping";
+    if (includeVipSignup) orderNotes += ` | +VIP Signup`;
     
     let finalDeliveryAddress = orderAddress;
     if (isGift) { orderNotes += ` | 🎁 GIFT ORDER`; finalDeliveryAddress = `[GIFT FOR: ${recipientName} | Ph: ${recipientPhone}] ${recipientAddress}`; }
 
     const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
+    
+    // Calculate total weight to send to backend for logistics tracking
+    const orderWeight = (selectedProduct.weight_kg || 1.0) * quantity;
+
     const { error: dbError } = await supabase.from("product_orders").insert([{ 
         telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, delivery_address: finalDeliveryAddress,
-        product_id: selectedProduct.id, product_name: selectedProduct.name, selected_option: selectedOption || "N/A", price: finalPrice,
-        payment_type: userRegion, receipt_url: receiptUrl, shipping_speed: checkoutShipping, is_new_vip_signup: includeVipSignup, status: 'pending' 
+        product_id: selectedProduct.id, product_name: selectedProduct.name, selected_option: selectedOption || "N/A", 
+        price: finalPrice, payment_type: userRegion, receipt_url: receiptUrl, shipping_speed: checkoutShipping, 
+        is_new_vip_signup: includeVipSignup, status: 'pending', total_weight_kg: orderWeight
       }]);
 
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
 
-    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
+    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name} (x${quantity})\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n⚖️ <b>ክብደት:</b> ${orderWeight} kg\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
+    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} (ብዛት: ${quantity}) የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
 
     fetchUserOrders(currentUser.id.toString());
-    setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); setActiveTab("ሱቅ"); window.scrollTo(0,0); setShowSuccessModal(true);
+    setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setQuantity(1); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); setActiveTab("ሱቅ"); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
   const handleOpenSourcing = () => { setReqProductName(""); setReqStoreName(""); setReqProductLink(""); setReqImage(null); setShowOrderForm(true); };
@@ -508,7 +529,7 @@ export default function App() {
   
   const openProduct = (prod) => { 
     window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`); 
-    setSelectedProduct(prod); setCurrentImgIndex(0); setSelectedOption(null); 
+    setSelectedProduct(prod); setQuantity(1); setSelectedOption(null); 
     setShowInlineCheckout(!prod.options || prod.options.length === 0); 
   };
   
@@ -520,7 +541,12 @@ export default function App() {
       setFormData({ postCategory: item.category, title: item.title, subtitle: item.subtitle || "", excerpt: item.excerpt || "", body: item.body || "", author: item.author || "GOLETH", relatedLinks: item.related_links || [] });
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], sourceUrl: item.source_link || "", description: item.description || "", isSale: item.is_sale || false });
+      setFormData({ 
+        title: item.name, price: item.price, vipPrice: item.vip_price || "", 
+        shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], 
+        sourceUrl: item.source_link || "", description: item.description || "", isSale: item.is_sale || false,
+        cadCost: item.cost_cad || "", stockQty: item.stock_quantity || 0, weightKg: item.weight_kg || 1.0, specialFreightFee: item.special_freight_fee || ""
+      });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
@@ -558,7 +584,8 @@ export default function App() {
       const payload = { 
         name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, 
         category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, 
-        source_link: formData.sourceUrl || null, description: formData.description || null, is_sale: formData.isSale || false
+        source_link: formData.sourceUrl || null, description: formData.description || null, is_sale: formData.isSale || false,
+        cost_cad: Number(formData.cadCost), stock_quantity: Number(formData.stockQty), weight_kg: Number(formData.weightKg), special_freight_fee: formData.specialFreightFee ? Number(formData.specialFreightFee) : null
       };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       
@@ -722,7 +749,7 @@ export default function App() {
             <div className="text-center py-20 flex-1 flex flex-col justify-center">
               <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
               <h3 className="text-white font-black mb-3">ለማዘዝ ይግቡ (Login required)</h3>
-              <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ。</p>
+              <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ።</p>
               <div ref={telegramSourcingRef} className="flex justify-center min-h-[50px]"></div>
             </div>
           ) : (
@@ -878,10 +905,22 @@ export default function App() {
 
     const hasVipAccess = isVIP || isCEO;
     const isGettingVipPrice = hasVipAccess || includeVipSignup;
-    const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
-    const nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
+    
+    // Apply VIP discount cap of 3
+    let totalItemsPrice = 0;
+    if (isGettingVipPrice) {
+      if (quantity <= 3) {
+        totalItemsPrice = (selectedProduct.vip_price || selectedProduct.price) * quantity;
+      } else {
+        totalItemsPrice = ((selectedProduct.vip_price || selectedProduct.price) * 3) + (selectedProduct.price * (quantity - 3));
+      }
+    } else {
+      totalItemsPrice = selectedProduct.price * quantity;
+    }
+
+    const nextDayBirr = checkoutShipping === "next_day" ? 850 * quantity : 0; 
     const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
-    const dynamicTotal = basePrice + nextDayBirr + vipSignupBirr;
+    const dynamicTotal = totalItemsPrice + nextDayBirr + vipSignupBirr;
 
     const inlineCheckoutUI = showInlineCheckout ? (
       <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-4 mt-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
@@ -889,7 +928,7 @@ export default function App() {
           <div className="text-center">
             <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
             <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ。</p>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ።</p>
             <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
           </div>
         ) : (
@@ -910,6 +949,15 @@ export default function App() {
             <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => { const val = e.target.value.replace(/\D/g, ""); if (val.length <= 10) setVipPhone(val); }} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
             <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
 
+            <div className="bg-black border border-zinc-800 rounded-xl p-3 flex justify-between items-center mb-3">
+              <span className="text-sm font-bold text-zinc-300">ብዛት (Quantity):</span>
+              <div className="flex items-center space-x-4 bg-zinc-900 rounded-lg p-1 border border-zinc-700">
+                <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-1 text-white hover:text-amber-500"><Minus size={16} /></button>
+                <span className="font-bold text-lg w-6 text-center text-amber-500">{quantity}</span>
+                <button type="button" onClick={() => setQuantity(quantity + 1)} className="p-1 text-white hover:text-amber-500"><Plus size={16} /></button>
+              </div>
+            </div>
+
             <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
               <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
               <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው?</span>
@@ -926,13 +974,14 @@ export default function App() {
 
             <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-bold mt-2">
               <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
-              <option value="next_day">በሚቀጥለው ቀን (+$10 CAD አስቸኳይ)</option>
+              <option value="next_day">በሚቀጥለው ቀን (+{850 * quantity} ETB አስቸኳይ)</option>
             </select>
 
             <div className="bg-black p-3 rounded-xl border border-zinc-800 text-sm mt-4 mb-4">
                <h4 className="text-amber-500 font-black mb-2 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር</h4>
-               <div className="flex justify-between mb-1"><span className="text-zinc-400">የእቃው ዋጋ:</span> <span className="text-white font-bold">{basePrice} ብር</span></div>
-               {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ 850 ብር ($10)</span></div>}
+               <div className="flex justify-between mb-1"><span className="text-zinc-400">የእቃው ዋጋ (x{quantity}):</span> <span className="text-white font-bold">{totalItemsPrice} ብር</span></div>
+               {isGettingVipPrice && quantity > 3 && <div className="text-[10px] text-zinc-500 mb-2">VIP discount capped at 3 items. Item {quantity} charged at regular price.</div>}
+               {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ {850 * quantity} ብር</span></div>}
                {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '850 ብር ($10)' : '100 ብር'}</span></div>}
                
                <div className="flex justify-between mt-2 pt-2 border-t border-zinc-800">
@@ -1105,10 +1154,7 @@ export default function App() {
   };
 
   const renderShop = () => {
-    // Strictly follow CEO mapped categories.
     const uniquePrimary = ["ሁሉም", ...customCategories];
-
-    // Only fetch subcategories mapped to the currently selected primary category.
     const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []);
     const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
@@ -1206,7 +1252,7 @@ export default function App() {
       <div className="text-left space-y-3 mb-8 bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-xl">
         <h3 className="text-amber-500 font-black mb-3">የVIP አባልነት ጥቅሞች</h3>
         <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">የስፖርት ትንበያዎችን ያግኙ</span></div>
-        <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">በእቃዎች ላይ ከፍተኛ የVIP ቅናሽ</span></div>
+        <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">በእቃዎች ላይ ከፍተኛ የVIP ቅናሽ (እስከ 3 እቃዎች)</span></div>
         <div className="flex items-center space-x-3"><CheckCircle className="text-amber-500 w-5 h-5 shrink-0" /><span className="text-sm text-zinc-300">ልዩ የእቃ ማዘዣ ቅድሚያ እና ነፃ ማጓጓዣ</span></div>
       </div>
     );
@@ -1388,6 +1434,7 @@ export default function App() {
                        <div>
                           <p className="text-white font-bold text-sm">{order.full_name}</p>
                           <p className="text-amber-500 font-black text-sm">{order.product_name} <span className="text-zinc-500 font-normal text-xs">({order.selected_option})</span></p>
+                          {order.total_weight_kg && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className={order.total_weight_kg < 1 ? "text-red-500 font-bold" : "text-white"}>{order.total_weight_kg} kg</span></p>}
                        </div>
                        <div className="text-right">
                           {getStatusBadge(order.status)}
@@ -1636,8 +1683,18 @@ export default function App() {
                 <input required value={formData.title || ""} placeholder="የእቃው ስም" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <input required value={formData.price || ""} type="number" placeholder="ዋጋ" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <input required value={formData.price || ""} type="number" placeholder="መሸጫ ዋጋ (Birr)" onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <input value={formData.vipPrice || ""} type="number" placeholder="የ VIP ዋጋ (Birr)" onChange={(e) => setFormData({ ...formData, vipPrice: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <input required value={formData.cadCost || ""} type="number" step="0.01" placeholder="Base Cost (CAD) - Backend" onChange={(e) => setFormData({ ...formData, cadCost: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <input required value={formData.stockQty || ""} type="number" placeholder="Local Shop Stock Qty" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mt-4 mb-4">
+                  <input required value={formData.weightKg || ""} type="number" step="0.1" placeholder="Weight (kg)" onChange={(e) => setFormData({ ...formData, weightKg: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  <input value={formData.specialFreightFee || ""} type="number" placeholder="Special Freight Fee (Birr) - Optional" onChange={(e) => setFormData({ ...formData, specialFreightFee: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
@@ -1820,7 +1877,7 @@ export default function App() {
           return (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setActivePost(null); setSelectedProduct(null); window.scrollTo(0,0); }}
+              onClick={() => { setActiveTab(tab.id); setActivePost(null); setSelectedProduct(null); setQuantity(1); window.scrollTo(0,0); }}
               className={`flex flex-col items-center p-2 transition-colors ${isActive ? "text-amber-500" : "text-zinc-600 hover:text-zinc-400"}`}
             >
               <Icon size={24} strokeWidth={isActive ? 2.5 : 2} className="mb-1" />
