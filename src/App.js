@@ -70,6 +70,7 @@ export default function App() {
   const [customSizeInput, setCustomSizeInput] = useState("");
   const [newCatInput, setNewCatInput] = useState("");
   const [newSubCatInput, setNewSubCatInput] = useState("");
+  const [selectedPrimaryForSub, setSelectedPrimaryForSub] = useState("");
   
   // Inline edit states for categories
   const [editCatIndex, setEditCatIndex] = useState(null);
@@ -79,7 +80,9 @@ export default function App() {
   
   const [savedCustomSizes, setSavedCustomSizes] = useState(() => JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]'));
   const [customCategories, setCustomCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_categories') || '["ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"]'));
-  const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcategories') || '["ልብስ", "ጫማ", "ሌሎች"]'));
+  
+  // Subcategories are now mapped to specific primary categories
+  const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcats_map') || '{"ወንድ":["ልብስ","ጫማ"],"ሴት":["ልብስ","ጫማ"]}'));
 
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -123,6 +126,8 @@ export default function App() {
     fetchData();
     fetchGames(); 
     
+    if (!selectedPrimaryForSub && customCategories.length > 0) setSelectedPrimaryForSub(customCategories[0]);
+
     const savedUserStr = localStorage.getItem('goleth_user');
     if (savedUserStr) {
       try {
@@ -199,10 +204,8 @@ export default function App() {
 
   const handleTelegramLogin = async (telegramUser) => {
     if (!telegramUser || !telegramUser.id) return;
-
     setCurrentUser(telegramUser);
     localStorage.setItem('goleth_user', JSON.stringify(telegramUser));
-
     const { data } = await supabase.from('vip_users').upsert([ { telegram_id: telegramUser.id.toString(), username: telegramUser.username || telegramUser.first_name || 'User' } ], { onConflict: 'telegram_id' }).select('*');
 
     if (data && data[0]) {
@@ -266,22 +269,19 @@ export default function App() {
     const { error: dbError } = await supabase.from("vip_payments").insert([{ telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }]);
 
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
-
     const adminMsg = `👑 <b>አዲስ የVIP አባልነት ክፍያ ደርሷል!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n💳 <b>የክፍያ አይነት:</b> ${vipPaymentType}\n🖼️ <b>የደረሰኝ ሊንክ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ክፍያዎ በተሳካ ሁኔታ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ በጥቂት ሰዓታት ውስጥ የVIP አባልነትዎ ይከፈታል።`;
-    
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
-
     setUploading(false); setHasPendingVip(true); setActiveTab("ዋና"); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
   const handleProductOrderSubmit = async (e) => {
     e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
 
-    const isGettingVipPrice = isVIP || includeVipSignup;
+    const isGettingVipPrice = isVIP || isCEO || includeVipSignup;
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
     let finalPrice = basePrice + (checkoutShipping === "next_day" ? 850 : 0) + (includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0);
 
@@ -302,7 +302,6 @@ export default function App() {
 
     const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name}\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
     const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
-    
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
@@ -325,11 +324,8 @@ export default function App() {
     }]);
 
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
-
     const message = `🛍 <b>አዲስ ልዩ የእቃ ማዘዣ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📦 <b>የእቃው ስም:</b> ${reqProductName || "አልተገለጸም"}\n🏪 <b>የሱቁ ስም:</b> ${reqStoreName || "አልተገለጸም"}\n🔗 <b>ሊንክ:</b> ${reqProductLink || "አልተገለጸም"}\n🚚 <b>አቅርቦት:</b> ${e.target.shipping.value}${extraNotes}\n🖼️ <b>ምስል:</b> ${imageUrl || "ምንም ምስል አልተያያዘም"}`;
-    
     try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "HTML" }) }); } catch (err) {}
-
     setUploading(false); setIsGift(false); alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!"); setShowOrderForm(false); if(activePost) window.history.back(); setActiveTab("ሱቅ"); window.scrollTo(0,0);
   };
 
@@ -337,7 +333,6 @@ export default function App() {
     if (!currentUser?.id) return;
     const scoreA = predictionInputs[gameId]?.a; const scoreB = predictionInputs[gameId]?.b;
     if (scoreA === undefined || scoreB === undefined || scoreA === "" || scoreB === "") { alert("እባክዎ ሁለቱንም ውጤቶች ያስገቡ።"); return; }
-    
     const { error } = await supabase.from('predictions').insert([{ telegram_id: currentUser.id.toString(), game_id: gameId, predicted_score_a: parseInt(scoreA), predicted_score_b: parseInt(scoreB) }]);
     if (!error) { alert("ውጤቱ ተመዝግቧል!"); fetchUserPredictions(currentUser.id); } else { alert("ውጤቱን ቀድመው ገምተዋል።"); }
   };
@@ -372,33 +367,52 @@ export default function App() {
   // Custom CEO Categories Logic
   const addCategory = (type) => {
     if (type === 'primary' && newCatInput.trim() && !customCategories.includes(newCatInput)) {
-      const updated = [...customCategories, newCatInput.trim()]; setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); setNewCatInput("");
-    } else if (type === 'secondary' && newSubCatInput.trim() && !customSubCats.includes(newSubCatInput)) {
-      const updated = [...customSubCats, newSubCatInput.trim()]; setCustomSubCats(updated); localStorage.setItem('goleth_subcategories', JSON.stringify(updated)); setNewSubCatInput("");
+      const updated = [...customCategories, newCatInput.trim()]; 
+      setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); setNewCatInput("");
+      if (!selectedPrimaryForSub) setSelectedPrimaryForSub(newCatInput.trim());
+    } else if (type === 'secondary' && newSubCatInput.trim() && selectedPrimaryForSub) {
+      const currentArr = customSubCats[selectedPrimaryForSub] || [];
+      if (!currentArr.includes(newSubCatInput.trim())) {
+        const updated = { ...customSubCats, [selectedPrimaryForSub]: [...currentArr, newSubCatInput.trim()] };
+        setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); setNewSubCatInput("");
+      }
     }
   };
   
   const removeCategory = (type, val) => {
-    if (type === 'primary') { const updated = customCategories.filter(c => c !== val); setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); } 
-    else { const updated = customSubCats.filter(c => c !== val); setCustomSubCats(updated); localStorage.setItem('goleth_subcategories', JSON.stringify(updated)); }
+    if (type === 'primary') { 
+      const updated = customCategories.filter(c => c !== val); setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); 
+      if (selectedPrimaryForSub === val) setSelectedPrimaryForSub(updated[0] || "");
+    } 
+    else { 
+      const currentArr = customSubCats[selectedPrimaryForSub] || [];
+      const filtered = currentArr.filter(c => c !== val);
+      const updated = { ...customSubCats, [selectedPrimaryForSub]: filtered };
+      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+    }
   };
 
   const moveCategory = (type, index, direction) => {
-    const arr = type === 'primary' ? [...customCategories] : [...customSubCats];
+    const arr = type === 'primary' ? [...customCategories] : [...(customSubCats[selectedPrimaryForSub] || [])];
     if (direction === -1 && index > 0) { [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]; } 
     else if (direction === 1 && index < arr.length - 1) { [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; }
+    
     if (type === 'primary') { setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); }
-    else { setCustomSubCats(arr); localStorage.setItem('goleth_subcategories', JSON.stringify(arr)); }
+    else { 
+      const updated = { ...customSubCats, [selectedPrimaryForSub]: arr };
+      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+    }
   };
 
   const saveCategoryEdit = (type) => {
-    const arr = type === 'primary' ? [...customCategories] : [...customSubCats];
+    const arr = type === 'primary' ? [...customCategories] : [...(customSubCats[selectedPrimaryForSub] || [])];
     if (type === 'primary') {
       if (editCatValue.trim()) arr[editCatIndex] = editCatValue.trim();
       setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); setEditCatIndex(null); setEditCatValue("");
     } else {
       if (editSubCatValue.trim()) arr[editSubCatIndex] = editSubCatValue.trim();
-      setCustomSubCats(arr); localStorage.setItem('goleth_subcategories', JSON.stringify(arr)); setEditSubCatIndex(null); setEditSubCatValue("");
+      const updated = { ...customSubCats, [selectedPrimaryForSub]: arr };
+      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); setEditSubCatIndex(null); setEditSubCatValue("");
     }
   };
 
@@ -670,7 +684,8 @@ export default function App() {
     if (!selectedProduct) return null;
     const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
 
-    const isGettingVipPrice = isVIP || includeVipSignup;
+    const hasVipAccess = isVIP || isCEO;
+    const isGettingVipPrice = hasVipAccess || includeVipSignup;
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
     const nextDayBirr = checkoutShipping === "next_day" ? 850 : 0; 
     const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 100 : 850) : 0;
@@ -682,14 +697,14 @@ export default function App() {
           <div className="text-center">
             <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
             <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ።</p>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ。</p>
             <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
           </div>
         ) : (
           <form onSubmit={handleProductOrderSubmit} className="space-y-3">
             <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-2">የእርስዎ መረጃ</h3>
             
-            {!isVIP && selectedProduct.vip_price && (
+            {!hasVipAccess && selectedProduct.vip_price && (
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
                 <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
                 <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
@@ -798,15 +813,15 @@ export default function App() {
           </div>
 
           <div className="mt-3 border-b border-zinc-800 pb-4">
-            {isVIP ? (
+            {hasVipAccess ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-black text-2xl line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
-                 <p className="text-amber-500 font-black text-2xl">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
+                 <p className="text-zinc-400 font-black text-xl line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
+                 <p className="text-amber-500 font-black text-xl">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
-                 <p className="text-white font-black text-2xl">{selectedProduct.price} ብር</p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-2xl mt-1">VIP: {selectedProduct.vip_price} ብር</p>}
+                 <p className="text-white font-black text-xl">{selectedProduct.price} ብር</p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-xl mt-1">VIP: {selectedProduct.vip_price} ብር</p>}
                </div>
             )}
           </div>
@@ -896,17 +911,18 @@ export default function App() {
   };
 
   const renderShop = () => {
-    const allPrimary = ["ሁሉም", ...customCategories, ...products.map(p => p.category).filter(Boolean)];
-    const uniquePrimary = [...new Set(allPrimary)];
+    // Strictly follow CEO mapped categories. Do NOT dynamically append based on products.
+    const uniquePrimary = ["ሁሉም", ...customCategories];
 
-    const allSecondary = shopCategory === "ሁሉም" 
-      ? ["ሁሉም", ...customSubCats] 
-      : ["ሁሉም", ...customSubCats, ...products.filter(p => p.category === shopCategory).map(p => p.subcategory).filter(Boolean)];
-    const uniqueSecondary = [...new Set(allSecondary)];
+    // Only fetch subcategories that the CEO explicitly mapped to the currently selected primary category.
+    const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []);
+    const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
     let filtered = products;
     if (shopCategory !== "ሁሉም") filtered = filtered.filter(p => p.category === shopCategory);
     if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") filtered = filtered.filter(p => p.subcategory === shopSubCategory);
+
+    const hasVipAccess = isVIP || isCEO;
 
     return (
       <div className="pb-24">
@@ -950,10 +966,10 @@ export default function App() {
               </div>
 
               <div className="p-3 flex flex-col flex-grow">
-                 <h3 className="text-zinc-200 font-bold text-xs line-clamp-2 leading-snug mb-2">{item.name}</h3>
+                 <h3 className="text-zinc-200 font-bold text-sm line-clamp-2 leading-snug mb-2">{item.name}</h3>
                  
                  <div className="mt-auto">
-                    {isVIP ? (
+                    {hasVipAccess ? (
                       <>
                         <p className="text-amber-500 font-black text-base leading-none">VIP: {item.vip_price || item.price} ብር</p>
                         {item.vip_price && <p className="text-zinc-400 font-black text-base line-through mt-1">መደበኛ: {item.price} ብር</p>}
@@ -1017,7 +1033,7 @@ export default function App() {
       );
     }
 
-    if (hasPendingVip) {
+    if (hasPendingVip && !isCEO) {
       return (
         <div className="pb-24 pt-6 text-center">
           <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-8 mb-8 max-w-md mx-auto">
@@ -1029,7 +1045,7 @@ export default function App() {
       );
     }
 
-    if (!isVIP || vipStatus === "expired" || vipStatus === "none") {
+    if (!isCEO && (!isVIP || vipStatus === "expired" || vipStatus === "none")) {
       return (
         <div className="pb-24 pt-6">
           <div className="max-w-md mx-auto mb-8">
@@ -1084,8 +1100,13 @@ export default function App() {
     }
 
     return (
-      <div className="pb-24">
-        {vipStatus === "expiring_soon" && (
+      <div className="pb-24 pt-4">
+        {isCEO && (
+          <div className="bg-amber-500/10 border border-amber-500 text-amber-500 p-3 rounded-xl mb-6 text-center text-xs font-bold uppercase tracking-widest shadow-sm">
+            🛡️ CEO Access Granted
+          </div>
+        )}
+        {vipStatus === "expiring_soon" && !isCEO && (
           <div className="bg-red-900/50 border border-red-500 text-white p-4 rounded-xl mb-6 text-center text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
             ⚠️ <span className="font-bold">ማሳሰቢያ:</span> የVIP አባልነትዎ ሊያልቅ 2 ቀናት ቀርተውታል። አገልግሎቱ እንዳይቋረጥ እባክዎ ያድሱ።
           </div>
@@ -1139,9 +1160,6 @@ export default function App() {
   };
 
   const renderAdmin = () => {
-    const allPrimaryOptions = [...new Set([...customCategories, ...products.map(p => p.category).filter(Boolean)])];
-    const allSecondaryOptions = [...new Set([...customSubCats, ...products.map(p => p.subcategory).filter(Boolean)])];
-
     return (
       <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
         <div className="flex justify-between items-center mb-6">
@@ -1187,28 +1205,41 @@ export default function App() {
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-               <h3 className="text-amber-500 font-bold mb-4">ንዑስ ምድቦች (Subcategories)</h3>
-               <div className="flex space-x-2 mb-4">
-                 <input type="text" value={newSubCatInput} onChange={e => setNewSubCatInput(e.target.value)} placeholder="Add new subcategory..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                 <button onClick={() => addCategory('secondary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
+               <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-amber-500 font-bold">ንዑስ ምድቦች (Subcategories)</h3>
                </div>
-               <div className="flex flex-col gap-2">
-                 {customSubCats.map((c, index) => (
-                   <div key={c} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
-                     {editSubCatIndex === index ? (
-                       <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
-                     ) : (
-                       <span>{c}</span>
-                     )}
-                     <div className="flex items-center space-x-1">
-                       <button onClick={() => { setEditSubCatIndex(index); setEditSubCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
-                       <button onClick={() => moveCategory('secondary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
-                       <button onClick={() => moveCategory('secondary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
-                       <button onClick={() => removeCategory('secondary', c)} className="p-1.5 text-red-500 hover:text-red-400"><X size={16}/></button>
-                     </div>
+               <p className="text-xs text-zinc-400 mb-3">1. ንዑስ ምድብ ለማን እንደሚገባ ይምረጡ፦</p>
+               <select value={selectedPrimaryForSub} onChange={(e) => setSelectedPrimaryForSub(e.target.value)} className="w-full bg-black border border-zinc-700 text-amber-500 font-bold p-3 rounded-xl outline-none mb-4 focus:border-amber-500">
+                  {customCategories.length === 0 && <option value="">No Primary Categories</option>}
+                  {customCategories.map(c => <option key={`sub_opt_${c}`} value={c}>{c}</option>)}
+               </select>
+
+               {selectedPrimaryForSub && (
+                 <>
+                   <div className="flex space-x-2 mb-4">
+                     <input type="text" value={newSubCatInput} onChange={e => setNewSubCatInput(e.target.value)} placeholder={`Add subcategory to ${selectedPrimaryForSub}...`} className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                     <button onClick={() => addCategory('secondary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
                    </div>
-                 ))}
-               </div>
+                   <div className="flex flex-col gap-2">
+                     {(customSubCats[selectedPrimaryForSub] || []).length === 0 && <span className="text-xs text-zinc-500 italic">ምንም የለም</span>}
+                     {(customSubCats[selectedPrimaryForSub] || []).map((c, index) => (
+                       <div key={c} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                         {editSubCatIndex === index ? (
+                           <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
+                         ) : (
+                           <span>{c}</span>
+                         )}
+                         <div className="flex items-center space-x-1">
+                           <button onClick={() => { setEditSubCatIndex(index); setEditSubCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
+                           <button onClick={() => moveCategory('secondary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
+                           <button onClick={() => moveCategory('secondary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
+                           <button onClick={() => removeCategory('secondary', c)} className="p-1.5 text-red-500 hover:text-red-400"><X size={16}/></button>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 </>
+               )}
             </div>
           </div>
         )}
@@ -1362,18 +1393,18 @@ export default function App() {
                 <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                   <div className="relative">
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድብ (Primary Category)</label>
-                    <input required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value })} placeholder="Type or select a category..." className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" />
-                    <div className="flex flex-wrap gap-2 mt-3">
-                       {allPrimaryOptions.map(c => <button key={`p_${c}`} type="button" onClick={() => setFormData({ ...formData, shopCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>)}
-                    </div>
+                    <select required value={formData.shopCat || ""} onChange={(e) => setFormData({ ...formData, shopCat: e.target.value, shopSubCat: "" })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors">
+                       <option value="">ምረጥ (Select...)</option>
+                       {customCategories.map(c => <option key={`p_opt_${c}`} value={c}>{c}</option>)}
+                    </select>
                   </div>
 
                   <div className="relative border-t border-zinc-800 pt-4 mt-2">
                     <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድብ (Subcategory)</label>
-                    <input value={formData.shopSubCat || ""} onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} placeholder="Type or select a subcategory..." className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors" />
-                    <div className="flex flex-wrap gap-2 mt-3">
-                       {allSecondaryOptions.map(c => <button key={`s_${c}`} type="button" onClick={() => setFormData({ ...formData, shopSubCat: c })} className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700">{c}</button>)}
-                    </div>
+                    <select value={formData.shopSubCat || ""} onChange={(e) => setFormData({ ...formData, shopSubCat: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors">
+                       <option value="">ምንም (None)</option>
+                       {(customSubCats[formData.shopCat] || []).map(c => <option key={`s_opt_${c}`} value={c}>{c}</option>)}
+                    </select>
                   </div>
                 </div>
                 
