@@ -362,7 +362,6 @@ export default function App() {
     setCustomSizeInput("");
   };
 
-  // Custom CEO Categories Logic
   const addCategory = (type) => {
     if (type === 'primary' && newCatInput.trim() && !customCategories.includes(newCatInput)) {
       const updated = [...customCategories, newCatInput.trim()]; 
@@ -430,7 +429,7 @@ export default function App() {
       setFormData({ postCategory: item.category, title: item.title, subtitle: item.subtitle || "", excerpt: item.excerpt || "", body: item.body || "", author: item.author || "GOLETH", relatedLinks: item.related_links || [] });
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], sourceUrl: item.source_url || "", description: item.description || "" });
+      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], sourceUrl: item.source_link || "", description: item.description || "" });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
@@ -464,16 +463,16 @@ export default function App() {
       const payload = { 
         name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, 
         category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, 
-        source_url: formData.sourceUrl || null, description: formData.description || null
+        source_link: formData.sourceUrl || null, description: formData.description || null
       };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       
       if (editId) { 
         const { error } = await supabase.from("products").update(payload).eq("id", editId); 
-        if (error) { alert("Database Error: " + error.message + " (Did you forget to add the 'description' and 'source_url' columns in Supabase?)"); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message + " (Check 'description' and 'source_link' columns)"); setUploading(false); return; }
       } else { 
         const { error } = await supabase.from("products").insert([payload]); 
-        if (error) { alert("Database Error: " + error.message + " (Did you forget to add the 'description' and 'source_url' columns in Supabase?)"); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message + " (Check 'description' and 'source_link' columns)"); setUploading(false); return; }
       }
     }
     setFormData({ options: [], relatedLinks: [] }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
@@ -827,13 +826,13 @@ export default function App() {
           <div className="mt-3 border-b border-zinc-800 pb-4">
             {hasVipAccess ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-black text-xl line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
-                 <p className="text-amber-500 font-black text-xl">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
+                 <p className="text-zinc-400 font-black text-lg line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
+                 <p className="text-amber-500 font-black text-lg">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
-                 <p className="text-white font-black text-xl">{selectedProduct.price} ብር</p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-xl mt-1">VIP: {selectedProduct.vip_price} ብር</p>}
+                 <p className="text-white font-black text-lg">{selectedProduct.price} ብር</p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-lg mt-1">VIP: {selectedProduct.vip_price} ብር</p>}
                </div>
             )}
           </div>
@@ -983,13 +982,13 @@ export default function App() {
                  <div className="mt-auto">
                     {hasVipAccess ? (
                       <>
-                        <p className="text-amber-500 font-black text-base leading-none">VIP: {item.vip_price || item.price} ብር</p>
-                        {item.vip_price && <p className="text-zinc-400 font-black text-base line-through mt-1">መደበኛ: {item.price} ብር</p>}
+                        <p className="text-amber-500 font-black text-sm leading-none">VIP: {item.vip_price || item.price} ብር</p>
+                        {item.vip_price && <p className="text-zinc-400 font-black text-sm line-through mt-1">መደበኛ: {item.price} ብር</p>}
                       </>
                     ) : (
                       <>
-                        <p className="text-white font-black text-base leading-none">{item.price} ብር</p>
-                        {item.vip_price && <p className="text-amber-500 font-black text-base mt-1">VIP: {item.vip_price} ብር</p>}
+                        <p className="text-white font-black text-sm leading-none">{item.price} ብር</p>
+                        {item.vip_price && <p className="text-amber-500 font-black text-sm mt-1">VIP: {item.vip_price} ብር</p>}
                       </>
                     )}
                  </div>
