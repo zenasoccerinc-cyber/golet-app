@@ -123,18 +123,51 @@ export default function App() {
   useEffect(() => {
     fetchData();
     fetchGames(); 
+    fetchGlobalCategories();
+    
     if (!selectedPrimaryForSub && customCategories.length > 0) setSelectedPrimaryForSub(customCategories[0]);
+
     const savedUserStr = localStorage.getItem('goleth_user');
     if (savedUserStr) {
       try {
         const savedUser = JSON.parse(savedUserStr);
-        if (savedUser && savedUser.id) { setCurrentUser(savedUser); handleTelegramLogin(savedUser); }
+        if (savedUser && savedUser.id) {
+          setCurrentUser(savedUser);
+          handleTelegramLogin(savedUser); 
+        }
       } catch (e) { console.error("Error parsing saved user", e); }
     }
+
     const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  const fetchGlobalCategories = async () => {
+    try {
+      const { data, error } = await supabase.from('app_settings').select('*').eq('id', 1).single();
+      if (data) {
+        if (data.primary_categories) {
+          setCustomCategories(data.primary_categories);
+          localStorage.setItem('goleth_categories', JSON.stringify(data.primary_categories));
+        }
+        if (data.subcategories_map) {
+          setCustomSubCats(data.subcategories_map);
+          localStorage.setItem('goleth_subcats_map', JSON.stringify(data.subcategories_map));
+        }
+      }
+    } catch (err) {
+      console.log("Settings table not found yet. Using local storage fallback.");
+    }
+  };
+
+  const syncCategoriesToDB = async (primaries, subcats) => {
+    try {
+      await supabase.from('app_settings').upsert({ id: 1, primary_categories: primaries, subcategories_map: subcats });
+    } catch (e) {
+      console.error("Failed to sync to DB. Ensure 'app_settings' table exists.");
+    }
+  };
 
   const injectTelegramScript = (refElement, callback = () => {}) => {
     if (refElement && refElement.innerHTML === '') {
@@ -359,27 +392,38 @@ export default function App() {
   const addCategory = (type) => {
     if (type === 'primary' && newCatInput.trim() && !customCategories.includes(newCatInput)) {
       const updated = [...customCategories, newCatInput.trim()]; 
-      setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); setNewCatInput("");
+      setCustomCategories(updated); 
+      localStorage.setItem('goleth_categories', JSON.stringify(updated)); 
+      syncCategoriesToDB(updated, customSubCats);
+      setNewCatInput("");
       if (!selectedPrimaryForSub) setSelectedPrimaryForSub(newCatInput.trim());
     } else if (type === 'secondary' && newSubCatInput.trim() && selectedPrimaryForSub) {
       const currentArr = customSubCats[selectedPrimaryForSub] || [];
       if (!currentArr.includes(newSubCatInput.trim())) {
         const updated = { ...customSubCats, [selectedPrimaryForSub]: [...currentArr, newSubCatInput.trim()] };
-        setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); setNewSubCatInput("");
+        setCustomSubCats(updated); 
+        localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+        syncCategoriesToDB(customCategories, updated);
+        setNewSubCatInput("");
       }
     }
   };
   
   const removeCategory = (type, val) => {
     if (type === 'primary') { 
-      const updated = customCategories.filter(c => c !== val); setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); 
+      const updated = customCategories.filter(c => c !== val); 
+      setCustomCategories(updated); 
+      localStorage.setItem('goleth_categories', JSON.stringify(updated)); 
+      syncCategoriesToDB(updated, customSubCats);
       if (selectedPrimaryForSub === val) setSelectedPrimaryForSub(updated[0] || "");
     } 
     else { 
       const currentArr = customSubCats[selectedPrimaryForSub] || [];
       const filtered = currentArr.filter(c => c !== val);
       const updated = { ...customSubCats, [selectedPrimaryForSub]: filtered };
-      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+      setCustomSubCats(updated); 
+      localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+      syncCategoriesToDB(customCategories, updated);
     }
   };
 
@@ -388,10 +432,15 @@ export default function App() {
     if (direction === -1 && index > 0) { [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]; } 
     else if (direction === 1 && index < arr.length - 1) { [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; }
     
-    if (type === 'primary') { setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); }
-    else { 
+    if (type === 'primary') { 
+      setCustomCategories(arr); 
+      localStorage.setItem('goleth_categories', JSON.stringify(arr)); 
+      syncCategoriesToDB(arr, customSubCats);
+    } else { 
       const updated = { ...customSubCats, [selectedPrimaryForSub]: arr };
-      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+      setCustomSubCats(updated); 
+      localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+      syncCategoriesToDB(customCategories, updated);
     }
   };
 
@@ -399,11 +448,17 @@ export default function App() {
     const arr = type === 'primary' ? [...customCategories] : [...(customSubCats[selectedPrimaryForSub] || [])];
     if (type === 'primary') {
       if (editCatValue.trim()) arr[editCatIndex] = editCatValue.trim();
-      setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); setEditCatIndex(null); setEditCatValue("");
+      setCustomCategories(arr); 
+      localStorage.setItem('goleth_categories', JSON.stringify(arr)); 
+      syncCategoriesToDB(arr, customSubCats);
+      setEditCatIndex(null); setEditCatValue("");
     } else {
       if (editSubCatValue.trim()) arr[editSubCatIndex] = editSubCatValue.trim();
       const updated = { ...customSubCats, [selectedPrimaryForSub]: arr };
-      setCustomSubCats(updated); localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); setEditSubCatIndex(null); setEditSubCatValue("");
+      setCustomSubCats(updated); 
+      localStorage.setItem('goleth_subcats_map', JSON.stringify(updated)); 
+      syncCategoriesToDB(customCategories, updated);
+      setEditSubCatIndex(null); setEditSubCatValue("");
     }
   };
 
@@ -463,10 +518,10 @@ export default function App() {
       
       if (editId) { 
         const { error } = await supabase.from("products").update(payload).eq("id", editId); 
-        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
       } else { 
         const { error } = await supabase.from("products").insert([payload]); 
-        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message); setUploading(false); return; }
       }
     }
     setFormData({ options: [], relatedLinks: [], isSale: false }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
@@ -822,13 +877,13 @@ export default function App() {
           <div className="mt-3 border-b border-zinc-800 pb-4">
             {hasVipAccess ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-black text-sm line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
-                 <p className="text-amber-500 font-black text-lg">VIP: {selectedProduct.vip_price || selectedProduct.price} <span className="text-[12px]">ብር</span></p>
+                 <p className="text-zinc-400 font-black text-lg line-through decoration-red-500">መደበኛ: {selectedProduct.price} <span className="text-sm">ብር</span></p>
+                 <p className="text-amber-500 font-black text-lg">VIP: {selectedProduct.vip_price || selectedProduct.price} <span className="text-sm">ብር</span></p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
-                 <p className="text-white font-black text-lg">{selectedProduct.price} <span className="text-[12px] text-zinc-400">ብር</span></p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-sm mt-1">VIP: {selectedProduct.vip_price} <span className="text-[10px]">ብር</span></p>}
+                 <p className="text-white font-black text-lg">{selectedProduct.price} <span className="text-sm text-zinc-400">ብር</span></p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-lg mt-1">VIP: {selectedProduct.vip_price} <span className="text-sm">ብር</span></p>}
                </div>
             )}
           </div>
@@ -918,7 +973,10 @@ export default function App() {
   };
 
   const renderShop = () => {
+    // Strictly follow CEO mapped categories.
     const uniquePrimary = ["ሁሉም", ...customCategories];
+
+    // Only fetch subcategories mapped to the currently selected primary category.
     const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []);
     const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
@@ -957,7 +1015,7 @@ export default function App() {
         <div className="grid grid-cols-2 gap-3 mt-1">
           {filtered.map((item) => (
             <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg overflow-hidden">
-              <div className="bg-white w-full h-28 flex items-center justify-center relative shadow-sm overflow-hidden">
+              <div className="bg-white w-full h-36 flex items-center justify-center relative shadow-sm overflow-hidden">
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
@@ -970,19 +1028,19 @@ export default function App() {
                  ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
               </div>
 
-              <div className="p-2 flex flex-col flex-grow">
-                 <h3 className="text-zinc-200 font-bold text-xs line-clamp-2 leading-tight mb-1">{item.name}</h3>
+              <div className="p-3 flex flex-col flex-grow">
+                 <h3 className="text-zinc-200 font-bold text-sm line-clamp-2 leading-tight mb-1">{item.name}</h3>
                  
                  <div className="mt-auto">
                     {hasVipAccess ? (
                       <>
-                        <p className="text-amber-500 font-black text-sm leading-none">VIP: {item.vip_price || item.price} <span className="text-[9px]">ብር</span></p>
-                        {item.vip_price && <p className="text-zinc-500 font-bold text-[10px] line-through mt-0.5">መደበኛ: {item.price} ብር</p>}
+                        <p className="text-zinc-400 font-bold text-sm line-through mt-0.5">መደበኛ: {item.price} <span className="text-[10px]">ብር</span></p>
+                        <p className="text-amber-500 font-black text-sm leading-none">VIP: {item.vip_price || item.price} <span className="text-[10px]">ብር</span></p>
                       </>
                     ) : (
                       <>
-                        <p className="text-white font-black text-sm leading-none">{item.price} <span className="text-[9px] text-zinc-400">ብር</span></p>
-                        {item.vip_price && <p className="text-amber-500 font-black text-xs mt-0.5">VIP: {item.vip_price} <span className="text-[9px]">ብር</span></p>}
+                        <p className="text-white font-black text-sm leading-none">{item.price} <span className="text-[10px] text-zinc-400">ብር</span></p>
+                        {item.vip_price && <p className="text-amber-500 font-black text-sm mt-1">VIP: {item.vip_price} <span className="text-[10px]">ብር</span></p>}
                       </>
                     )}
                  </div>
