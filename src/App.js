@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -71,6 +71,12 @@ export default function App() {
   const [newCatInput, setNewCatInput] = useState("");
   const [newSubCatInput, setNewSubCatInput] = useState("");
   
+  // Inline edit states for categories
+  const [editCatIndex, setEditCatIndex] = useState(null);
+  const [editCatValue, setEditCatValue] = useState("");
+  const [editSubCatIndex, setEditSubCatIndex] = useState(null);
+  const [editSubCatValue, setEditSubCatValue] = useState("");
+  
   const [savedCustomSizes, setSavedCustomSizes] = useState(() => JSON.parse(localStorage.getItem('goleth_custom_sizes') || '[]'));
   const [customCategories, setCustomCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_categories') || '["ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"]'));
   const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcategories') || '["ልብስ", "ጫማ", "ሌሎች"]'));
@@ -125,16 +131,10 @@ export default function App() {
           setCurrentUser(savedUser);
           handleTelegramLogin(savedUser); 
         }
-      } catch (e) {
-        console.error("Error parsing saved user", e);
-      }
+      } catch (e) { console.error("Error parsing saved user", e); }
     }
 
-    const handlePopState = () => {
-       setActivePost(null);
-       setSelectedProduct(null);
-       setShowInlineCheckout(false);
-    };
+    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -173,8 +173,7 @@ export default function App() {
     try {
       const { data: postsData } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
       const { data: productsData } = await supabase.from("products").select("*").order("created_at", { ascending: false });
-      setPosts(postsData || []);
-      setProducts(productsData || []);
+      setPosts(postsData || []); setProducts(productsData || []);
     } catch (error) { console.error("Fetch error:", error); }
   };
 
@@ -187,8 +186,7 @@ export default function App() {
     if (!telegramId) return;
     const { data } = await supabase.from('predictions').select('*').eq('telegram_id', telegramId.toString());
     if (data) {
-      const predictionsMap = {};
-      data.forEach(p => { predictionsMap[p.game_id] = p; });
+      const predictionsMap = {}; data.forEach(p => { predictionsMap[p.game_id] = p; });
       setUserPredictions(predictionsMap);
     }
   };
@@ -205,85 +203,48 @@ export default function App() {
     setCurrentUser(telegramUser);
     localStorage.setItem('goleth_user', JSON.stringify(telegramUser));
 
-    const { data } = await supabase
-      .from('vip_users')
-      .upsert([ { telegram_id: telegramUser.id.toString(), username: telegramUser.username || telegramUser.first_name || 'User' } ], { onConflict: 'telegram_id' })
-      .select('*');
+    const { data } = await supabase.from('vip_users').upsert([ { telegram_id: telegramUser.id.toString(), username: telegramUser.username || telegramUser.first_name || 'User' } ], { onConflict: 'telegram_id' }).select('*');
 
     if (data && data[0]) {
       const userRecord = data[0];
       setCurrentUserProfile(userRecord);
       localStorage.setItem('goleth_profile', JSON.stringify(userRecord));
-
       setIsCEO(Boolean(userRecord.is_admin));
 
-      if (!userRecord.full_name || !userRecord.phone_number) {
-        setShowProfileModal(true);
-      }
+      if (!userRecord.full_name || !userRecord.phone_number) setShowProfileModal(true);
 
       let currentStatus = "none";
       let activeVip = Boolean(userRecord.is_vip);
 
       if (userRecord.vip_until) {
-        const now = new Date();
-        const expireDate = new Date(userRecord.vip_until);
-        
+        const now = new Date(); const expireDate = new Date(userRecord.vip_until);
         if (!isNaN(expireDate.getTime())) {
           const gracePeriodDate = new Date(expireDate.getTime() + (2 * 24 * 60 * 60 * 1000)); 
-          
-          if (now > gracePeriodDate) {
-            currentStatus = "expired";
-            activeVip = false; 
-          } else if (now > expireDate) {
-            currentStatus = "expiring_soon"; 
-          } else {
-            currentStatus = "active";
-          }
-        } else {
-          currentStatus = activeVip ? "active" : "none";
-        }
-      } else if (activeVip) {
-        currentStatus = "active";
-      }
+          if (now > gracePeriodDate) { currentStatus = "expired"; activeVip = false; } 
+          else if (now > expireDate) { currentStatus = "expiring_soon"; } 
+          else { currentStatus = "active"; }
+        } else { currentStatus = activeVip ? "active" : "none"; }
+      } else if (activeVip) { currentStatus = "active"; }
 
-      setIsVIP(activeVip);
-      setVipStatus(currentStatus);
-      fetchUserPredictions(telegramUser.id);
-      checkPendingVip(telegramUser.id);
+      setIsVIP(activeVip); setVipStatus(currentStatus);
+      fetchUserPredictions(telegramUser.id); checkPendingVip(telegramUser.id);
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('goleth_user');
-    localStorage.removeItem('goleth_profile');
-    setCurrentUser(null);
-    setCurrentUserProfile(null);
-    setIsVIP(false);
-    setVipStatus("none");
-    setUserPredictions({});
-    setHasPendingVip(false);
-    setIsCEO(false);
-    setShowAdmin(false);
+    localStorage.removeItem('goleth_user'); localStorage.removeItem('goleth_profile');
+    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false);
   };
 
   const saveUserProfile = async (e) => {
-    e.preventDefault();
-    if (!currentUser?.id) return;
-    
-    setUploading(true);
-    const name = e.target.fullName.value;
-    const phone = e.target.phone.value;
-    const loc = e.target.location.value;
+    e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
+    const name = e.target.fullName.value; const phone = e.target.phone.value; const loc = e.target.location.value;
     const region = ["USA", "Canada", "Europe", "Australia", "South America"].includes(loc) ? 'Diaspora' : 'Local';
 
     try {
       const { data, error } = await supabase.from('vip_users').update({ full_name: name, phone_number: phone, region: region }).eq('telegram_id', currentUser.id.toString()).select('*');
       if (error) throw error;
-      if (data && data[0]) {
-        setCurrentUserProfile(data[0]);
-        localStorage.setItem('goleth_profile', JSON.stringify(data[0]));
-        setShowProfileModal(false); 
-      }
+      if (data && data[0]) { setCurrentUserProfile(data[0]); localStorage.setItem('goleth_profile', JSON.stringify(data[0])); setShowProfileModal(false); }
     } catch (err) { alert("መረጃውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ።"); } 
     finally { setUploading(false); }
   };
@@ -293,27 +254,16 @@ export default function App() {
     const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
-    if (!uploadError) {
-      const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-      return data.publicUrl;
-    }
+    if (!uploadError) { const { data } = supabase.storage.from("images").getPublicUrl(fileName); return data.publicUrl; }
     return null;
   };
 
   const handleVipPaymentSubmit = async (e) => {
-    e.preventDefault();
-    if (!currentUser?.id) return;
-    setUploading(true);
-
-    if (vipPhone.length !== 10 || !vipReceiptFile) {
-      alert("እባክዎ መረጃዎችን በትክክል ያስገቡ።");
-      setUploading(false); return;
-    }
+    e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
+    if (vipPhone.length !== 10 || !vipReceiptFile) { alert("እባክዎ መረጃዎችን በትክክል ያስገቡ።"); setUploading(false); return; }
 
     const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
-    const { error: dbError } = await supabase.from("vip_payments").insert([
-      { telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }
-    ]);
+    const { error: dbError } = await supabase.from("vip_payments").insert([{ telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, payment_type: vipPaymentType, receipt_url: receiptUrl, status: 'pending' }]);
 
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
 
@@ -329,9 +279,7 @@ export default function App() {
   };
 
   const handleProductOrderSubmit = async (e) => {
-    e.preventDefault();
-    if (!currentUser?.id) return;
-    setUploading(true);
+    e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
 
     const isGettingVipPrice = isVIP || includeVipSignup;
     const basePrice = selectedProduct.vip_price && isGettingVipPrice ? selectedProduct.vip_price : selectedProduct.price;
@@ -341,10 +289,7 @@ export default function App() {
     if (includeVipSignup) orderNotes += ` | +VIP Membership Signup (${userRegion})`;
     
     let finalDeliveryAddress = orderAddress;
-    if (isGift) {
-      orderNotes += ` | 🎁 GIFT ORDER`;
-      finalDeliveryAddress = `[GIFT FOR: ${recipientName} | Ph: ${recipientPhone}] ${recipientAddress}`;
-    }
+    if (isGift) { orderNotes += ` | 🎁 GIFT ORDER`; finalDeliveryAddress = `[GIFT FOR: ${recipientName} | Ph: ${recipientPhone}] ${recipientAddress}`; }
 
     const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
     const { error: dbError } = await supabase.from("product_orders").insert([{ 
@@ -369,8 +314,7 @@ export default function App() {
   const handleOpenSourcing = () => { setReqProductName(""); setReqStoreName(""); setReqProductLink(""); setReqImage(null); setShowOrderForm(true); };
 
   const submitOrderForm = async (e) => {
-    e.preventDefault();
-    if (!currentUser?.id) { alert("እባክዎ ትዕዛዝዎን ለመላክ መጀመሪያ በቴሌግራም ይግቡ።"); return; }
+    e.preventDefault(); if (!currentUser?.id) { alert("እባክዎ ትዕዛዝዎን ለመላክ መጀመሪያ በቴሌግራም ይግቡ።"); return; }
     setUploading(true);
 
     const imageUrl = reqImage ? await uploadFileToSupabase(reqImage) : "";
@@ -425,7 +369,7 @@ export default function App() {
     setCustomSizeInput("");
   };
 
-  // Custom CEO Categories
+  // Custom CEO Categories Logic
   const addCategory = (type) => {
     if (type === 'primary' && newCatInput.trim() && !customCategories.includes(newCatInput)) {
       const updated = [...customCategories, newCatInput.trim()]; setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); setNewCatInput("");
@@ -433,18 +377,36 @@ export default function App() {
       const updated = [...customSubCats, newSubCatInput.trim()]; setCustomSubCats(updated); localStorage.setItem('goleth_subcategories', JSON.stringify(updated)); setNewSubCatInput("");
     }
   };
+  
   const removeCategory = (type, val) => {
     if (type === 'primary') { const updated = customCategories.filter(c => c !== val); setCustomCategories(updated); localStorage.setItem('goleth_categories', JSON.stringify(updated)); } 
     else { const updated = customSubCats.filter(c => c !== val); setCustomSubCats(updated); localStorage.setItem('goleth_subcategories', JSON.stringify(updated)); }
   };
 
+  const moveCategory = (type, index, direction) => {
+    const arr = type === 'primary' ? [...customCategories] : [...customSubCats];
+    if (direction === -1 && index > 0) { [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]; } 
+    else if (direction === 1 && index < arr.length - 1) { [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; }
+    if (type === 'primary') { setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); }
+    else { setCustomSubCats(arr); localStorage.setItem('goleth_subcategories', JSON.stringify(arr)); }
+  };
+
+  const saveCategoryEdit = (type) => {
+    const arr = type === 'primary' ? [...customCategories] : [...customSubCats];
+    if (type === 'primary') {
+      if (editCatValue.trim()) arr[editCatIndex] = editCatValue.trim();
+      setCustomCategories(arr); localStorage.setItem('goleth_categories', JSON.stringify(arr)); setEditCatIndex(null); setEditCatValue("");
+    } else {
+      if (editSubCatValue.trim()) arr[editSubCatIndex] = editSubCatValue.trim();
+      setCustomSubCats(arr); localStorage.setItem('goleth_subcategories', JSON.stringify(arr)); setEditSubCatIndex(null); setEditSubCatValue("");
+    }
+  };
+
   const openPost = (post) => { window.history.pushState({ postId: post.id }, "", `#article-${post.id}`); setActivePost(post); };
   
-  // Product Detail Initialization
   const openProduct = (prod) => { 
     window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`); 
     setSelectedProduct(prod); setCurrentImgIndex(0); setSelectedOption(null); 
-    // Auto-open form if no options exist, otherwise hide until selected
     setShowInlineCheckout(!prod.options || prod.options.length === 0); 
   };
   
@@ -838,13 +800,13 @@ export default function App() {
           <div className="mt-3 border-b border-zinc-800 pb-4">
             {isVIP ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-bold text-sm line-through decoration-red-500">መደበኛ ዋጋ: {selectedProduct.price} ብር</p>
+                 <p className="text-zinc-400 font-black text-2xl line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
                  <p className="text-amber-500 font-black text-2xl">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
                  <p className="text-white font-black text-2xl">{selectedProduct.price} ብር</p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-bold text-lg">VIP ዋጋ: {selectedProduct.vip_price} ብር</p>}
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-2xl mt-1">VIP: {selectedProduct.vip_price} ብር</p>}
                </div>
             )}
           </div>
@@ -975,7 +937,7 @@ export default function App() {
         <div className="grid grid-cols-2 gap-3 mt-1">
           {filtered.map((item) => (
             <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg overflow-hidden">
-              <div className="bg-white w-full h-40 flex items-center justify-center relative shadow-sm overflow-hidden">
+              <div className="bg-white w-full h-32 flex items-center justify-center relative shadow-sm overflow-hidden">
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
@@ -993,13 +955,13 @@ export default function App() {
                  <div className="mt-auto">
                     {isVIP ? (
                       <>
-                        <p className="text-amber-500 font-black text-lg leading-none">VIP: {item.vip_price || item.price} ብር</p>
-                        {item.vip_price && <p className="text-zinc-400 font-bold text-xs line-through mt-1">መደበኛ: {item.price} ብር</p>}
+                        <p className="text-amber-500 font-black text-base leading-none">VIP: {item.vip_price || item.price} ብር</p>
+                        {item.vip_price && <p className="text-zinc-400 font-black text-base line-through mt-1">መደበኛ: {item.price} ብር</p>}
                       </>
                     ) : (
                       <>
-                        <p className="text-white font-black text-lg leading-none">{item.price} ብር</p>
-                        {item.vip_price && <p className="text-amber-500 font-bold text-sm mt-1">VIP: {item.vip_price} ብር</p>}
+                        <p className="text-white font-black text-base leading-none">{item.price} ብር</p>
+                        {item.vip_price && <p className="text-amber-500 font-black text-base mt-1">VIP: {item.vip_price} ብር</p>}
                       </>
                     )}
                  </div>
@@ -1205,12 +1167,21 @@ export default function App() {
                  <input type="text" value={newCatInput} onChange={e => setNewCatInput(e.target.value)} placeholder="Add new primary..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
                  <button onClick={() => addCategory('primary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
                </div>
-               <div className="flex flex-wrap gap-2">
-                 {customCategories.map(c => (
-                   <span key={c} className="bg-zinc-800 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 text-sm">
-                     <span>{c}</span>
-                     <button onClick={() => removeCategory('primary', c)} className="text-red-500 hover:text-red-400"><X size={14}/></button>
-                   </span>
+               <div className="flex flex-col gap-2">
+                 {customCategories.map((c, index) => (
+                   <div key={c} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                     {editCatIndex === index ? (
+                       <input autoFocus type="text" value={editCatValue} onChange={e => setEditCatValue(e.target.value)} onBlur={() => saveCategoryEdit('primary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
+                     ) : (
+                       <span>{c}</span>
+                     )}
+                     <div className="flex items-center space-x-1">
+                       <button onClick={() => { setEditCatIndex(index); setEditCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
+                       <button onClick={() => moveCategory('primary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
+                       <button onClick={() => moveCategory('primary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
+                       <button onClick={() => removeCategory('primary', c)} className="p-1.5 text-red-500 hover:text-red-400"><X size={16}/></button>
+                     </div>
+                   </div>
                  ))}
                </div>
             </div>
@@ -1221,12 +1192,21 @@ export default function App() {
                  <input type="text" value={newSubCatInput} onChange={e => setNewSubCatInput(e.target.value)} placeholder="Add new subcategory..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
                  <button onClick={() => addCategory('secondary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
                </div>
-               <div className="flex flex-wrap gap-2">
-                 {customSubCats.map(c => (
-                   <span key={c} className="bg-zinc-800 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 text-sm">
-                     <span>{c}</span>
-                     <button onClick={() => removeCategory('secondary', c)} className="text-red-500 hover:text-red-400"><X size={14}/></button>
-                   </span>
+               <div className="flex flex-col gap-2">
+                 {customSubCats.map((c, index) => (
+                   <div key={c} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                     {editSubCatIndex === index ? (
+                       <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
+                     ) : (
+                       <span>{c}</span>
+                     )}
+                     <div className="flex items-center space-x-1">
+                       <button onClick={() => { setEditSubCatIndex(index); setEditSubCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
+                       <button onClick={() => moveCategory('secondary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
+                       <button onClick={() => moveCategory('secondary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
+                       <button onClick={() => removeCategory('secondary', c)} className="p-1.5 text-red-500 hover:text-red-400"><X size={16}/></button>
+                     </div>
+                   </div>
                  ))}
                </div>
             </div>
@@ -1487,7 +1467,7 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-black font-sans text-white">
+    <div className="min-h-screen flex flex-col bg-black font-sans text-white">
       <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-zinc-900 p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2 cursor-pointer select-none" onClick={handleLogoTap}>
           <h1 className="text-white font-black text-2xl tracking-widest">
@@ -1533,7 +1513,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="p-4 max-w-lg mx-auto">
+      <main className="flex-1 p-4 max-w-lg mx-auto w-full">
         {activePost && !selectedProduct && renderSinglePost()}
         
         {!activePost && !selectedProduct && (
@@ -1552,7 +1532,7 @@ export default function App() {
       {showOrderForm && renderOrderForm()}
       {showAdmin && renderAdmin()}
 
-      <nav className="fixed bottom-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 flex justify-around pb-6 pt-3 px-1 z-40">
+      <nav className="fixed bottom-0 inset-x-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 flex justify-around pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 px-1 z-[100]">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
