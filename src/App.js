@@ -56,7 +56,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({ options: [], relatedLinks: [] });
+  const [formData, setFormData] = useState({ options: [], relatedLinks: [], isSale: false });
   const [existingMainImage, setExistingMainImage] = useState(null);
   const [existingInlineImages, setExistingInlineImages] = useState([]);
   const [mainImageFile, setMainImageFile] = useState(null);
@@ -123,20 +123,14 @@ export default function App() {
   useEffect(() => {
     fetchData();
     fetchGames(); 
-    
     if (!selectedPrimaryForSub && customCategories.length > 0) setSelectedPrimaryForSub(customCategories[0]);
-
     const savedUserStr = localStorage.getItem('goleth_user');
     if (savedUserStr) {
       try {
         const savedUser = JSON.parse(savedUserStr);
-        if (savedUser && savedUser.id) {
-          setCurrentUser(savedUser);
-          handleTelegramLogin(savedUser); 
-        }
+        if (savedUser && savedUser.id) { setCurrentUser(savedUser); handleTelegramLogin(savedUser); }
       } catch (e) { console.error("Error parsing saved user", e); }
     }
-
     const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -429,12 +423,12 @@ export default function App() {
       setFormData({ postCategory: item.category, title: item.title, subtitle: item.subtitle || "", excerpt: item.excerpt || "", body: item.body || "", author: item.author || "GOLETH", relatedLinks: item.related_links || [] });
       if (item.image_urls && item.image_urls.length > 0) { setExistingMainImage(item.image_urls[0]); setExistingInlineImages(item.image_urls.slice(1)); } else { setExistingMainImage(null); setExistingInlineImages([]); }
     } else {
-      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], sourceUrl: item.source_link || "", description: item.description || "" });
+      setFormData({ title: item.name, price: item.price, vipPrice: item.vip_price || "", shopCat: item.category, shopSubCat: item.subcategory || "", options: item.options || [], sourceUrl: item.source_link || "", description: item.description || "", isSale: item.is_sale || false });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
   
-  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH" }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); };
+  const openNewPost = (type) => { setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", isSale: false }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); };
   const handleSizeChange = (e) => { const value = e.target.value; setFormData((prev) => { const options = prev.options || []; if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) }; return { ...prev, options: [...options, value] }; }); };
   const toggleOptionCategory = (categoryName) => { setExpandedOptionCategories((prev) => ({ ...prev, [categoryName]: !prev[categoryName] })); };
   const handleAddRelated = (e) => { const value = e.target.value; if (!value) return; if (!formData.relatedLinks?.includes(value)) { setFormData(prev => ({ ...prev, relatedLinks: [...(prev.relatedLinks || []), value] })); } };
@@ -463,19 +457,19 @@ export default function App() {
       const payload = { 
         name: formData.title, price: Number(formData.price), vip_price: formData.vipPrice ? Number(formData.vipPrice) : null, 
         category: formData.shopCat, subcategory: formData.shopSubCat, options: formData.options, 
-        source_link: formData.sourceUrl || null, description: formData.description || null
+        source_link: formData.sourceUrl || null, description: formData.description || null, is_sale: formData.isSale || false
       };
       if (finalUrls.length > 0) payload.image_urls = finalUrls;
       
       if (editId) { 
         const { error } = await supabase.from("products").update(payload).eq("id", editId); 
-        if (error) { alert("Database Error: " + error.message + " (Check 'description' and 'source_link' columns)"); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
       } else { 
         const { error } = await supabase.from("products").insert([payload]); 
-        if (error) { alert("Database Error: " + error.message + " (Check 'description' and 'source_link' columns)"); setUploading(false); return; }
+        if (error) { alert("Database Error: " + error.message + " (Check 'description', 'source_link', and 'is_sale' columns)"); setUploading(false); return; }
       }
     }
-    setFormData({ options: [], relatedLinks: [] }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
+    setFormData({ options: [], relatedLinks: [], isSale: false }); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setExistingMainImage(null); setExistingInlineImages([]); setEditId(null); setSelectedMainImgIdx(0); setUploading(false); setShowAdmin(false); setShowSizeDropdown(false); setExpandedOptionCategories({}); fetchData(); alert("በተሳካ ሁኔታ ተጠናቋል!");
   };
 
   const formatOptionDisplay = (optionString) => {
@@ -541,7 +535,7 @@ export default function App() {
             <div className="text-center py-20 flex-1 flex flex-col justify-center">
               <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
               <h3 className="text-white font-black mb-3">ለማዘዝ ይግቡ (Login required)</h3>
-              <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ።</p>
+              <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ。</p>
               <div ref={telegramSourcingRef} className="flex justify-center min-h-[50px]"></div>
             </div>
           ) : (
@@ -600,13 +594,13 @@ export default function App() {
   };
 
   const renderOrderBanner = () => (
-    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-xl p-3 flex justify-between items-center shadow-2xl border border-amber-500/20 mb-2 mt-0 hover:border-amber-500/50 transition-all group">
+    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-lg p-2 flex justify-between items-center shadow-lg border border-amber-500/20 mb-2 mt-0 hover:border-amber-500/50 transition-all group">
       <div className="flex-1 flex flex-col items-center text-center">
-        <h3 className="text-amber-500 font-black text-lg tracking-wide drop-shadow-md leading-tight mb-1">ልዩ እቃ ማዘዝ ይፈልጋሉ?</h3>
-        <p className="text-zinc-300 text-sm font-bold">ከየትም ቦታ : የፈለጉበት ቦታ እናመጣሎታለን!</p>
+        <h3 className="text-amber-500 font-black text-sm tracking-wide drop-shadow-md leading-tight mb-0.5">ልዩ እቃ ማዘዝ ይፈልጋሉ?</h3>
+        <p className="text-zinc-400 text-[10px] font-bold">ከየትም ቦታ : የፈለጉበት ቦታ እናመጣሎታለን!</p>
       </div>
-      <div className="bg-amber-500/10 p-2.5 rounded-full shadow-inner border border-amber-500/30 group-hover:bg-amber-500/20 transition-colors shrink-0 ml-2">
-         <PlusCircle className="text-amber-500 drop-shadow-lg" size={28} />
+      <div className="bg-amber-500/10 p-1.5 rounded-full shadow-inner border border-amber-500/30 group-hover:bg-amber-500/20 transition-colors shrink-0 ml-2">
+         <PlusCircle className="text-amber-500 drop-shadow-lg" size={20} />
       </div>
     </button>
   );
@@ -805,6 +799,7 @@ export default function App() {
           {hasImages ? (
             <div className="relative w-full bg-white mb-4 border-b border-zinc-800 overflow-hidden">
                {selectedProduct.image_urls.length > 1 && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-white z-20 flex items-center">← Swipe →</div>}
+               {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg">ቅናሽ</div>}
                <div className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-64 w-full relative z-10">
                   {selectedProduct.image_urls.map((url, idx) => (
                     <img key={idx} src={url} alt={selectedProduct.name} className="w-full h-full object-contain shrink-0 snap-center mix-blend-multiply" />
@@ -812,7 +807,8 @@ export default function App() {
                </div>
             </div>
           ) : (
-            <div className="w-full h-64 bg-zinc-900 flex items-center justify-center mb-4 border border-zinc-800">
+            <div className="w-full h-64 bg-zinc-900 flex items-center justify-center mb-4 border border-zinc-800 relative">
+              {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg">ቅናሽ</div>}
               <span className="text-zinc-500 font-bold text-sm">ምስል የለም</span>
             </div>
           )}
@@ -826,13 +822,13 @@ export default function App() {
           <div className="mt-3 border-b border-zinc-800 pb-4">
             {hasVipAccess ? (
                <div className="flex flex-col space-y-1">
-                 <p className="text-zinc-400 font-black text-lg line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
-                 <p className="text-amber-500 font-black text-lg">VIP: {selectedProduct.vip_price || selectedProduct.price} ብር</p>
+                 <p className="text-zinc-400 font-black text-sm line-through decoration-red-500">መደበኛ: {selectedProduct.price} ብር</p>
+                 <p className="text-amber-500 font-black text-lg">VIP: {selectedProduct.vip_price || selectedProduct.price} <span className="text-[12px]">ብር</span></p>
                </div>
             ) : (
                <div className="flex flex-col space-y-1">
-                 <p className="text-white font-black text-lg">{selectedProduct.price} ብር</p>
-                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-lg mt-1">VIP: {selectedProduct.vip_price} ብር</p>}
+                 <p className="text-white font-black text-lg">{selectedProduct.price} <span className="text-[12px] text-zinc-400">ብር</span></p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-sm mt-1">VIP: {selectedProduct.vip_price} <span className="text-[10px]">ብር</span></p>}
                </div>
             )}
           </div>
@@ -922,10 +918,7 @@ export default function App() {
   };
 
   const renderShop = () => {
-    // Strictly follow CEO mapped categories.
     const uniquePrimary = ["ሁሉም", ...customCategories];
-
-    // Only fetch subcategories mapped to the currently selected primary category.
     const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []);
     const uniqueSecondary = ["ሁሉም", ...activeSubCats];
 
@@ -964,31 +957,32 @@ export default function App() {
         <div className="grid grid-cols-2 gap-3 mt-1">
           {filtered.map((item) => (
             <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg overflow-hidden">
-              <div className="bg-white w-full h-32 flex items-center justify-center relative shadow-sm overflow-hidden">
+              <div className="bg-white w-full h-28 flex items-center justify-center relative shadow-sm overflow-hidden">
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
                       <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={12}/></button>
                     </div>
                  )}
+                 {item.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-black px-2 py-1 z-10 rounded-br-lg shadow-sm">ቅናሽ</div>}
                  {item.image_urls && item.image_urls.length > 0 ? (
                     <img src={item.image_urls[0]} alt={item.name} className="w-full h-full object-cover mix-blend-multiply transition-transform duration-300 group-hover:scale-105" />
                  ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
               </div>
 
-              <div className="p-3 flex flex-col flex-grow">
-                 <h3 className="text-zinc-200 font-bold text-sm line-clamp-2 leading-snug mb-2">{item.name}</h3>
+              <div className="p-2 flex flex-col flex-grow">
+                 <h3 className="text-zinc-200 font-bold text-xs line-clamp-2 leading-tight mb-1">{item.name}</h3>
                  
                  <div className="mt-auto">
                     {hasVipAccess ? (
                       <>
-                        <p className="text-amber-500 font-black text-sm leading-none">VIP: {item.vip_price || item.price} ብር</p>
-                        {item.vip_price && <p className="text-zinc-400 font-black text-sm line-through mt-1">መደበኛ: {item.price} ብር</p>}
+                        <p className="text-amber-500 font-black text-sm leading-none">VIP: {item.vip_price || item.price} <span className="text-[9px]">ብር</span></p>
+                        {item.vip_price && <p className="text-zinc-500 font-bold text-[10px] line-through mt-0.5">መደበኛ: {item.price} ብር</p>}
                       </>
                     ) : (
                       <>
-                        <p className="text-white font-black text-sm leading-none">{item.price} ብር</p>
-                        {item.vip_price && <p className="text-amber-500 font-black text-sm mt-1">VIP: {item.vip_price} ብር</p>}
+                        <p className="text-white font-black text-sm leading-none">{item.price} <span className="text-[9px] text-zinc-400">ብር</span></p>
+                        {item.vip_price && <p className="text-amber-500 font-black text-xs mt-0.5">VIP: {item.vip_price} <span className="text-[9px]">ብር</span></p>}
                       </>
                     )}
                  </div>
@@ -1398,6 +1392,14 @@ export default function App() {
 
             {adminTab === "products" && (
               <>
+                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl mb-4 flex items-center justify-between">
+                  <span className="text-white font-bold text-sm">ይህ እቃ ቅናሽ ላይ ነው? (Is it on Sale?)</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={formData.isSale || false} onChange={e => setFormData({...formData, isSale: e.target.checked})} className="sr-only peer" />
+                    <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
                 <input required value={formData.title || ""} placeholder="የእቃው ስም" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
                 
                 <div className="grid grid-cols-2 gap-4">
