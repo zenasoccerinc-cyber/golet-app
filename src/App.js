@@ -13,7 +13,7 @@ const TELEGRAM_BOT_TOKEN = process.env.REACT_APP_TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.REACT_APP_TELEGRAM_CHAT_ID; 
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("ዋና");
+  const [activeTab, setActiveTab] = useState("ሱቅ"); // Changed default to Shop
   const [activePost, setActivePost] = useState(null);
   
   const [shopCategory, setShopCategory] = useState("ሁሉም");
@@ -107,7 +107,6 @@ export default function App() {
   const [vipPhone, setVipPhone] = useState("");
   const [vipReceiptFile, setVipReceiptFile] = useState(null);
   
-  const telegramWrapperRef = useRef(null); 
   const telegramCheckoutRef = useRef(null);
   const telegramSourcingRef = useRef(null);
   const telegramHeaderLoginRef = useRef(null);
@@ -153,13 +152,12 @@ export default function App() {
     return { regular: totalRegular, vip: totalVip };
   };
 
-  // Automated CEO Financial Metrics
   const inventoryAssetValueCad = products.reduce((sum, p) => sum + ((p.stock_quantity || 0) * (p.cost_cad || 0)), 0);
   const activeLocalStock = products.reduce((sum, p) => sum + (p.stock_quantity || 0), 0);
   const onlineRevenue = allOrders.filter(o => o.status === 'arrived').reduce((sum, o) => sum + (o.price || 0), 0);
   const offlineRevenue = products.reduce((sum, p) => sum + ((p.offline_sales || 0) * (p.price || 0)), 0);
   const totalRevenue = onlineRevenue + offlineRevenue;
-  const prizePool = Math.round(totalRevenue * 0.03); // Skimming 3% for contests
+  const prizePool = Math.round(totalRevenue * 0.03); 
 
   useEffect(() => {
     fetchData();
@@ -225,7 +223,6 @@ export default function App() {
     }
   };
 
-  useEffect(() => { if (activeTab === "ቪአይፒ" && !currentUser) injectTelegramScript(telegramWrapperRef.current); }, [activeTab, currentUser]);
   useEffect(() => { if (showInlineCheckout && !currentUser) injectTelegramScript(telegramCheckoutRef.current); }, [showInlineCheckout, currentUser]);
   useEffect(() => { if (showOrderForm && !currentUser) injectTelegramScript(telegramSourcingRef.current); }, [showOrderForm, currentUser]);
   useEffect(() => { if (showLoginModal && !currentUser) injectTelegramScript(telegramHeaderLoginRef.current, () => setShowLoginModal(false)); }, [showLoginModal, currentUser]);
@@ -334,11 +331,12 @@ export default function App() {
     if (!currentUser?.id) return; 
     setUploading(true);
     
-    const phone = e.target.phone.value; const loc = e.target.location.value;
-    const region = ["USA", "Canada", "Europe", "Australia", "South America"].includes(loc) ? 'Diaspora' : 'Local';
+    const phone = e.target.phone.value; 
+    // Only read location from form if it's not already locked in the profile
+    const loc = currentUserProfile?.region || (["USA", "Canada", "Europe", "Australia", "South America"].includes(e.target.location.value) ? 'Diaspora' : 'Local');
 
     try {
-      const { data, error } = await supabase.from('vip_users').update({ full_name: name, phone_number: phone, region: region }).eq('telegram_id', currentUser.id.toString()).select('*');
+      const { data, error } = await supabase.from('vip_users').update({ full_name: name, phone_number: phone, region: loc }).eq('telegram_id', currentUser.id.toString()).select('*');
       if (error) throw error;
       if (data && data[0]) { 
         setCurrentUserProfile(data[0]); 
@@ -372,7 +370,7 @@ export default function App() {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
-    setUploading(false); setHasPendingVip(true); setActiveTab("ዋና"); window.scrollTo(0,0); setShowSuccessModal(true);
+    setUploading(false); setHasPendingVip(true); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
   const handleProductOrderSubmit = async (e) => {
@@ -393,7 +391,7 @@ export default function App() {
     }
 
     const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; // Updated VIP inline cost
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
     const finalPrice = totalItemsPrice + nextDayBirr + vipSignupBirr;
 
     let orderNotes = checkoutShipping === "next_day" ? `+ ${1300 * quantity} ETB (Next Day)` : "Standard Shipping";
@@ -422,7 +420,7 @@ export default function App() {
     } catch (err) {}
 
     fetchUserOrders(currentUser.id.toString());
-    setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setQuantity(1); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); setActiveTab("ሱቅ"); window.scrollTo(0,0); setShowSuccessModal(true);
+    setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setQuantity(1); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
   const handleOfflineSale = async (product) => {
@@ -462,7 +460,7 @@ export default function App() {
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
     const message = `🛍 <b>አዲስ ልዩ የእቃ ማዘዣ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📦 <b>የእቃው ስም:</b> ${reqProductName || "አልተገለጸም"}\n🏪 <b>የሱቁ ስም:</b> ${reqStoreName || "አልተገለጸም"}\n🔗 <b>ሊንክ:</b> ${reqProductLink || "አልተገለጸም"}\n🚚 <b>አቅርቦት:</b> ${e.target.shipping.value}${extraNotes}\n🖼️ <b>ምስል:</b> ${imageUrl || "ምንም ምስል አልተያያዘም"}`;
     try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "HTML" }) }); } catch (err) {}
-    setUploading(false); setIsGift(false); alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!"); setShowOrderForm(false); if(activePost) window.history.back(); setActiveTab("ሱቅ"); window.scrollTo(0,0);
+    setUploading(false); setIsGift(false); alert("ትዕዛዝዎ በተሳካ ሁኔታ ተልኳል!"); setShowOrderForm(false); if(activePost) window.history.back(); window.scrollTo(0,0);
   };
 
   const submitPrediction = async (gameId) => {
@@ -489,8 +487,11 @@ export default function App() {
   };
 
   const handleUpdateAdminOrder = async (orderId, telegramId, productName) => {
-    const update = orderUpdateData[orderId];
-    if (!update) return;
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    // Bug Fix: Fallback to the order's existing status/tracking if the admin didn't touch the dropdown
+    const update = orderUpdateData[orderId] || { status: order.status, tracking: order.tracking_number || "" };
 
     setUploading(true);
     const payload = {};
@@ -523,7 +524,7 @@ export default function App() {
     setUploading(false);
   };
 
-  const handleLogoTap = () => { setActiveTab("ዋና"); if (activePost) window.history.back(); window.scrollTo(0,0); };
+  const handleLogoTap = () => { setActiveTab("ሱቅ"); if (activePost) window.history.back(); window.scrollTo(0,0); };
 
   const handleAddCustomSize = () => {
     if(!customSizeInput.trim()) return;
@@ -696,32 +697,39 @@ export default function App() {
     );
   };
 
-  const renderProfileModal = () => (
-    <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
-      <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
-        <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
-        <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">እንኳን ደህና መጡ!</h2>
-        <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ይሙሉ (ይህ አንዴ ብቻ የሚጠየቅ ነው)።</p>
-        <form onSubmit={saveUserProfile} className="space-y-4">
-          <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.') }} />
-          <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
-          <select required name="location" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-bold">
-            <option value="">የት ሀገር ነዎት? (Location)</option>
-            <option value="Ethiopia">Ethiopia (ኢትዮጵያ)</option>
-            <option value="USA">USA</option>
-            <option value="Canada">Canada</option>
-            <option value="Europe">Europe</option>
-            <option value="Australia">Australia</option>
-            <option value="South America">South America</option>
-            <option value="Other">Other (ሌላ)</option>
-          </select>
-          <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
-            {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
-          </button>
-        </form>
+  const renderProfileModal = () => {
+    const isRegionLocked = !!currentUserProfile?.region;
+    
+    return (
+      <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
+        <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+          <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
+          <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">የግል መረጃ</h2>
+          <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ያስተካክሉ።</p>
+          <form onSubmit={saveUserProfile} className="space-y-4">
+            <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.') }} />
+            <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (Phone Number)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
+            
+            <div className="relative">
+              <select required name="location" disabled={isRegionLocked} defaultValue={currentUserProfile?.region === 'Diaspora' ? 'USA' : (currentUserProfile?.region === 'Local' ? 'Ethiopia' : '')} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                <option value="">የት ሀገር ነዎት? (Location)</option>
+                <option value="Ethiopia">Ethiopia (ኢትዮጵያ) - Local</option>
+                <option value="USA">USA - Diaspora</option>
+                <option value="Canada">Canada - Diaspora</option>
+                <option value="Europe">Europe - Diaspora</option>
+                <option value="Australia">Australia - Diaspora</option>
+              </select>
+              {isRegionLocked && <p className="text-[10px] text-zinc-500 mt-1">Location is locked for pricing accuracy. Contact support to change.</p>}
+            </div>
+
+            <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
+              {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
+            </button>
+          </form>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -1327,25 +1335,66 @@ export default function App() {
     );
   };
 
-  const renderBlurGames = () => (
-    <div className="opacity-30 blur-[3px] pointer-events-none select-none max-w-sm mx-auto mt-6">
-      <h2 className="text-lg font-black text-center mb-4">የሳምንቱ የቪአይፒ ጨዋታዎች</h2>
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
-        <div className="flex justify-between items-center mb-4">
-          <div className="text-center text-xs">ቡድን አንድ</div>
-          <div className="text-amber-500 font-bold">VS</div>
-          <div className="text-center text-xs">ቡድን ሁለት</div>
-        </div>
-        <div className="flex justify-center space-x-2">
-          <div className="w-12 h-10 bg-black rounded"></div>
-          <div className="w-12 h-10 bg-black rounded"></div>
-        </div>
+  const renderActualGames = (isBlurred = false) => {
+    if (!games || games.length === 0) return null;
+    
+    return (
+      <div className={isBlurred ? "opacity-30 blur-[4px] pointer-events-none select-none mt-8" : "mt-8"}>
+        {Array.isArray(games) && games.map(game => {
+          if (!game || !game.id) return null;
+          const userPred = userPredictions ? userPredictions[game.id] : null;
+          return (
+            <div key={game.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4 shadow-xl">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col items-center w-1/3">
+                  {game.team_a_logo && typeof game.team_a_logo === 'string' && <img src={game.team_a_logo} alt="Team A" className="w-14 h-14 mb-2 object-contain drop-shadow-md"/>}
+                  <span className="font-bold text-center text-xs text-zinc-300">{String(game.team_a || "")}</span>
+                </div>
+                <div className="text-2xl font-black text-amber-500 w-1/3 text-center">VS</div>
+                <div className="flex flex-col items-center w-1/3">
+                  {game.team_b_logo && typeof game.team_b_logo === 'string' && <img src={game.team_b_logo} alt="Team B" className="w-14 h-14 mb-2 object-contain drop-shadow-md"/>}
+                  <span className="font-bold text-center text-xs text-zinc-300">{String(game.team_b || "")}</span>
+                </div>
+              </div>
+
+              {!isBlurred && game.status === 'open' && !userPred && (
+                <div className="flex flex-col items-center space-y-4 border-t border-zinc-800 pt-4">
+                  <div className="flex justify-center items-center space-x-3">
+                    <input type="number" value={predictionInputs[game.id]?.a || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), a: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
+                    <span className="font-black text-zinc-500">-</span>
+                    <input type="number" value={predictionInputs[game.id]?.b || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), b: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
+                  </div>
+                  <button onClick={() => submitPrediction(game.id)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">ውጤት ላክ</button>
+                </div>
+              )}
+
+              {!isBlurred && game.status === 'open' && userPred && (
+                <div className="mt-4 text-center bg-black border border-amber-500/50 text-amber-500 text-sm font-bold p-3 rounded-xl">🔒 ግምትዎ ተቆልፏል: {String(userPred.predicted_score_a ?? '')} - {String(userPred.predicted_score_b ?? '')}</div>
+              )}
+
+              {!isBlurred && game.status === 'finished' && userPred && (
+                <div className="mt-4 text-center border-t border-zinc-800 pt-4">
+                  <div className="text-sm font-bold text-zinc-400 mb-2">ትክክለኛ ውጤት: <span className="text-white">{String(game.final_score_a ?? '')} - {String(game.final_score_b ?? '')}</span></div>
+                  <div className={`p-3 rounded-xl text-sm font-black text-white ${userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? 'bg-green-600/80 border border-green-500' : 'bg-red-900/50 border border-red-800 text-red-200'}`}>
+                    {userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? "🎉 አሸናፊ!" : `የእርስዎ ግምት: ${String(userPred.predicted_score_a ?? '')} - ${String(userPred.predicted_score_b ?? '')} ❌`}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderVIP = () => {
-    const scrollToAction = () => document.getElementById('vip-action-area')?.scrollIntoView({ behavior: 'smooth' });
+    const handleVipActionClick = () => {
+       if (!currentUser) {
+          setShowLoginModal(true);
+       } else {
+          document.getElementById('vip-payment-form')?.scrollIntoView({ behavior: 'smooth' });
+       }
+    };
 
     const renderVipBenefits = () => (
       <div className="text-left mb-8 bg-gradient-to-b from-zinc-900 to-black p-[2px] rounded-2xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
@@ -1362,12 +1411,15 @@ export default function App() {
                  <h4 className="text-lg font-black text-amber-500">የሀገር ውስጥ VIP</h4>
               </div>
               <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
-                 <li>በሳምንት እና በወር የምንለቃቸውን የእግር ኳስ ወይም ሌላ ውድድሮች ላይ በመሳተፍ ሱቅ ውስጥ ካሉ እቃዎችን ያሸንፋሉ</li>
-                 <li>ልዩ ታላቅ የሆነ የዕቃ ቅናሾችን ያገኛሉ</li>
+                 <li>በየሳምንቱ እና በየወሩ በሚኖሩን የእግር ኳስ እና ሌሎች የውድድር መርሐ ግብሮች በመሳተፍ የሱቃችን ምርቶችን የማሸነፍ ዕድል ያገኛሉ!</li>
+                 <li>ለተመረጡ እቃዎች ልዩ እና ታላቅ ቅናሾች ተጠቃሚ ይሆናሉ።</li>
               </ul>
               <div className="mt-5 pl-16">
-                 <p className="text-2xl font-black text-white mb-3">300 ብር <span className="text-sm text-zinc-500 font-bold">/ በወር</span></p>
-                 <button onClick={scrollToAction} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
+                 <div className="flex items-baseline space-x-1 mb-3">
+                    <p className="text-2xl font-black text-white">300 ብር</p>
+                    <p className="text-sm text-zinc-300 font-bold">/ በወር</p>
+                 </div>
+                 <button onClick={handleVipActionClick} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
               </div>
             </div>
             
@@ -1377,12 +1429,15 @@ export default function App() {
                  <h4 className="text-lg font-black text-amber-500">የዳያስፖራ VIP</h4>
               </div>
               <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
-                 <li>በወር 2 ግዜ ነጻ የአገልግሎት (የእቃውን ከሱቃችን የሚገዙ ከሆነ የእቃውን እና ማጓጓዣ ብቻ ይከፍላሉ)</li>
-                 <li>በሳምንት እና በወር የምንለቃቸውን የእግር ኳስ ወይም ሌላ ውድድሮች ላይ በመሳተፍ ሱቅ ውስጥ ካሉ እቃዎችን ያሸንፋሉ። ያሸነፉትን እቃ ወደ ኢትዮጲያ መላክ ከፈለጉ የነጻ አገልግሎት ያገኛሉ</li>
+                 <li>በወር 2 ጊዜ ከማንኛውም የአገልግሎት ክፍያ ነጻ ይሆናሉ (እቃውን ከገዙ በኋላ የእቃውን እና የማጓጓዣ ክፍያ ብቻ ይከፍላሉ)።</li>
+                 <li>በሳምንት እና በወር በሚኖሩ ውድድሮች በመሳተፍ ምርቶችን ያሸንፉ፤ ያሸነፉትን እቃ ወደ ኢትዮጵያ በነጻ የመላክ እድል ያገኛሉ።</li>
               </ul>
               <div className="mt-5 pl-16">
-                 <p className="text-2xl font-black text-white mb-3">$15 <span className="text-sm text-zinc-500 font-bold">/ በወር</span></p>
-                 <button onClick={scrollToAction} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
+                 <div className="flex items-baseline space-x-1 mb-3">
+                    <p className="text-2xl font-black text-white">$15</p>
+                    <p className="text-sm text-zinc-300 font-bold">/ በወር</p>
+                 </div>
+                 <button onClick={handleVipActionClick} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
               </div>
             </div>
           </div>
@@ -1394,14 +1449,9 @@ export default function App() {
       return (
         <div className="pb-24 pt-6">
           <div className="text-center max-w-sm mx-auto mb-8">
-            <h2 className="text-2xl font-black text-white mb-6">ወደ VIP አባልነት</h2>
             {renderVipBenefits()}
-            <div id="vip-action-area" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
-              <p className="text-white text-sm font-bold mb-4">አባል ለመሆን ወይም ለመግባት (Login)፦</p>
-              <div ref={telegramWrapperRef} className="flex justify-center min-h-[50px]"></div>
-            </div>
           </div>
-          {renderBlurGames()}
+          {renderActualGames(true)}
         </div>
       );
     }
@@ -1425,7 +1475,7 @@ export default function App() {
           <div className="max-w-md mx-auto mb-8">
             {renderVipBenefits()}
 
-            <div id="vip-action-area" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl mt-8">
+            <div id="vip-payment-form" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl mt-8">
               <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">
                 {vipStatus === "expired" ? "አባልነትዎ አልቋል (Expired)" : "ወርሃዊ የVIP አባልነት"}
               </h2>
@@ -1468,7 +1518,7 @@ export default function App() {
               </form>
             </div>
           </div>
-          {renderBlurGames()}
+          {renderActualGames(true)}
         </div>
       );
     }
@@ -1485,50 +1535,7 @@ export default function App() {
             ⚠️ <span className="font-bold">ማሳሰቢያ:</span> የVIP አባልነትዎ ሊያልቅ 2 ቀናት ቀርተውታል። አገልግሎቱ እንዳይቋረጥ እባክዎ ያድሱ።
           </div>
         )}
-        <h2 className="text-2xl font-black text-white mb-6 text-center">የVIP ትንበያ</h2>
-        {Array.isArray(games) && games.map(game => {
-          if (!game || !game.id) return null;
-          const userPred = userPredictions ? userPredictions[game.id] : null;
-          return (
-            <div key={game.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4 shadow-xl">
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex flex-col items-center w-1/3">
-                  {game.team_a_logo && typeof game.team_a_logo === 'string' && <img src={game.team_a_logo} alt="Team A" className="w-14 h-14 mb-2 object-contain drop-shadow-md"/>}
-                  <span className="font-bold text-center text-xs text-zinc-300">{String(game.team_a || "")}</span>
-                </div>
-                <div className="text-2xl font-black text-amber-500 w-1/3 text-center">VS</div>
-                <div className="flex flex-col items-center w-1/3">
-                  {game.team_b_logo && typeof game.team_b_logo === 'string' && <img src={game.team_b_logo} alt="Team B" className="w-14 h-14 mb-2 object-contain drop-shadow-md"/>}
-                  <span className="font-bold text-center text-xs text-zinc-300">{String(game.team_b || "")}</span>
-                </div>
-              </div>
-
-              {game.status === 'open' && !userPred && (
-                <div className="flex flex-col items-center space-y-4 border-t border-zinc-800 pt-4">
-                  <div className="flex justify-center items-center space-x-3">
-                    <input type="number" value={predictionInputs[game.id]?.a || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), a: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
-                    <span className="font-black text-zinc-500">-</span>
-                    <input type="number" value={predictionInputs[game.id]?.b || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), b: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
-                  </div>
-                  <button onClick={() => submitPrediction(game.id)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">ውጤት ላክ</button>
-                </div>
-              )}
-
-              {game.status === 'open' && userPred && (
-                <div className="mt-4 text-center bg-black border border-amber-500/50 text-amber-500 text-sm font-bold p-3 rounded-xl">🔒 ግምትዎ ተቆልፏል: {String(userPred.predicted_score_a ?? '')} - {String(userPred.predicted_score_b ?? '')}</div>
-              )}
-
-              {game.status === 'finished' && userPred && (
-                <div className="mt-4 text-center border-t border-zinc-800 pt-4">
-                  <div className="text-sm font-bold text-zinc-400 mb-2">ትክክለኛ ውጤት: <span className="text-white">{String(game.final_score_a ?? '')} - {String(game.final_score_b ?? '')}</span></div>
-                  <div className={`p-3 rounded-xl text-sm font-black text-white ${userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? 'bg-green-600/80 border border-green-500' : 'bg-red-900/50 border border-red-800 text-red-200'}`}>
-                    {userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? "🎉 አሸናፊ!" : `የእርስዎ ግምት: ${String(userPred.predicted_score_a ?? '')} - ${String(userPred.predicted_score_b ?? '')} ❌`}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {renderActualGames(false)}
       </div>
     );
   };
@@ -1573,7 +1580,6 @@ export default function App() {
                </div>
             </div>
 
-            {/* NEW STARTUP EXPENSES TRACKER */}
             <div className="bg-zinc-900 border border-amber-500/50 p-4 rounded-xl shadow-lg flex items-center justify-between">
                <div>
                  <p className="text-xs text-amber-500 font-bold uppercase mb-1">Marketing & Startup Expenses</p>
@@ -2088,7 +2094,7 @@ export default function App() {
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setActivePost(null); setSelectedProduct(null); setQuantity(1); window.scrollTo(0,0); }}
-              className={`flex flex-col items-center p-2 transition-colors ${isActive ? "text-amber-500" : "text-zinc-600 hover:text-zinc-400"}`}
+              className={`flex flex-col items-center p-2 transition-colors ${isActive ? "text-amber-500" : "text-zinc-400 hover:text-zinc-300"}`}
             >
               <Icon size={24} strokeWidth={isActive ? 2.5 : 2} className="mb-1" />
               <span className="text-[10px] font-bold tracking-wide">{tab.id}</span>
