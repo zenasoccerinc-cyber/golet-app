@@ -51,6 +51,7 @@ export default function App() {
   
   const [adminTab, setAdminTab] = useState("overview");
   const [uploading, setUploading] = useState(false);
+  const [startupExpenses, setStartupExpenses] = useState(() => Number(localStorage.getItem('goleth_expenses') || 0));
   
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({ options: [], relatedLinks: [], isSale: false, shopCat: [], shopSubCat: [] });
@@ -124,6 +125,12 @@ export default function App() {
   const isFullNameValid = (nameStr) => {
     if (!nameStr) return false;
     return nameStr.trim().split(/\s+/).length > 1;
+  };
+
+  const handleUpdateExpenses = (val) => {
+    const num = Number(val);
+    setStartupExpenses(num);
+    localStorage.setItem('goleth_expenses', num);
   };
 
   const calculateAutomatedPrice = (cadCost, weightKg, specialFee) => {
@@ -609,14 +616,31 @@ export default function App() {
         title: item.name, price: item.price, vipPrice: item.vip_price || "", 
         shopCat: parsedCat, shopSubCat: parsedSubCat, options: item.options || [], 
         sourceUrl: item.source_link || "", description: item.description || "", isSale: item.is_sale || false,
-        cadCost: item.cost_cad || "", stockQty: item.stock_quantity || 0, weightKg: item.weight_kg || 1.0, specialFreightFee: item.special_freight_fee || ""
+        cadCost: item.cost_cad || 0, stockQty: item.stock_quantity || 0, weightKg: item.weight_kg || 1.0, specialFreightFee: item.special_freight_fee || ""
       });
     }
     setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); setShowAdmin(true);
   };
   
   const openNewPost = (type) => { 
-    setAdminTab(type); setEditId(null); setFormData({ options: [], relatedLinks: [], author: "GOLETH", isSale: false, shopCat: [], shopSubCat: [] }); setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); 
+    setAdminTab(type); 
+    setEditId(null); 
+    setFormData({ 
+      options: [], 
+      relatedLinks: [], 
+      author: "GOLETH", 
+      isSale: false, 
+      shopCat: [], 
+      shopSubCat: [],
+      stockQty: 0,
+      cadCost: 0
+    }); 
+    setExistingMainImage(null); 
+    setExistingInlineImages([]); 
+    setMainImageFile(null); 
+    setInlineImageFiles([]); 
+    setProductImageFiles([]); 
+    setSelectedMainImgIdx(0); 
     if (type === 'orders') fetchAllOrders();
   };
   
@@ -1322,23 +1346,36 @@ export default function App() {
 
   const renderVIP = () => {
     const renderVipBenefits = () => (
-      <div className="text-left space-y-3 mb-8 bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-xl">
-        <h3 className="text-amber-500 font-black mb-3">የVIP አባልነት ጥቅሞች</h3>
-        
-        <div className="flex items-start space-x-3 mt-4">
-           <div className="bg-amber-500/20 p-1 rounded"><Target className="text-amber-500 w-4 h-4 shrink-0" /></div>
-           <div>
-              <p className="text-sm font-bold text-amber-500">ሀገር ውስጥ VIP (Local)</p>
-              <p className="text-xs text-zinc-400 leading-relaxed">የስፖርት ትንበያ፣ ልዩ የሱቅ ቅናሽ (እስከ 3 እቃዎች) እና የቀደመ መረጃ። (በወር 100 ብር)</p>
-           </div>
-        </div>
-        
-        <div className="flex items-start space-x-3 mt-4">
-           <div className="bg-blue-500/20 p-1 rounded"><Package className="text-blue-500 w-4 h-4 shrink-0" /></div>
-           <div>
-              <p className="text-sm font-bold text-blue-500">ዳያስፖራ VIP (Diaspora)</p>
-              <p className="text-xs text-zinc-400 leading-relaxed">የ"Gift-a-Local" አገልግሎት፣ Next-day መላኪያ ትዕዛዝ እና ልዩ የሱቅ ቅናሽ። (በወር 1300 ብር / $10)</p>
-           </div>
+      <div className="text-left mb-8 bg-gradient-to-b from-zinc-900 to-black p-[2px] rounded-2xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Target size={120} /></div>
+        <div className="bg-zinc-950 rounded-2xl p-5 h-full z-10 relative">
+          <h3 className="text-amber-500 font-black mb-5 text-lg border-b border-zinc-800 pb-3 flex items-center">
+            <Target className="mr-2" size={20} /> የVIP አባልነት ጥቅሞች
+          </h3>
+          
+          <div className="grid grid-cols-1 gap-6">
+            <div className="group relative bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50 hover:border-amber-500/30 transition-all">
+              <div className="flex items-center space-x-3 mb-2">
+                 <div className="bg-amber-500/20 p-2 rounded-lg"><Home className="text-amber-500 w-5 h-5 shrink-0" /></div>
+                 <p className="text-base font-black text-white">ሀገር ውስጥ VIP (Local)</p>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed pl-12 border-l-2 border-zinc-800 ml-4">
+                 የስፖርት ትንበያ፣ ልዩ የሱቅ ቅናሽ (እስከ 3 እቃዎች) እና የቀደመ መረጃ።
+                 <span className="block mt-2 font-bold text-amber-500">100 ብር / ወር</span>
+              </p>
+            </div>
+            
+            <div className="group relative bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50 hover:border-blue-500/30 transition-all">
+              <div className="flex items-center space-x-3 mb-2">
+                 <div className="bg-blue-500/20 p-2 rounded-lg"><Package className="text-blue-500 w-5 h-5 shrink-0" /></div>
+                 <p className="text-base font-black text-white">ዳያስፖራ VIP (Diaspora)</p>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed pl-12 border-l-2 border-zinc-800 ml-4">
+                 የ"Gift-a-Local" አገልግሎት፣ Next-day መላኪያ ትዕዛዝ እና ልዩ የሱቅ ቅናሽ።
+                 <span className="block mt-2 font-bold text-blue-500">1300 ብር ($10) / ወር</span>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1347,7 +1384,6 @@ export default function App() {
       return (
         <div className="pb-24 pt-6">
           <div className="text-center max-w-sm mx-auto mb-8">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
             <h2 className="text-2xl font-black text-white mb-6">ወደ VIP አባልነት</h2>
             {renderVipBenefits()}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
@@ -1379,7 +1415,7 @@ export default function App() {
           <div className="max-w-md mx-auto mb-8">
             {renderVipBenefits()}
 
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl mt-8">
               <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">
                 {vipStatus === "expired" ? "አባልነትዎ አልቋል (Expired)" : "ወርሃዊ የVIP አባልነት"}
               </h2>
@@ -1508,7 +1544,7 @@ export default function App() {
         {adminTab === "overview" && !editId && (
           <div className="space-y-4 pb-20 animate-in fade-in duration-200">
             <h3 className="text-amber-500 font-bold mb-2">Financial Metrics</h3>
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-2 gap-3 mb-4">
                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
                   <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Total Revenue</p>
                   <p className="text-amber-500 font-black text-lg">{totalRevenue.toLocaleString()} ብር</p>
@@ -1526,7 +1562,25 @@ export default function App() {
                   <p className="text-white font-black text-lg">{activeLocalStock} Items</p>
                </div>
             </div>
-            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-xs text-zinc-300 leading-relaxed">
+
+            {/* NEW STARTUP EXPENSES TRACKER */}
+            <div className="bg-zinc-900 border border-amber-500/50 p-4 rounded-xl shadow-lg flex items-center justify-between">
+               <div>
+                 <p className="text-xs text-amber-500 font-bold uppercase mb-1">Marketing & Startup Expenses</p>
+                 <p className="text-[10px] text-zinc-400">Budget Limit: $500</p>
+               </div>
+               <div className="flex items-center space-x-2">
+                 <span className="text-zinc-500 font-bold">$</span>
+                 <input 
+                   type="number" 
+                   value={startupExpenses} 
+                   onChange={(e) => handleUpdateExpenses(e.target.value)} 
+                   className="bg-black text-white font-black text-lg text-center w-20 rounded-lg border border-zinc-700 py-2 focus:border-amber-500 outline-none"
+                 />
+               </div>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-xs text-zinc-300 leading-relaxed mt-4">
                <span className="font-bold text-amber-500 block mb-1">💡 How it works:</span>
                To deduct local sales from the Active Local Stock and log it into Total Revenue, click the <span className="bg-black text-amber-500 px-1 py-0.5 rounded font-bold">-1 ሽያጭ</span> button on the main shop feed next to any product.
             </div>
