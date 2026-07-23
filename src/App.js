@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -22,7 +22,11 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [showInlineCheckout, setShowInlineCheckout] = useState(false);
+  
+  // Cart State
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
+
   const [includeVipSignup, setIncludeVipSignup] = useState(false);
   
   const [userRegion, setUserRegion] = useState("ሀገር ውስጥ");
@@ -49,6 +53,13 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   
+  // Offline Sale State
+  const [showOfflineSaleModal, setShowOfflineSaleModal] = useState(false);
+  const [offlineSaleProduct, setOfflineSaleProduct] = useState(null);
+  const [offlineSaleMode, setOfflineSaleMode] = useState("single");
+  const [offlineSaleQty, setOfflineSaleQty] = useState(1);
+  const [offlineSaleCustomPrice, setOfflineSaleCustomPrice] = useState("");
+
   const [adminTab, setAdminTab] = useState("overview");
   const [uploading, setUploading] = useState(false);
   const [startupExpenses, setStartupExpenses] = useState(() => Number(localStorage.getItem('goleth_expenses') || 0));
@@ -78,7 +89,6 @@ export default function App() {
   const [customCategories, setCustomCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_categories') || '["ወንድ", "ሴት", "ልጅ", "መድሀኒት", "ጤና እና ውበት"]'));
   const [customSubCats, setCustomSubCats] = useState(() => JSON.parse(localStorage.getItem('goleth_subcats_map') || '{"ወንድ":["ልብስ","ጫማ"],"ሴት":["ልብስ","ጫማ"]}'));
   
-  // Hide Logic
   const [hiddenCategories, setHiddenCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_hidden_cats') || '[]'));
   const [hiddenSubCategories, setHiddenSubCategories] = useState(() => JSON.parse(localStorage.getItem('goleth_hidden_subcats') || '[]'));
 
@@ -155,10 +165,16 @@ export default function App() {
 
   const inventoryAssetValueCad = products.reduce((sum, p) => sum + ((p.stock_quantity || 0) * (p.cost_cad || 0)), 0);
   const activeLocalStock = products.reduce((sum, p) => sum + (p.stock_quantity || 0), 0);
-  const onlineRevenue = allOrders.filter(o => o.status === 'arrived').reduce((sum, o) => sum + (o.price || 0), 0);
-  const offlineRevenue = products.reduce((sum, p) => sum + ((p.offline_sales || 0) * (p.price || 0)), 0);
-  const totalRevenue = onlineRevenue + offlineRevenue;
+  
+  // Realized Cash now includes BOTH arrived online orders AND logged offline sales
+  const onlineRevenue = allOrders.filter(o => o.status === 'arrived' && !o.is_offline_sale).reduce((sum, o) => sum + (o.price || 0), 0);
+  const loggedOfflineRevenue = allOrders.filter(o => o.is_offline_sale).reduce((sum, o) => sum + (o.price || 0), 0);
+  const totalRevenue = onlineRevenue + loggedOfflineRevenue;
   const prizePool = Math.round(totalRevenue * 0.03); 
+  
+  // Flight Batching logic
+  const pendingOrdersWeight = allOrders.filter(o => o.status === 'pending' && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
+  const flightBatchPercentage = Math.min((pendingOrdersWeight / 1.0) * 100, 100);
 
   useEffect(() => {
     fetchData();
@@ -178,7 +194,7 @@ export default function App() {
       } catch (e) {}
     }
 
-    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowInlineCheckout(false); setShowAccountMenu(false); setQuantity(1); };
+    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowCart(false); setShowAccountMenu(false); setQuantity(1); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -224,7 +240,7 @@ export default function App() {
     }
   };
 
-  useEffect(() => { if (showInlineCheckout && !currentUser) injectTelegramScript(telegramCheckoutRef.current); }, [showInlineCheckout, currentUser]);
+  useEffect(() => { if (showCart && !currentUser) injectTelegramScript(telegramCheckoutRef.current); }, [showCart, currentUser]);
   useEffect(() => { if (showOrderForm && !currentUser) injectTelegramScript(telegramSourcingRef.current); }, [showOrderForm, currentUser]);
   useEffect(() => { if (showLoginModal && !currentUser) injectTelegramScript(telegramHeaderLoginRef.current, () => setShowLoginModal(false)); }, [showLoginModal, currentUser]);
   useEffect(() => { if (activeTab === "ቪአይፒ" && !currentUser) injectTelegramScript(telegramWrapperRef.current); }, [activeTab, currentUser]);
@@ -257,7 +273,7 @@ export default function App() {
   const fetchUserOrders = async (telegramId) => {
     if (!telegramId) return;
     try {
-      const { data } = await supabase.from('product_orders').select('*').eq('telegram_id', telegramId).order('created_at', { ascending: false });
+      const { data } = await supabase.from('product_orders').select('*').eq('telegram_id', telegramId).eq('is_offline_sale', false).order('created_at', { ascending: false });
       if (data) setUserOrders(data);
     } catch (e) {}
   };
@@ -359,6 +375,73 @@ export default function App() {
     return null;
   };
 
+  // Cart Functions
+  const addToCart = () => {
+    if (!selectedProduct) return;
+    const newItem = {
+      product: selectedProduct,
+      option: selectedOption || "N/A",
+      quantity: quantity
+    };
+    
+    setCart(prev => {
+      // Check if exact product and option exists to merge qty
+      const existing = prev.find(item => item.product.id === newItem.product.id && item.option === newItem.option);
+      if (existing) {
+        return prev.map(item => item === existing ? { ...item, quantity: item.quantity + newItem.quantity } : item);
+      }
+      return [...prev, newItem];
+    });
+    
+    setSelectedOption(null);
+    setQuantity(1);
+    setShowCart(true);
+  };
+
+  const removeFromCart = (indexToRemove) => {
+    setCart(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const getCartTotals = () => {
+    const hasVipAccess = isVIP || isCEO;
+    const isGettingVipPrice = hasVipAccess || includeVipSignup;
+    
+    let totalItemsPrice = 0;
+    let totalItemsWeight = 0;
+    const productQtyMap = {}; // Tracks qty per unique product to apply max 3 limit
+    
+    cart.forEach(item => {
+      const pid = item.product.id;
+      if (!productQtyMap[pid]) productQtyMap[pid] = 0;
+      
+      const startQty = productQtyMap[pid];
+      const endQty = startQty + item.quantity;
+      
+      for (let i = startQty + 1; i <= endQty; i++) {
+        if (isGettingVipPrice && i <= 3) {
+          totalItemsPrice += (item.product.vip_price || item.product.price);
+        } else {
+          totalItemsPrice += item.product.price;
+        }
+      }
+      
+      productQtyMap[pid] = endQty;
+      totalItemsWeight += (item.product.weight_kg || 1.0) * item.quantity;
+    });
+
+    const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const nextDayBirr = checkoutShipping === "next_day" ? 1300 * totalQty : 0; 
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
+    
+    return {
+      itemsPrice: totalItemsPrice,
+      totalWeight: totalItemsWeight,
+      nextDayFee: nextDayBirr,
+      vipFee: vipSignupBirr,
+      finalTotal: totalItemsPrice + nextDayBirr + vipSignupBirr
+    };
+  };
+
   const handleVipPaymentSubmit = async (e) => {
     e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
     const receiptUrl = await uploadFileToSupabase(vipReceiptFile);
@@ -374,73 +457,132 @@ export default function App() {
     setUploading(false); setHasPendingVip(true); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
-  const handleProductOrderSubmit = async (e) => {
-    e.preventDefault(); if (!currentUser?.id) return; setUploading(true);
+  const handleCartOrderSubmit = async (e) => {
+    e.preventDefault(); if (!currentUser?.id || cart.length === 0) return; setUploading(true);
 
-    const hasVipAccess = isVIP || isCEO;
-    const isGettingVipPrice = hasVipAccess || includeVipSignup;
+    const totals = getCartTotals();
+    const batchIdStr = Date.now().toString(36) + Math.random().toString(36).substring(2);
     
-    let totalItemsPrice = 0;
-    if (isGettingVipPrice) {
-      if (quantity <= 3) {
-        totalItemsPrice = (selectedProduct.vip_price || selectedProduct.price) * quantity;
-      } else {
-        totalItemsPrice = ((selectedProduct.vip_price || selectedProduct.price) * 3) + (selectedProduct.price * (quantity - 3));
-      }
-    } else {
-      totalItemsPrice = selectedProduct.price * quantity;
-    }
-
-    const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
-    const finalPrice = totalItemsPrice + nextDayBirr + vipSignupBirr;
-
-    let orderNotes = checkoutShipping === "next_day" ? `+ ${1300 * quantity} ETB (Next Day)` : "Standard Shipping";
+    let orderNotes = checkoutShipping === "next_day" ? `Next Day Shipping` : "Standard Shipping";
     if (includeVipSignup) orderNotes += ` | +VIP Signup`;
     
     let finalDeliveryAddress = orderAddress;
     if (isGift) { orderNotes += ` | 🎁 GIFT ORDER`; finalDeliveryAddress = `[GIFT FOR: ${recipientName} | Ph: ${recipientPhone}] ${recipientAddress}`; }
 
     const receiptUrl = orderFile ? await uploadFileToSupabase(orderFile) : "";
-    const orderWeight = (selectedProduct.weight_kg || 1.0) * quantity;
 
-    const { error: dbError } = await supabase.from("product_orders").insert([{ 
-        telegram_id: currentUser.id.toString(), full_name: orderName, phone_number: vipPhone, delivery_address: finalDeliveryAddress,
-        product_id: selectedProduct.id, product_name: selectedProduct.name, selected_option: selectedOption || "N/A", 
-        price: finalPrice, payment_type: userRegion, receipt_url: receiptUrl, shipping_speed: checkoutShipping, 
-        is_new_vip_signup: includeVipSignup, status: 'pending', total_weight_kg: orderWeight
-      }]);
+    // Build array of inserts
+    const hasVipAccess = isVIP || isCEO;
+    const isGettingVipPrice = hasVipAccess || includeVipSignup;
+    const productQtyMap = {};
+
+    const inserts = cart.map(item => {
+      const pid = item.product.id;
+      if (!productQtyMap[pid]) productQtyMap[pid] = 0;
+      
+      const startQty = productQtyMap[pid];
+      const endQty = startQty + item.quantity;
+      let lineItemPrice = 0;
+      
+      for (let i = startQty + 1; i <= endQty; i++) {
+        if (isGettingVipPrice && i <= 3) {
+          lineItemPrice += (item.product.vip_price || item.product.price);
+        } else {
+          lineItemPrice += item.product.price;
+        }
+      }
+      productQtyMap[pid] = endQty;
+      
+      // Pro-rate shipping/vip fees into the price per row if needed, but for now we'll just log the exact line item price
+      // to keep DB clean, and we can log the total in notes or add columns. 
+      // To ensure total matches, we will add the extra fees to the first item.
+      return { 
+        telegram_id: currentUser.id.toString(), 
+        full_name: orderName, 
+        phone_number: vipPhone, 
+        delivery_address: finalDeliveryAddress,
+        product_id: item.product.id, 
+        product_name: item.product.name, 
+        selected_option: item.option, 
+        price: lineItemPrice, 
+        payment_type: userRegion, 
+        receipt_url: receiptUrl, 
+        shipping_speed: checkoutShipping, 
+        is_new_vip_signup: includeVipSignup, 
+        status: 'pending', 
+        total_weight_kg: (item.product.weight_kg || 1.0) * item.quantity,
+        order_batch_id: batchIdStr,
+        is_offline_sale: false
+      };
+    });
+
+    // Add extra fees to the first row just so DB sum(price) = finalTotal
+    if (inserts.length > 0) {
+       inserts[0].price += totals.nextDayFee + totals.vipFee;
+    }
+
+    const { error: dbError } = await supabase.from("product_orders").insert(inserts);
 
     if (dbError) { alert("የመረጃ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ።"); setUploading(false); return; }
 
-    const adminMsg = `🛍 <b>አዲስ የእቃ ትዕዛዝ!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃ:</b> ${selectedProduct.name} (x${quantity})\n📏 <b>አማራጭ:</b> ${selectedOption || "N/A"}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n⚖️ <b>ክብደት:</b> ${orderWeight} kg\n💰 <b>ጠቅላላ ዋጋ:</b> ${finalPrice} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
-    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ ለ ${selectedProduct.name} (ብዛት: ${quantity}) የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
+    const itemsListTxt = cart.map(i => `- ${i.product.name} (x${i.quantity}) [${i.option}]`).join("\n");
+    
+    const adminMsg = `🛍 <b>አዲስ የጋሪ ትዕዛዝ (Cart Order)!</b>\n\n👤 <b>ስም:</b> ${orderName}\n📞 <b>ስልክ:</b> ${vipPhone}\n📍 <b>አድራሻ:</b> ${finalDeliveryAddress}\n📦 <b>እቃዎች:</b>\n${itemsListTxt}\n🚚 <b>ማጓጓዣ:</b> ${checkoutShipping}\n⚖️ <b>ክብደት:</b> ${totals.totalWeight} kg\n💰 <b>ጠቅላላ ዋጋ:</b> ${totals.finalTotal} ብር\n📝 <b>Notes:</b> ${orderNotes}\n💳 <b>ክፍያ ክልል:</b> ${userRegion}\n🖼️ <b>ደረሰኝ:</b> ${receiptUrl}`;
+    const userMsg = `🎉 <b>ትዕዛዝዎ ደርሶናል!</b>\n\nውድ ${orderName}፣ የላኩትን የክፍያ ማረጋገጫ ተቀብለናል። ክፍያው እንደተረጋገጠ ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።`;
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: adminMsg, parse_mode: "HTML" }) });
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser.id, text: userMsg, parse_mode: "HTML" }) });
     } catch (err) {}
 
     fetchUserOrders(currentUser.id.toString());
-    setUploading(false); setShowInlineCheckout(false); setSelectedProduct(null); setSelectedOption(null); setQuantity(1); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); window.scrollTo(0,0); setShowSuccessModal(true);
+    setUploading(false); setCart([]); setShowCart(false); setSelectedProduct(null); setIncludeVipSignup(false); setIsGift(false); setOrderFile(null); window.scrollTo(0,0); setShowSuccessModal(true);
   };
 
-  const handleOfflineSale = async (product) => {
+  const handleOpenOfflineSale = (product) => {
     if (product.stock_quantity < 1) return alert("ምንም እቃ የለም! (Out of stock)");
-    if (!window.confirm(`Log 1 physical offline sale for ${product.name}?`)) return;
+    setOfflineSaleProduct(product);
+    setOfflineSaleMode("single");
+    setOfflineSaleQty(1);
+    setOfflineSaleCustomPrice(product.price);
+    setShowOfflineSaleModal(true);
+  };
 
+  const submitOfflineSale = async () => {
     setUploading(true);
-    const newStock = product.stock_quantity - 1;
-    const newOfflineSales = (product.offline_sales || 0) + 1;
+    const newStock = offlineSaleProduct.stock_quantity - offlineSaleQty;
+    const finalPrice = offlineSaleMode === 'single' ? (offlineSaleProduct.price * offlineSaleQty) : Number(offlineSaleCustomPrice);
+    
+    // 1. Update stock
+    const { error: stockError } = await supabase.from('products').update({
+      stock_quantity: newStock
+    }).eq('id', offlineSaleProduct.id);
 
-    const { error } = await supabase.from('products').update({
-      stock_quantity: newStock,
-      offline_sales: newOfflineSales
-    }).eq('id', product.id);
+    if (stockError) {
+      alert("Failed to update stock.");
+      setUploading(false);
+      return;
+    }
 
-    if (!error) {
-      setProducts(products.map(p => p.id === product.id ? { ...p, stock_quantity: newStock, offline_sales: newOfflineSales } : p));
+    // 2. Insert into product_orders as realized cash
+    const { error: orderError } = await supabase.from("product_orders").insert([{
+      telegram_id: currentUser?.id?.toString() || "ceo_offline",
+      full_name: "Physical Store Sale",
+      product_id: offlineSaleProduct.id,
+      product_name: offlineSaleProduct.name,
+      selected_option: offlineSaleMode === 'bulk' ? `Bulk Sale (x${offlineSaleQty})` : `Retail (x${offlineSaleQty})`,
+      price: finalPrice,
+      payment_type: "Offline/Cash",
+      status: "arrived", // instantly realized
+      is_offline_sale: true,
+      total_weight_kg: 0 // Not relevant for shipping
+    }]);
+
+    if (!orderError) {
+      setProducts(products.map(p => p.id === offlineSaleProduct.id ? { ...p, stock_quantity: newStock } : p));
+      fetchAllOrders(); // refresh revenue
+      setShowOfflineSaleModal(false);
     } else {
-      alert("Failed to log sale.");
+      alert("Failed to log sale revenue.");
     }
     setUploading(false);
   };
@@ -477,7 +619,7 @@ export default function App() {
     const a_url = teamAFile ? await uploadFileToSupabase(teamAFile) : '';
     const b_url = teamBFile ? await uploadFileToSupabase(teamBFile) : '';
     await supabase.from('games').insert([{...newGame, team_a_logo: a_url, team_b_logo: b_url}]);
-    setNewGame({ team_a: '', team_b: '' }); setTeamAFile(null); setTeamBFile(null); setUploading(false); fetchGames(); alert("ጨዋታው ታትሟል!");
+    newGame({ team_a: '', team_b: '' }); setTeamAFile(null); setTeamBFile(null); setUploading(false); fetchGames(); alert("ጨዋታው ታትሟል!");
   };
 
   const updateFinalScore = async (gameId) => {
@@ -498,7 +640,6 @@ export default function App() {
     if (update.status) payload.status = update.status;
     if (update.tracking !== undefined) payload.tracking_number = update.tracking;
 
-    // The .select() ensures we verify the DB actually accepted the update
     const { data, error } = await supabase.from('product_orders').update(payload).eq('id', orderId).select();
     
     if (error) {
@@ -604,7 +745,6 @@ export default function App() {
   const openProduct = (prod) => { 
     window.history.pushState({ prodId: prod.id }, "", `#product-${prod.id}`); 
     setSelectedProduct(prod); setQuantity(1); setSelectedOption(null); 
-    setShowInlineCheckout(!prod.options || prod.options.length === 0); 
   };
   
   const handleDelete = async (table, id) => { if (window.confirm("እርግጠኛ ነዎት?")) { await supabase.from(table).delete().eq("id", id); if (table === "games") fetchGames(); else fetchData(); if (activePost || selectedProduct) window.history.back(); } };
@@ -745,6 +885,191 @@ export default function App() {
        case 'arrived': return <span className="bg-green-900/50 text-green-400 border border-green-900 px-2 py-1 rounded text-[10px] font-black uppercase">Arrived</span>;
        default: return <span className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] font-black uppercase">{status || 'Pending'}</span>;
     }
+  };
+
+  const renderOfflineSaleModal = () => {
+    if (!showOfflineSaleModal || !offlineSaleProduct) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black/95 z-[90] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
+        <div className="bg-zinc-900 border border-amber-500/50 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+          <button onClick={() => setShowOfflineSaleModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
+          <h2 className="text-xl font-black text-amber-500 mb-2">Log Store Sale</h2>
+          <p className="text-white text-sm font-bold mb-4">{offlineSaleProduct.name}</p>
+          
+          <div className="flex space-x-2 mb-6">
+            <button onClick={() => { setOfflineSaleMode("single"); setOfflineSaleCustomPrice(offlineSaleProduct.price); }} className={`flex-1 py-2 rounded-lg font-bold text-sm border ${offlineSaleMode === "single" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-700"}`}>Retail Sale</button>
+            <button onClick={() => { setOfflineSaleMode("bulk"); setOfflineSaleCustomPrice(""); }} className={`flex-1 py-2 rounded-lg font-bold text-sm border ${offlineSaleMode === "bulk" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-700"}`}>Bulk/Custom Sale</button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-zinc-400 font-bold block mb-1">Quantity Sold (Units)</label>
+              <input type="number" min="1" max={offlineSaleProduct.stock_quantity} value={offlineSaleQty} onChange={(e) => setOfflineSaleQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
+              <p className="text-[10px] text-zinc-500 mt-1">Available stock: {offlineSaleProduct.stock_quantity}</p>
+            </div>
+            
+            {offlineSaleMode === 'bulk' && (
+              <div>
+                <label className="text-xs text-zinc-400 font-bold block mb-1">Total Revenue Collected (Birr)</label>
+                <input type="number" value={offlineSaleCustomPrice} onChange={(e) => setOfflineSaleCustomPrice(e.target.value)} placeholder="e.g. 4500" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
+              </div>
+            )}
+            
+            {offlineSaleMode === 'single' && (
+              <div className="bg-black p-3 rounded-xl border border-zinc-800">
+                <p className="text-xs text-zinc-400 font-bold">Auto-calculated Revenue</p>
+                <p className="text-lg font-black text-white">{offlineSaleProduct.price * offlineSaleQty} Birr</p>
+              </div>
+            )}
+            
+            <button onClick={submitOfflineSale} disabled={uploading || (offlineSaleMode === 'bulk' && !offlineSaleCustomPrice)} className="w-full bg-amber-500 disabled:bg-zinc-800 text-black font-black py-4 rounded-xl shadow-lg mt-2 transition-colors">
+              {uploading ? "Logging..." : "Confirm Sale"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCartSlideOver = () => {
+    const isReadyToCheckout = isFullNameValid(orderName) && vipPhone.length === 10 && orderFile;
+    const totals = getCartTotals();
+    const hasVipAccess = isVIP || isCEO;
+
+    return (
+      <div className="fixed inset-0 z-[80] flex justify-end">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowCart(false)}></div>
+        <div className="relative w-full max-w-sm bg-zinc-950 h-full overflow-y-auto border-l border-zinc-800 animate-in slide-in-from-right duration-300 flex flex-col">
+          <div className="p-6 pb-4 border-b border-zinc-900 sticky top-0 bg-zinc-950 z-10 flex justify-between items-center">
+            <h2 className="text-xl font-black text-white flex items-center"><ShoppingCart className="mr-2 text-amber-500" size={24}/> ጋሪዎ (Cart)</h2>
+            <button onClick={() => setShowCart(false)} className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition-colors"><X size={20}/></button>
+          </div>
+
+          <div className="p-6 flex-1 overflow-y-auto pb-32">
+            {cart.length === 0 ? (
+              <div className="text-center py-20">
+                <ShoppingBag className="mx-auto text-zinc-700 w-16 h-16 mb-4" />
+                <p className="text-zinc-500 font-bold">ጋሪዎ ባዶ ነው</p>
+              </div>
+            ) : (
+              <div className="space-y-4 mb-8">
+                {cart.map((item, index) => (
+                  <div key={index} className="bg-black border border-zinc-800 rounded-xl p-3 flex gap-3 relative shadow-md">
+                    <button onClick={() => removeFromCart(index)} className="absolute -top-2 -right-2 bg-red-900/50 text-red-500 p-1.5 rounded-full hover:bg-red-900"><X size={14}/></button>
+                    {item.product.image_urls && item.product.image_urls[0] ? (
+                      <img src={item.product.image_urls[0]} alt={item.product.name} className="w-16 h-16 object-cover rounded-lg bg-white" />
+                    ) : (
+                      <div className="w-16 h-16 bg-zinc-900 rounded-lg flex items-center justify-center text-[10px] text-zinc-500 font-bold">ምስል የለም</div>
+                    )}
+                    <div className="flex-1">
+                      <h4 className="text-white text-sm font-bold line-clamp-1">{item.product.name}</h4>
+                      <p className="text-[10px] text-zinc-400 font-bold mt-0.5">አማራጭ: <span className="text-amber-500">{item.option}</span></p>
+                      <div className="mt-2 flex justify-between items-center">
+                        <span className="text-xs text-zinc-300 bg-zinc-900 px-2 py-1 rounded">ብዛት: <span className="font-black text-white">{item.quantity}</span></span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {cart.length > 0 && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-2 flex items-center">
+                  የእርስዎ መረጃ
+                  {hasVipAccess && <span className="ml-2 bg-amber-500 text-black px-2 py-0.5 rounded-full text-[9px] font-black tracking-normal">VIP Member</span>}
+                </h3>
+
+                {!currentUser ? (
+                  <div className="text-center bg-zinc-900 p-6 rounded-2xl border border-amber-500/30">
+                    <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Users className="text-amber-500 w-6 h-6" /></div>
+                    <h3 className="text-white font-black mb-2 text-sm">ለመግዛት ይግቡ</h3>
+                    <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleCartOrderSubmit} className="space-y-3">
+                    
+                    {!hasVipAccess && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
+                        <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
+                        <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
+                          <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '1950 ብር ($15)' : '300 ብር'})</span>
+                          በየእቃው ላይ ያለውን የVIP ቅናሽ (ለእያንዳንዱ እቃ እስከ 3 ብዛት) ለማግኘት ይህን ይምረጡ።
+                        </label>
+                      </div>
+                    )}
+
+                    <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.'); }} />
+                    <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                    <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+
+                    <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
+                      <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
+                      <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው?</span>
+                    </label>
+
+                    {isGift && (
+                      <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
+                        <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
+                        <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                        <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value.replace(/\D/g, ""))} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                        <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+                      </div>
+                    )}
+
+                    <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-bold mt-2">
+                      <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
+                      <option value="next_day">በሚቀጥለው ቀን (+{1300 * cart.reduce((sum, item) => sum + item.quantity, 0)} ETB አስቸኳይ)</option>
+                    </select>
+
+                    <div className="bg-black p-3 rounded-xl border border-zinc-800 text-sm mt-4 mb-4">
+                       <h4 className="text-amber-500 font-black mb-2 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር</h4>
+                       <div className="flex justify-between mb-1"><span className="text-zinc-400">የእቃዎች ዋጋ:</span> <span className="text-white font-bold">{totals.itemsPrice} ብር</span></div>
+                       
+                       {(isVIP || includeVipSignup) && <div className="text-[9px] text-zinc-400 font-bold bg-amber-500/10 border border-amber-500/30 p-2 rounded mt-1 mb-2 leading-snug">💡 VIP discount applied automatically to the first 3 units of each unique product.</div>}
+                       
+                       {totals.nextDayFee > 0 && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ {totals.nextDayFee} ብር</span></div>}
+                       {totals.vipFee > 0 && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {totals.vipFee} ብር</span></div>}
+                       
+                       <div className="flex justify-between mt-2 pt-2 border-t border-zinc-800">
+                         <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
+                         <span className="text-amber-500 font-black text-lg">{totals.finalTotal} ብር</span>
+                       </div>
+
+                       <div className="mt-3 bg-zinc-900 p-3 rounded-lg border border-amber-500/20">
+                         {userRegion === "ሀገር ውስጥ" ? (
+                           <>
+                             <p className="font-bold text-amber-500 mb-1">🏦 የባንክ ማስተላለፊያ</p>
+                             <p className="text-zinc-300 text-xs mb-1">የኢትዮጵያ ንግድ ባንክ (CBE)</p>
+                             <p className="text-zinc-300">አካውንት: <span className="text-white font-mono text-lg font-black ml-1">1000123456789</span></p>
+                           </>
+                         ) : (
+                           <>
+                             <p className="font-bold text-amber-500 mb-1">💳 PayPal (Diaspora)</p>
+                             <p className="text-zinc-300">Email: <span className="text-white font-mono text-lg font-black ml-1">demo@goleth.com</span></p>
+                             <p className="text-[10px] text-zinc-500 mt-1">Please convert the Birr total to USD/CAD before sending.</p>
+                           </>
+                         )}
+                       </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-zinc-800">
+                      <label className="block text-zinc-400 text-xs font-bold mb-2">⚠️ ክፍያ ከፈጸሙ በኋላ ደረሰኙን እዚህ ያያይዙ፦</label>
+                      <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
+                    </div>
+                    
+                    <button type="submit" disabled={uploading || !isReadyToCheckout} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors mt-4">
+                      {uploading ? "በመላክ ላይ..." : "ይዘዙ (Checkout)"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderAccountSlideOver = () => (
@@ -1000,126 +1325,6 @@ export default function App() {
     if (!selectedProduct) return null;
     const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
     const hasVipAccess = isVIP || isCEO;
-    const isGettingVipPrice = hasVipAccess || includeVipSignup;
-    
-    let totalItemsPrice = 0;
-    if (isGettingVipPrice) {
-      if (quantity <= 3) {
-        totalItemsPrice = (selectedProduct.vip_price || selectedProduct.price) * quantity;
-      } else {
-        totalItemsPrice = ((selectedProduct.vip_price || selectedProduct.price) * 3) + (selectedProduct.price * (quantity - 3));
-      }
-    } else {
-      totalItemsPrice = selectedProduct.price * quantity;
-    }
-
-    const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
-    const dynamicTotal = totalItemsPrice + nextDayBirr + vipSignupBirr;
-    
-    const checkoutReady = isFullNameValid(orderName) && vipPhone.length === 10 && orderFile;
-
-    const inlineCheckoutUI = showInlineCheckout ? (
-      <div className="bg-zinc-900 border border-amber-500/50 rounded-2xl p-4 mt-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl mb-24">
-        {!currentUser ? (
-          <div className="text-center">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
-            <h3 className="text-white font-black mb-3">ለመግዛት ይግቡ (Login required)</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ትዕዛዝዎን በትክክል ለማስኬድ በቴሌግራም መለያዎ ይግቡ。</p>
-            <div ref={telegramCheckoutRef} className="flex justify-center min-h-[50px]"></div>
-          </div>
-        ) : (
-          <form onSubmit={handleProductOrderSubmit} className="space-y-3">
-            <h3 className="text-white font-black text-sm uppercase tracking-widest border-b border-zinc-900 pb-2 mb-2 flex items-center">
-              የእርስዎ መረጃ
-              {hasVipAccess && <span className="ml-2 bg-amber-500 text-black px-2 py-0.5 rounded-full text-[9px] font-black tracking-normal">VIP Member</span>}
-            </h3>
-            
-            {!hasVipAccess && selectedProduct.vip_price && (
-              <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start space-x-3 mb-4">
-                <input type="checkbox" id="vipUpsell" checked={includeVipSignup} onChange={e => setIncludeVipSignup(e.target.checked)} className="mt-1 w-5 h-5 accent-amber-500 cursor-pointer" />
-                <label htmlFor="vipUpsell" className="text-sm text-zinc-200 cursor-pointer">
-                  <span className="font-bold text-amber-500 block">የ VIP ቅናሽ አሁን ያግኙ! (+ {userRegion === 'ዳያስፖራ' ? '1950 ብር ($15)' : '300 ብር'})</span>
-                  ይህንን በመጫን የVIP አባልነት ይግዙና እቃውን በVIP ዋጋ ይውሰዱ።
-                </label>
-              </div>
-            )}
-
-            <input required value={orderName} onChange={(e) => setOrderName(e.target.value)} placeholder="ሙሉ ስም (First and Last Name)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'Please enter both first and last name separated by a space.'); }} />
-            <input required type="tel" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
-            <textarea required value={orderAddress} onChange={(e) => setOrderAddress(e.target.value)} rows="2" placeholder="የማድረሻ አድራሻ (ከተማ፣ ሰፈር፣ ልዩ ቦታ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
-
-            <div className="bg-black border border-zinc-800 rounded-xl p-3 flex justify-between items-center mb-3">
-              <span className="text-sm font-bold text-zinc-300">ብዛት (Quantity):</span>
-              <div className="flex items-center space-x-4 bg-zinc-900 rounded-lg p-1 border border-zinc-700">
-                <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-1 text-white hover:text-amber-500"><Minus size={16} /></button>
-                <span className="font-bold text-lg w-6 text-center text-amber-500">{quantity}</span>
-                <button type="button" onClick={() => setQuantity(quantity + 1)} className="p-1 text-white hover:text-amber-500"><Plus size={16} /></button>
-              </div>
-            </div>
-
-            <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
-              <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
-              <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው?</span>
-            </label>
-
-            {isGift && (
-              <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
-                <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
-                <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value.replace(/\D/g, ""))} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
-                <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-black border border-zinc-800 text-white p-2.5 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
-              </div>
-            )}
-
-            <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-bold mt-2">
-              <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
-              <option value="next_day">በሚቀጥለው ቀን (+{1300 * quantity} ETB አስቸኳይ)</option>
-            </select>
-
-            <div className="bg-black p-3 rounded-xl border border-zinc-800 text-sm mt-4 mb-4">
-               <h4 className="text-amber-500 font-black mb-2 border-b border-zinc-800 pb-2">የክፍያ ዝርዝር</h4>
-               <div className="flex justify-between mb-1"><span className="text-zinc-400">የእቃው ዋጋ (x{quantity}):</span> <span className="text-white font-bold">{totalItemsPrice} ብር</span></div>
-               
-               {isGettingVipPrice && quantity > 3 && <div className="text-[10px] text-zinc-300 font-bold bg-amber-500/10 border border-amber-500/30 p-2 rounded mt-1 mb-2">💡 Note: VIP discount applies to the first 3 items. Regular price applies to item 4+.</div>}
-               
-               {checkoutShipping === "next_day" && <div className="flex justify-between mb-1"><span className="text-zinc-400">አስቸኳይ ማጓጓዣ:</span> <span className="text-white font-bold">+ {1300 * quantity} ብር</span></div>}
-               {includeVipSignup && <div className="flex justify-between mb-1"><span className="text-amber-500">VIP አባልነት:</span> <span className="text-amber-500 font-bold">+ {userRegion === 'ዳያስፖራ' ? '1950 ብር ($15)' : '300 ብር'}</span></div>}
-               
-               <div className="flex justify-between mt-2 pt-2 border-t border-zinc-800">
-                 <span className="text-white font-black">ጠቅላላ ክፍያ:</span>
-                 <span className="text-amber-500 font-black text-lg">{dynamicTotal} ብር</span>
-               </div>
-
-               <div className="mt-3 bg-zinc-900 p-3 rounded-lg border border-amber-500/20">
-                 {userRegion === "ሀገር ውስጥ" ? (
-                   <>
-                     <p className="font-bold text-amber-500 mb-1">🏦 የባንክ ማስተላለፊያ</p>
-                     <p className="text-zinc-300 text-xs mb-1">የኢትዮጵያ ንግድ ባንክ (CBE)</p>
-                     <p className="text-zinc-300">አካውንት: <span className="text-white font-mono text-lg font-black ml-1">1000123456789</span></p>
-                   </>
-                 ) : (
-                   <>
-                     <p className="font-bold text-amber-500 mb-1">💳 PayPal (Diaspora)</p>
-                     <p className="text-zinc-300">Email: <span className="text-white font-mono text-lg font-black ml-1">demo@goleth.com</span></p>
-                     <p className="text-[10px] text-zinc-500 mt-1">Please convert the Birr total to USD/CAD before sending.</p>
-                   </>
-                 )}
-               </div>
-            </div>
-
-            <div className="pt-2 border-t border-zinc-800">
-              <label className="block text-zinc-400 text-xs font-bold mb-2">⚠️ ክፍያ ከፈጸሙ በኋላ ደረሰኙን እዚህ ያያይዙ፦</label>
-              <input required type="file" onChange={(e) => setOrderFile(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:bg-zinc-800 file:text-white file:font-bold file:border-0 file:cursor-pointer hover:file:bg-zinc-700 bg-black border border-zinc-800 rounded-xl p-2" />
-            </div>
-            
-            <button type="submit" disabled={uploading || !checkoutReady} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors mt-4">
-              {uploading ? "በመላክ ላይ..." : "ይዘዙ"}
-            </button>
-          </form>
-        )}
-      </div>
-    ) : null;
 
     return (
       <div className="fixed inset-0 bg-black z-50 overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-24">
@@ -1127,9 +1332,17 @@ export default function App() {
           <button onClick={() => window.history.back()} className="absolute top-4 left-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-20">
             <ChevronLeft className="text-white w-6 h-6" />
           </button>
+          
+          <div className="absolute top-4 right-4 z-20 flex space-x-2">
+             <button onClick={() => setShowCart(true)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors relative">
+                <ShoppingCart className="text-white w-6 h-6" />
+                {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>}
+             </button>
+          </div>
+
           {isCEO && (
              <div className="absolute top-4 left-16 flex space-x-2 z-20">
-                <button onClick={(e) => { e.stopPropagation(); handleOfflineSale(selectedProduct); }} className="bg-amber-500 text-black backdrop-blur p-2.5 rounded-full font-black text-xs shadow-lg"><DollarSign size={20} className="inline mr-1"/> Log Sale</button>
+                <button onClick={(e) => { e.stopPropagation(); handleOpenOfflineSale(selectedProduct); }} className="bg-amber-500 text-black backdrop-blur p-2.5 rounded-full font-black text-xs shadow-lg flex items-center"><DollarSign size={16} className="mr-1"/> Log Sale</button>
                 <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-white"><Edit2 size={20}/></button>
                 <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-red-500"><Trash2 size={20}/></button>
              </div>
@@ -1137,8 +1350,8 @@ export default function App() {
 
           {hasImages ? (
             <div className="relative w-full bg-white mb-4 border-b border-zinc-800 overflow-hidden">
-               {selectedProduct.image_urls.length > 1 && <div className="absolute top-4 right-4 bg-black/50 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-white z-20 flex items-center">← Swipe →</div>}
-               {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg">ቅናሽ</div>}
+               {selectedProduct.image_urls.length > 1 && <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-white z-20 flex items-center">← Swipe →</div>}
+               {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg mt-14">ቅናሽ</div>}
                <div className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-64 w-full relative z-10">
                   {selectedProduct.image_urls.map((url, idx) => (
                     <img key={idx} src={url} alt={selectedProduct.name} className="w-full h-full object-contain shrink-0 snap-center mix-blend-multiply" />
@@ -1147,7 +1360,7 @@ export default function App() {
             </div>
           ) : (
             <div className="w-full h-64 bg-zinc-900 flex items-center justify-center mb-4 border border-zinc-800 relative">
-              {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg">ቅናሽ</div>}
+              {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg mt-14">ቅናሽ</div>}
               <span className="text-zinc-500 font-bold text-sm">ምስል የለም</span>
             </div>
           )}
@@ -1179,19 +1392,33 @@ export default function App() {
              </div>
           )}
 
-          {selectedProduct.options && selectedProduct.options.length > 0 && (
-            <div className="mt-4 border-b border-zinc-800 pb-4">
-              <h3 className="text-white font-black text-sm mb-3">ምርጫዎትን ይጫኑ (ወደ ማዘዣው ለመሄድ)</h3>
-              <div className="flex flex-wrap gap-2">
-                {selectedProduct.options.map((opt) => (
-                  <button key={opt} onClick={() => { setSelectedOption(opt); setShowInlineCheckout(true); }} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedOption === opt ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-black text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
-                    {formatOptionDisplay(opt)}
-                  </button>
-                ))}
+          <div className="mt-4 border-b border-zinc-800 pb-4">
+            {selectedProduct.options && selectedProduct.options.length > 0 && (
+              <>
+                <h3 className="text-white font-black text-sm mb-3">ምርጫዎትን ይጫኑ</h3>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {selectedProduct.options.map((opt) => (
+                    <button key={opt} onClick={() => setSelectedOption(opt)} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedOption === opt ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-black text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
+                      {formatOptionDisplay(opt)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="bg-black border border-zinc-800 rounded-xl p-3 flex justify-between items-center mb-4 mt-2">
+              <span className="text-sm font-bold text-zinc-300">ብዛት (Quantity):</span>
+              <div className="flex items-center space-x-4 bg-zinc-900 rounded-lg p-1 border border-zinc-700">
+                <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-1 text-white hover:text-amber-500"><Minus size={16} /></button>
+                <span className="font-bold text-lg w-6 text-center text-amber-500">{quantity}</span>
+                <button type="button" onClick={() => setQuantity(quantity + 1)} className="p-1 text-white hover:text-amber-500"><Plus size={16} /></button>
               </div>
             </div>
-          )}
-          {inlineCheckoutUI}
+
+            <button onClick={addToCart} disabled={selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors flex items-center justify-center">
+              <ShoppingCart className="mr-2" size={20} /> ወደ ጋሪ አስገባ (Add to Cart)
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1276,13 +1503,34 @@ export default function App() {
 
     return (
       <div className="pb-24">
-        <div className="flex flex-wrap gap-2 pb-3 mb-1">
-          {uniquePrimary.map(cat => (
-            <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${shopCategory === cat ? "bg-amber-500 text-black shadow-lg" : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white"}`}>
-              {cat}
-            </button>
-          ))}
+        
+        {isCEO && pendingOrdersWeight > 0 && (
+           <div className="bg-zinc-900 border border-amber-500 p-4 rounded-xl mb-4 shadow-lg">
+              <div className="flex justify-between items-end mb-2">
+                 <div className="flex items-center text-amber-500 font-black text-sm uppercase tracking-wider"><Plane size={16} className="mr-2"/> Flight Batch Status</div>
+                 <div className="text-right text-xs text-zinc-400 font-bold">{pendingOrdersWeight.toFixed(2)} / 1.00 kg</div>
+              </div>
+              <div className="w-full bg-black rounded-full h-3 border border-zinc-800 overflow-hidden">
+                 <div className={`h-full transition-all duration-500 ${flightBatchPercentage >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{width: `${flightBatchPercentage}%`}}></div>
+              </div>
+              {flightBatchPercentage >= 100 && <p className="text-green-500 text-[10px] font-black uppercase tracking-widest mt-2">✅ Batch Ready for Flight</p>}
+           </div>
+        )}
+
+        <div className="flex justify-between items-center mb-3">
+           <div className="flex flex-wrap gap-2 flex-1">
+             {uniquePrimary.map(cat => (
+               <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
+                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${shopCategory === cat ? "bg-amber-500 text-black shadow-lg" : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white"}`}>
+                 {cat}
+               </button>
+             ))}
+           </div>
+           
+           <button onClick={() => setShowCart(true)} className="bg-zinc-900 border border-zinc-800 p-2 rounded-xl relative ml-2 shadow-lg">
+             <ShoppingCart className="text-amber-500 w-5 h-5" />
+             {cart.length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-black text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-black">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>}
+           </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1290,7 +1538,7 @@ export default function App() {
         </div>
 
         {shopCategory !== "ሁሉም" && uniqueSecondary.length > 1 && (
-           <div className="flex flex-wrap gap-2 pb-4 mb-2">
+           <div className="flex flex-wrap gap-2 pb-4 mb-2 mt-2">
            {uniqueSecondary.map(cat => (
              <button key={cat} onClick={() => setShopSubCategory(cat)} 
                className={`px-3 py-1 rounded-full text-[10px] font-bold transition-colors ${shopSubCategory === cat ? "bg-zinc-300 text-black" : "bg-zinc-800 text-zinc-400 hover:text-white"}`}>
@@ -1306,7 +1554,7 @@ export default function App() {
               <div className="bg-white w-full h-36 flex items-center justify-center relative shadow-sm overflow-hidden">
                  {isCEO && (
                     <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
-                      <button onClick={(e) => { e.stopPropagation(); handleOfflineSale(item); }} className="bg-black/80 backdrop-blur p-1.5 rounded-md text-amber-500 font-black text-[10px] flex items-center">-1 ሽያጭ</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleOpenOfflineSale(item); }} className="bg-black/80 backdrop-blur p-1.5 rounded-md text-amber-500 font-black text-[10px] flex items-center"><DollarSign size={12} className="mr-0.5"/> POS</button>
                       <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
                       <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={12}/></button>
                     </div>
@@ -1418,7 +1666,7 @@ export default function App() {
               </div>
               <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
                  <li>በየሳምንቱ እና በየወሩ በሚኖሩን የእግር ኳስ እና ሌሎች የውድድር መርሐ ግብሮች በመሳተፍ የሱቃችን ምርቶችን የማሸነፍ ዕድል ያገኛሉ!</li>
-                 <li>ለተመረጡ እቃዎች ልዩ እና ታላቅ ቅናሾች ተጠቃሚ ይሆናሉ።</li>
+                 <li>ለእያንዳንዱ እቃ እስከ 3 ብዛት ለሚገዙት ልዩ እና ታላቅ ቅናሾች ተጠቃሚ ይሆናሉ።</li>
               </ul>
               <div className="mt-5 pl-16">
                  <div className="flex items-baseline space-x-1 mb-3">
@@ -1566,10 +1814,28 @@ export default function App() {
 
         {adminTab === "overview" && !editId && (
           <div className="space-y-4 pb-20 animate-in fade-in duration-200">
-            <h3 className="text-amber-500 font-bold mb-2">Financial Metrics</h3>
+            
+            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-lg mb-2">
+               <div className="flex justify-between items-end mb-4">
+                  <h3 className="text-amber-500 font-black text-lg flex items-center"><Plane className="mr-2" size={20}/> Flight Batching</h3>
+                  <p className="text-zinc-400 font-bold text-sm">{pendingOrdersWeight.toFixed(2)} kg / 1.00 kg</p>
+               </div>
+               
+               <div className="w-full bg-black rounded-full h-4 border border-zinc-800 overflow-hidden mb-3">
+                  <div className={`h-full transition-all duration-500 ${flightBatchPercentage >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{width: `${flightBatchPercentage}%`}}></div>
+               </div>
+               
+               {flightBatchPercentage >= 100 ? (
+                  <div className="bg-green-500/20 text-green-400 p-3 rounded-lg text-sm font-black text-center border border-green-500/30">✅ Minimum weight reached! Ready to ship.</div>
+               ) : (
+                  <p className="text-zinc-500 text-xs text-center">You need {(1.0 - pendingOrdersWeight).toFixed(2)}kg more to fill the bag.</p>
+               )}
+            </div>
+
+            <h3 className="text-amber-500 font-bold mb-2 mt-4">Financial Metrics</h3>
             <div className="grid grid-cols-2 gap-3 mb-4">
                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Total Revenue</p>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Realized Cash (Sales)</p>
                   <p className="text-amber-500 font-black text-lg">{totalRevenue.toLocaleString()} ብር</p>
                </div>
                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
@@ -1577,7 +1843,7 @@ export default function App() {
                   <p className="text-[#2AABEE] font-black text-lg">{prizePool.toLocaleString()} ብር</p>
                </div>
                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Stock Asset Value</p>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Trapped Capital (Stock)</p>
                   <p className="text-white font-black text-lg">${inventoryAssetValueCad.toLocaleString()} CAD</p>
                </div>
                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
@@ -1603,8 +1869,8 @@ export default function App() {
             </div>
 
             <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-xs text-zinc-300 leading-relaxed mt-4">
-               <span className="font-bold text-amber-500 block mb-1">💡 How it works:</span>
-               To deduct local sales from the Active Local Stock and log it into Total Revenue, click the <span className="bg-black text-amber-500 px-1 py-0.5 rounded font-bold">-1 ሽያጭ</span> button on the main shop feed next to any product.
+               <span className="font-bold text-amber-500 block mb-1">💡 Real-time Store Updates:</span>
+               To deduct local sales from the Active Local Stock and immediately move the exact profit to <b>Realized Cash</b>, tap the <span className="bg-black text-amber-500 px-1 py-0.5 rounded font-bold border border-zinc-800"><DollarSign size={10} className="inline"/> Log Sale</span> button on any product in the store feed. It allows you to select single retail or bulk custom pricing.
             </div>
           </div>
         )}
@@ -1617,12 +1883,14 @@ export default function App() {
                  const currentUpdate = orderUpdateData[order.id] || { status: order.status, tracking: order.tracking_number || "" };
                  
                  return (
-                 <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg">
+                 <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg relative overflow-hidden">
+                    {order.is_offline_sale && <div className="absolute top-0 right-0 bg-blue-900/50 text-blue-300 text-[9px] font-black px-2 py-1 rounded-bl-lg border-b border-l border-blue-800/50">OFFLINE SALE</div>}
                     <div className="flex justify-between items-start">
                        <div>
                           <p className="text-white font-bold text-sm">{order.full_name}</p>
                           <p className="text-amber-500 font-black text-sm">{order.product_name} <span className="text-zinc-500 font-normal text-xs">({order.selected_option})</span></p>
-                          {order.total_weight_kg && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className={order.total_weight_kg < 1 ? "text-red-500 font-bold" : "text-white"}>{order.total_weight_kg} kg</span></p>}
+                          {order.total_weight_kg > 0 && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className={order.total_weight_kg < 1 ? "text-red-500 font-bold" : "text-white"}>{order.total_weight_kg} kg</span></p>}
+                          {order.order_batch_id && <p className="text-[10px] text-zinc-600 font-mono mt-1">Batch: {order.order_batch_id}</p>}
                        </div>
                        <div className="text-right">
                           {getStatusBadge(order.status)}
@@ -1630,25 +1898,27 @@ export default function App() {
                        </div>
                     </div>
                     
-                    <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
-                       <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
-                          <select value={currentUpdate.status} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
-                             <option value="pending">Pending (በሂደት ላይ)</option>
-                             <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
-                             <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
-                             <option value="arrived">Arrived (ደርሷል)</option>
-                          </select>
-                       </div>
-                       <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Tracking Number</label>
-                          <input type="text" value={currentUpdate.tracking} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, tracking: e.target.value}})} placeholder="Optional tracking link/code" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500" />
-                       </div>
-                       
-                       <button onClick={() => handleUpdateAdminOrder(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-xs hover:bg-amber-400 transition-colors">
-                          Update & Notify User
-                       </button>
-                    </div>
+                    {!order.is_offline_sale && (
+                      <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
+                         <div>
+                            <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
+                            <select value={currentUpdate.status} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
+                               <option value="pending">Pending (በሂደት ላይ)</option>
+                               <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
+                               <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
+                               <option value="arrived">Arrived (ደርሷል)</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Tracking Number</label>
+                            <input type="text" value={currentUpdate.tracking} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, tracking: e.target.value}})} placeholder="Optional tracking link/code" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500" />
+                         </div>
+                         
+                         <button onClick={() => handleUpdateAdminOrder(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-xs hover:bg-amber-400 transition-colors">
+                            Update & Notify User
+                         </button>
+                      </div>
+                    )}
                  </div>
               )})}
            </div>
@@ -1792,7 +2062,7 @@ export default function App() {
                 <select required value={formData.author || ""} onChange={(e) => setFormData({ ...formData, author: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-amber-500 font-bold p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
                   <option value="">ጸሐፊ (Author) ይምረጡ</option>
                   <option value="">GOLETH</option>
-                  {authorList.map(a => <option key={a} value={a}>{a}</option>)}
+                  <option value="">አማኑኤል</option>
                 </select>
 
                 <input required value={formData.title || ""} placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
@@ -2072,6 +2342,7 @@ export default function App() {
       )}
 
       {showAccountMenu && renderAccountSlideOver()}
+      {showCart && renderCartSlideOver()}
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
         {activePost && !selectedProduct && renderSinglePost()}
@@ -2090,6 +2361,7 @@ export default function App() {
       {showProfileModal && renderProfileModal()}
       {showSuccessModal && renderSuccessModal()}
       {showOrderForm && renderOrderForm()}
+      {renderOfflineSaleModal()}
       {showAdmin && renderAdmin()}
 
       <nav className="fixed bottom-0 inset-x-0 w-full bg-black/95 backdrop-blur-md border-t border-zinc-900 flex justify-around pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 px-1 z-[100]">
