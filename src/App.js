@@ -164,8 +164,9 @@ export default function App() {
     return { regular: totalRegular, vip: totalVip };
   };
 
-  const inventoryAssetValueCad = products.reduce((sum, p) => sum + ((p.stock_quantity || 0) * (p.cost_cad || 0)), 0);
-  const activeLocalStock = products.reduce((sum, p) => sum + (p.stock_quantity || 0), 0);
+  // Clamped at 0 to prevent negative metrics from glitchy stock counts
+  const inventoryAssetValueCad = products.reduce((sum, p) => sum + (Math.max(0, p.stock_quantity || 0) * (p.cost_cad || 0)), 0);
+  const activeLocalStock = products.reduce((sum, p) => sum + Math.max(0, p.stock_quantity || 0), 0);
   
   const onlineOrdersArr = allOrders.filter(o => o.status === 'arrived' && !o.is_offline_sale);
   const offlineOrdersArr = allOrders.filter(o => o.is_offline_sale);
@@ -174,7 +175,6 @@ export default function App() {
   const totalRevenue = onlineRevenue + loggedOfflineRevenue;
   const prizePool = Math.round(totalRevenue * 0.03); 
   
-  // Adjusted: counts pending AND approved to prevent early reset
   const pendingOrdersWeight = allOrders.filter(o => (o.status === 'pending' || o.status === 'approved') && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
   const flightBatchPercentage = Math.min((pendingOrdersWeight / 1.0) * 100, 100);
 
@@ -331,7 +331,6 @@ export default function App() {
       localStorage.setItem('goleth_profile', JSON.stringify(userRecord));
       setIsCEO(Boolean(userRecord.is_admin));
 
-      // Show profile modal only if missing completely
       if (!userRecord.full_name || !userRecord.phone_number) {
          setShowProfileModal(true);
       }
@@ -420,6 +419,18 @@ export default function App() {
     setShowCart(true);
   };
 
+  const updateCartItemQty = (index, delta) => {
+    setCart(prev => {
+      const newCart = [...prev];
+      const newQty = newCart[index].quantity + delta;
+      if (newQty <= 0) {
+        return newCart.filter((_, idx) => idx !== index);
+      }
+      newCart[index].quantity = newQty;
+      return newCart;
+    });
+  };
+
   const removeFromCart = (indexToRemove) => {
     setCart(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
@@ -461,7 +472,8 @@ export default function App() {
     });
 
     const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
-    const nextDayBirr = checkoutShipping === "next_day" ? 1300 * totalQty : 0; 
+    // Fixed logic: Flat 1300 ETB for the entire cart next-day delivery
+    const nextDayBirr = checkoutShipping === "next_day" ? 1300 : 0; 
     const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
     
     return {
@@ -498,10 +510,8 @@ export default function App() {
 
   const handleApproveVip = async (paymentId, telegramId) => {
      setUploading(true);
-     // 1. Update vip_payments
      const { error: pError } = await supabase.from('vip_payments').update({ status: 'approved', approved_at: new Date() }).eq('id', paymentId);
      
-     // 2. Update vip_users
      const expireDate = new Date();
      expireDate.setMonth(expireDate.getMonth() + 1);
 
@@ -511,7 +521,7 @@ export default function App() {
      }).eq('telegram_id', telegramId.toString());
 
      if (pError || uError) {
-        alert("Error approving VIP.");
+        alert("Error approving VIP. Please check Supabase policies.");
      } else {
         const userMsg = `🎉 <b>እንኳን ደስ አሎት!</b>\n\nየVIP አባልነትዎ አሁን ጀምሯል። ለቀጣይ አንድ ወር ልዩ ቅናሾችን ያገኛሉ። ወደ መተግበሪያው ገብተው ይጠቀሙ!`;
         try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: telegramId, text: userMsg, parse_mode: "HTML" }) }); } catch (err) {}
@@ -868,7 +878,7 @@ export default function App() {
           <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">የግል መረጃ</h2>
           <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ያስተካክሉ።</p>
           <form onSubmit={saveUserProfile} className="space-y-4">
-            <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)') }} />
+            <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም ክፍተት በማድረግ ይጻፉ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)') }} />
             <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
             
             <div className="relative">
@@ -920,7 +930,7 @@ export default function App() {
             <div>
               <label className="text-xs text-zinc-400 font-bold block mb-1">Quantity Sold (Units)</label>
               <input type="number" min="1" max={offlineSaleProduct.stock_quantity} value={offlineSaleQty} onChange={(e) => setOfflineSaleQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" />
-              <p className="text-[10px] text-zinc-500 mt-1">Available stock: {offlineSaleProduct.stock_quantity}</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Available stock: {Math.max(0, offlineSaleProduct.stock_quantity)}</p>
             </div>
             
             {offlineSaleMode === 'bulk' && (
@@ -980,7 +990,11 @@ export default function App() {
                       <h4 className="text-white text-sm font-bold truncate pr-4">{item.product.name}</h4>
                       <p className="text-[10px] text-zinc-400 font-bold mt-0.5">አማራጭ: <span className="text-amber-500">{item.option}</span></p>
                       <div className="mt-2 flex justify-between items-center">
-                        <span className="text-xs font-black text-white bg-zinc-900 px-2 py-1 rounded border border-zinc-700">ብዛት: <span className="text-amber-500 ml-1">{item.quantity}</span></span>
+                         <div className="flex items-center space-x-2 bg-zinc-900 rounded-lg p-1 border border-zinc-700">
+                           <button onClick={() => updateCartItemQty(index, -1)} className="text-white hover:text-amber-500 px-2 py-0.5">-</button>
+                           <span className="font-bold text-sm w-4 text-center text-amber-500">{item.quantity}</span>
+                           <button onClick={() => updateCartItemQty(index, 1)} className="text-white hover:text-amber-500 px-2 py-0.5">+</button>
+                         </div>
                       </div>
                     </div>
                   </div>
@@ -1033,7 +1047,7 @@ export default function App() {
 
                     <select required value={checkoutShipping} onChange={(e) => setCheckoutShipping(e.target.value)} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-bold mt-2">
                       <option value="standard">ከ3-5 የስራ ቀናት (መደበኛ ማጓጓዣ)</option>
-                      <option value="next_day">በሚቀጥለው ቀን (+{1300 * totals.totalQty} ብር አስቸኳይ)</option>
+                      <option value="next_day">በሚቀጥለው ቀን (+1300 ብር አስቸኳይ)</option>
                     </select>
 
                     <div className="bg-black p-3 rounded-xl border border-zinc-800 text-sm mt-4 mb-4">
@@ -1771,9 +1785,8 @@ export default function App() {
       return (
         <div className="pb-24 pt-6">
           <div className="max-w-md mx-auto mb-8">
-            {renderVipBenefits()}
 
-            <div id="vip-payment-form" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl mt-8">
+            <div id="vip-payment-form" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
               <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">
                 {vipStatus === "expired" ? "አባልነትዎ አልቋል (Expired)" : "ወርሃዊ የVIP አባልነት"}
               </h2>
