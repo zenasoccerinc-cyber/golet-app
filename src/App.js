@@ -13,7 +13,7 @@ const TELEGRAM_BOT_TOKEN = process.env.REACT_APP_TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.REACT_APP_TELEGRAM_CHAT_ID; 
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("ሱቅ"); // Changed default to Shop
+  const [activeTab, setActiveTab] = useState("ሱቅ"); // Default home is now Shop
   const [activePost, setActivePost] = useState(null);
   
   const [shopCategory, setShopCategory] = useState("ሁሉም");
@@ -110,6 +110,7 @@ export default function App() {
   const telegramCheckoutRef = useRef(null);
   const telegramSourcingRef = useRef(null);
   const telegramHeaderLoginRef = useRef(null);
+  const telegramWrapperRef = useRef(null); 
 
   const authorList = ["GOLETH", "አማኑኤል", "Writer Name"];
   
@@ -226,6 +227,7 @@ export default function App() {
   useEffect(() => { if (showInlineCheckout && !currentUser) injectTelegramScript(telegramCheckoutRef.current); }, [showInlineCheckout, currentUser]);
   useEffect(() => { if (showOrderForm && !currentUser) injectTelegramScript(telegramSourcingRef.current); }, [showOrderForm, currentUser]);
   useEffect(() => { if (showLoginModal && !currentUser) injectTelegramScript(telegramHeaderLoginRef.current, () => setShowLoginModal(false)); }, [showLoginModal, currentUser]);
+  useEffect(() => { if (activeTab === "ቪአይፒ" && !currentUser) injectTelegramScript(telegramWrapperRef.current); }, [activeTab, currentUser]);
 
   useEffect(() => {
     if (currentUserProfile) {
@@ -332,7 +334,6 @@ export default function App() {
     setUploading(true);
     
     const phone = e.target.phone.value; 
-    // Only read location from form if it's not already locked in the profile
     const loc = currentUserProfile?.region || (["USA", "Canada", "Europe", "Australia", "South America"].includes(e.target.location.value) ? 'Diaspora' : 'Local');
 
     try {
@@ -490,7 +491,6 @@ export default function App() {
     const order = allOrders.find(o => o.id === orderId);
     if (!order) return;
     
-    // Bug Fix: Fallback to the order's existing status/tracking if the admin didn't touch the dropdown
     const update = orderUpdateData[orderId] || { status: order.status, tracking: order.tracking_number || "" };
 
     setUploading(true);
@@ -498,8 +498,14 @@ export default function App() {
     if (update.status) payload.status = update.status;
     if (update.tracking !== undefined) payload.tracking_number = update.tracking;
 
-    const { error } = await supabase.from('product_orders').update(payload).eq('id', orderId);
-    if (!error) {
+    // The .select() ensures we verify the DB actually accepted the update
+    const { data, error } = await supabase.from('product_orders').update(payload).eq('id', orderId).select();
+    
+    if (error) {
+      alert("Database Error: " + error.message);
+    } else if (!data || data.length === 0) {
+      alert("Update failed! Supabase Row-Level Security (RLS) is blocking the update. Please check your table policies.");
+    } else {
       alert("Order updated successfully!");
       setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...payload } : o));
       
@@ -520,7 +526,7 @@ export default function App() {
          if (update.tracking) msg += `\n<b>ትራኪንግ (Tracking #):</b> <code>${update.tracking}</code>`;
          try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: telegramId, text: msg, parse_mode: "HTML" }) }); } catch (err) {}
       }
-    } else { alert("Failed to update order."); }
+    }
     setUploading(false);
   };
 
@@ -1008,7 +1014,7 @@ export default function App() {
     }
 
     const nextDayBirr = checkoutShipping === "next_day" ? 1300 * quantity : 0; 
-    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; // Updated VIP inline cost
+    const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
     const dynamicTotal = totalItemsPrice + nextDayBirr + vipSignupBirr;
     
     const checkoutReady = isFullNameValid(orderName) && vipPhone.length === 10 && orderFile;
