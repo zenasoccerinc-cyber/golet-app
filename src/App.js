@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import SuccessModal from "./components/SuccessModal"; // CEO Edit: Linking the new Success Modal
+import ProfileSlideOver from "./components/ProfileSlideOver"; // CEO Edit: Linking the Profile Menu
 
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -2530,7 +2531,16 @@ export default function App() {
 
       {renderProductDetail()}
 
-      {showProfileSlideOver && renderProfileSlideOver()}
+      {/* CEO Edit: Using the standalone Profile Menu and passing required data */}
+      {showProfileSlideOver && (
+        <ProfileSlideOver
+          setShowProfileSlideOver={setShowProfileSlideOver}
+          currentUserProfile={currentUserProfile}
+          saveUserProfile={saveUserProfile}
+          isFullNameValid={isFullNameValid}
+          uploading={uploading}
+        />
+      )}
       {showSuccessModal && <SuccessModal setShowSuccessModal={setShowSuccessModal} />} {/* CEO Edit: Using the standalone Success Modal */}
       {showOrderForm && renderOrderForm()}
       {renderOfflineSaleModal()}
