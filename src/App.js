@@ -9,6 +9,7 @@ import OfflineSaleModal from "./components/OfflineSaleModal"; // CEO Edit: Linki
 import CartSlideOver from "./components/CartSlideOver"; // CEO Edit: Linking the Cart Screen
 import AdminPanel from "./components/AdminPanel"; // CEO Edit: Linking the Command Center
 import Shop from "./components/Shop";
+import ProductDetail from "./components/ProductDetail";
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
@@ -1034,8 +1035,23 @@ export default function App() {
       {renderProductDetail()}
 
       {/* CEO Edit: Using the standalone Profile Menu and passing required data */}
-      {showProfileSlideOver && (
-        <ProfileSlideOver
+<ProductDetail
+  selectedProduct={selectedProduct}
+  isVIP={isVIP}
+  isCEO={isCEO}
+  cart={cart}
+  setShowCart={setShowCart}
+  handleOpenOfflineSale={handleOpenOfflineSale}
+  handleEdit={handleEdit}
+  handleDelete={handleDelete}
+  selectedOption={selectedOption}
+  setSelectedOption={setSelectedOption}
+  quantity={quantity}
+  setQuantity={setQuantity}
+  addToCart={addToCart}
+  formatOptionDisplay={formatOptionDisplay}
+/>
+<ProfileSlideOver
           setShowProfileSlideOver={setShowProfileSlideOver}
           currentUserProfile={currentUserProfile}
           saveUserProfile={saveUserProfile}
