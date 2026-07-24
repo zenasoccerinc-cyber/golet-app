@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List, LayoutDashboard, FileText, Settings, Archive
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -48,7 +48,7 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
-  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showProfileSlideOver, setShowProfileSlideOver] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   
@@ -176,8 +176,11 @@ export default function App() {
   const totalRevenue = onlineRevenue + loggedOfflineRevenue;
   const prizePool = Math.round(totalRevenue * 0.03); 
   
-  const pendingOrdersWeight = allOrders.filter(o => (o.status === 'pending' || o.status === 'approved') && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
-  const flightBatchPercentage = Math.min((pendingOrdersWeight / 1.0) * 100, 100);
+  // Flight Batch Math Updates: Orders = Pending only. Sourcing = Approved only (0.5kg assumed)
+  const pendingOrdersWeight = allOrders.filter(o => o.status === 'pending' && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
+  const approvedSourcingWeight = allSourcing.filter(o => o.status === 'approved').length * 0.5; 
+  const totalBatchWeight = pendingOrdersWeight + approvedSourcingWeight;
+  const flightBatchPercentage = Math.min((totalBatchWeight / 1.0) * 100, 100);
 
   useEffect(() => {
     fetchData();
@@ -197,7 +200,7 @@ export default function App() {
       } catch (e) {}
     }
 
-    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowCart(false); setShowAccountMenu(false); setQuantity(1); };
+    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowCart(false); setShowAccountMenu(false); setShowProfileSlideOver(false); setQuantity(1); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -341,7 +344,7 @@ export default function App() {
       setIsCEO(Boolean(userRecord.is_admin));
 
       if (!userRecord.full_name || !userRecord.phone_number) {
-         setShowProfileModal(true);
+         setShowProfileSlideOver(true);
       }
 
       let currentStatus = "none";
@@ -364,7 +367,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('goleth_user'); localStorage.removeItem('goleth_profile'); localStorage.removeItem('goleth_pending_vip');
-    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setShowAccountMenu(false); setUserOrders([]); setUserSourcing([]); setShowProfileModal(false);
+    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setShowAccountMenu(false); setUserOrders([]); setUserSourcing([]); setShowProfileSlideOver(false);
   };
 
   const saveUserProfile = async (e) => {
@@ -390,7 +393,7 @@ export default function App() {
         localStorage.setItem('goleth_profile', JSON.stringify(data[0])); 
         setOrderName(name);
         setVipPhone(phone);
-        setShowProfileModal(false); 
+        setShowProfileSlideOver(false); 
       } else {
         alert("Server validation failed. Close and try again.");
       }
@@ -904,15 +907,18 @@ export default function App() {
     );
   };
 
-  const renderProfileModal = () => {
+  const renderProfileSlideOver = () => {
     const isRegionLocked = !!currentUserProfile?.region;
     
     return (
-      <div className="fixed inset-0 bg-black/95 z-[70] overflow-y-auto flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
-        <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto">
-          <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
+      <div className="fixed inset-0 z-[80] flex justify-end">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowProfileSlideOver(false)}></div>
+        <div className="relative w-full max-w-sm bg-zinc-950 h-full overflow-y-auto border-l border-zinc-800 animate-in slide-in-from-right duration-300 flex flex-col p-6 shadow-2xl">
+          <button onClick={() => setShowProfileSlideOver(false)} className="absolute top-4 right-4 bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition-colors"><X className="text-white w-5 h-5" /></button>
+          
           <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">የግል መረጃ</h2>
           <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ያስተካክሉ።</p>
+          
           <form onSubmit={saveUserProfile} className="space-y-4">
             <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም ክፍተት በማድረግ ይጻፉ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)') }} />
             <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
@@ -929,7 +935,7 @@ export default function App() {
               {isRegionLocked && <p className="text-[10px] text-zinc-500 mt-1">Location is locked for pricing accuracy. Contact support to change.</p>}
             </div>
 
-            <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors mt-4">
+            <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-4 rounded-xl shadow-lg transition-colors mt-4">
               {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
             </button>
           </form>
@@ -1875,601 +1881,628 @@ export default function App() {
   };
 
   const renderAdmin = () => {
+    
+    // BADGES LOGIC
+    const pendingOrdersCount = allOrders.filter(o => o.status === 'pending' && !o.is_offline_sale).length;
+    const pendingSourcingCount = allSourcing.filter(o => o.status === 'pending').length;
+    const pendingVipCount = vipRequests.length;
+    
+    // MENU CONFIG
+    const adminMenu = [
+      { id: "overview", label: "Overview", icon: LayoutDashboard, badge: 0 },
+      { id: "orders", label: "Orders", icon: Package, badge: pendingOrdersCount },
+      { id: "sourcing", label: "Sourcing", icon: PlusCircle, badge: pendingSourcingCount },
+      { id: "vip", label: "VIP", icon: Target, badge: pendingVipCount },
+      { id: "products", label: "Products", icon: ShoppingBag, badge: 0 },
+      { id: "posts", label: "Articles", icon: FileText, badge: 0 },
+      { id: "games", label: "Games", icon: Trophy, badge: 0 },
+      { id: "categories", label: "Categories", icon: Settings, badge: 0 }
+    ];
+
     return (
-      <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto p-6 pt-16 animate-in fade-in duration-200">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-amber-500 font-black text-2xl tracking-wide">{editId ? "Edit Listing" : "CEO Dashboard"}</h2>
+      <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in duration-200">
+        <div className="flex justify-between items-center p-6 pb-4 border-b border-zinc-900 bg-black sticky top-0 z-10 shrink-0">
+          <h2 className="text-amber-500 font-black text-2xl tracking-wide flex items-center">
+            {editId ? "Edit Listing" : <><LayoutDashboard className="mr-2" /> CEO Dashboard</>}
+          </h2>
           <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors"><X className="text-white w-6 h-6" /></button>
         </div>
 
         {!editId && (
-          <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4 overflow-x-auto no-scrollbar">
-            {["overview", "posts", "products", "games", "categories", "orders", "sourcing", "vip"].map((tab) => (
-              <button key={tab} onClick={() => { setAdminTab(tab); if(tab !== 'overview') openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors capitalize shrink-0 ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
-                {tab} {tab === "vip" && vipRequests.length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] px-1.5 rounded-full">{vipRequests.length}</span>}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {adminTab === "overview" && !editId && (
-          <div className="space-y-4 pb-20 animate-in fade-in duration-200">
-            
-            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-lg mb-2">
-               <div className="flex justify-between items-end mb-4">
-                  <h3 className="text-amber-500 font-black text-lg flex items-center"><Plane className="mr-2" size={20}/> Flight Batching</h3>
-                  <p className="text-zinc-400 font-bold text-sm">{pendingOrdersWeight.toFixed(2)} kg / 1.00 kg</p>
-               </div>
-               
-               <div className="w-full bg-black rounded-full h-4 border border-zinc-800 overflow-hidden mb-3">
-                  <div className={`h-full transition-all duration-500 ${flightBatchPercentage >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{width: `${flightBatchPercentage}%`}}></div>
-               </div>
-               
-               {flightBatchPercentage >= 100 ? (
-                  <div className="bg-green-500/20 text-green-400 p-3 rounded-lg text-sm font-black text-center border border-green-500/30">✅ Minimum weight reached! Ready to ship.</div>
-               ) : (
-                  <p className="text-zinc-500 text-xs text-center">You need {(1.0 - pendingOrdersWeight).toFixed(2)}kg more to fill the bag.</p>
-               )}
-            </div>
-
-            <h3 className="text-amber-500 font-bold mb-2 mt-4">Financial Metrics</h3>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Realized Cash (Sales)</p>
-                  <p className="text-amber-500 font-black text-lg">{totalRevenue.toLocaleString()} ብር</p>
-               </div>
-               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Prize Pool (3%)</p>
-                  <p className="text-[#2AABEE] font-black text-lg">{prizePool.toLocaleString()} ብር</p>
-               </div>
-               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Trapped Capital (Stock)</p>
-                  <p className="text-white font-black text-lg">${inventoryAssetValueCad.toLocaleString()} CAD</p>
-               </div>
-               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Active Local Stock</p>
-                  <p className="text-white font-black text-lg">{activeLocalStock} Items</p>
-               </div>
-            </div>
-
-            <button onClick={() => setShowFinancialDetails(!showFinancialDetails)} className="w-full bg-black border border-zinc-800 text-zinc-400 py-3 rounded-xl font-bold text-sm flex items-center justify-center hover:text-white transition-colors">
-               <List size={16} className="mr-2" /> {showFinancialDetails ? "Hide" : "🔍 የሒሳብ ዝርዝር (View Details)"}
-            </button>
-
-            {showFinancialDetails && (
-               <div className="bg-black border border-zinc-800 p-4 rounded-xl space-y-6 animate-in slide-in-from-top-2">
-                  <div>
-                    <h4 className="text-amber-500 font-bold text-sm border-b border-zinc-800 pb-2 mb-3">📦 Trapped Capital Breakdown</h4>
-                    {products.filter(p => p.stock_quantity > 0).length === 0 ? <p className="text-xs text-zinc-500">No stock trapped.</p> : (
-                       <ul className="space-y-2">
-                         {products.filter(p => p.stock_quantity > 0).map(p => (
-                            <li key={p.id} className="flex justify-between text-xs">
-                              <span className="text-zinc-300 truncate w-48">{p.name} (x{p.stock_quantity})</span>
-                              <span className="text-white font-mono">${(p.stock_quantity * p.cost_cad).toFixed(2)} CAD</span>
-                            </li>
-                         ))}
-                       </ul>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="text-green-500 font-bold text-sm border-b border-zinc-800 pb-2 mb-3">💰 Realized Cash Breakdown</h4>
-                    {onlineOrdersArr.length === 0 && offlineOrdersArr.length === 0 ? <p className="text-xs text-zinc-500">No realized sales yet.</p> : (
-                       <ul className="space-y-2">
-                         {offlineOrdersArr.map(o => (
-                            <li key={o.id} className="flex justify-between text-xs">
-                              <span className="text-blue-300 truncate w-48">[POS] {o.product_name}</span>
-                              <span className="text-white font-mono">{o.price} ብር</span>
-                            </li>
-                         ))}
-                         {onlineOrdersArr.map(o => (
-                            <li key={o.id} className="flex justify-between text-xs">
-                              <span className="text-zinc-300 truncate w-48">[APP] {o.product_name}</span>
-                              <span className="text-white font-mono">{o.price} ብር</span>
-                            </li>
-                         ))}
-                       </ul>
-                    )}
-                  </div>
-               </div>
-            )}
-
-            <div className="bg-zinc-900 border border-amber-500/50 p-4 rounded-xl shadow-lg flex items-center justify-between mt-4">
-               <div>
-                 <p className="text-xs text-amber-500 font-bold uppercase mb-1">Marketing & Startup Expenses</p>
-                 <p className="text-[10px] text-zinc-400">Budget Limit: $500</p>
-               </div>
-               <div className="flex items-center space-x-2">
-                 <span className="text-zinc-500 font-bold">$</span>
-                 <input 
-                   type="number" 
-                   value={startupExpenses} 
-                   onChange={(e) => handleUpdateExpenses(e.target.value)} 
-                   className="bg-black text-white font-black text-lg text-center w-20 rounded-lg border border-zinc-700 py-2 focus:border-amber-500 outline-none"
-                 />
-               </div>
+          <div className="bg-black border-b border-zinc-900 shadow-xl z-10 shrink-0">
+            <div className="flex overflow-x-auto no-scrollbar p-3 px-6 gap-3">
+              {adminMenu.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = adminTab === tab.id;
+                return (
+                  <button key={tab.id} onClick={() => { setAdminTab(tab.id); if(tab.id !== 'overview') openNewPost(tab.id); }} className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center shrink-0 border ${isActive ? "bg-amber-500 text-black border-amber-500 shadow-lg" : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"}`}>
+                    <Icon size={16} className="mr-2" /> {tab.label}
+                    {tab.badge > 0 && <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full font-black ${isActive ? 'bg-red-600 text-white' : 'bg-red-500/20 text-red-500'}`}>{tab.badge}</span>}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
 
-        {adminTab === "vip" && (
-           <div className="space-y-6 pb-20">
-              <h3 className="text-amber-500 font-bold mb-2">Pending VIP Payments</h3>
-              {vipRequests.length === 0 && <p className="text-zinc-500 text-sm">No pending VIP requests.</p>}
-              {vipRequests.map(req => (
-                 <div key={req.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg relative">
-                    <p className="text-white font-bold">{req.full_name}</p>
-                    <p className="text-xs text-zinc-400">Phone: <span className="font-mono text-white">{req.phone_number}</span></p>
-                    <p className="text-xs text-zinc-400">Type: <span className="text-amber-500">{req.payment_type}</span></p>
-                    <p className="text-[10px] text-zinc-500">{new Date(req.created_at).toLocaleString()}</p>
-                    
-                    {req.receipt_url && (
-                       <a href={req.receipt_url} target="_blank" rel="noreferrer" className="block text-center bg-black border border-zinc-700 py-2 rounded-lg text-xs font-bold text-[#2AABEE] hover:bg-zinc-800">
-                          View Receipt Image
-                       </a>
-                    )}
-
-                    <button onClick={() => handleApproveVip(req.id, req.telegram_id)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-3 rounded-lg hover:bg-amber-400 transition-colors">
-                       Approve & Grant VIP
-                    </button>
+        <div className="flex-1 overflow-y-auto p-6 pt-4 pb-32">
+          {adminTab === "overview" && !editId && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              
+              <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-lg mb-2">
+                 <div className="flex justify-between items-end mb-4">
+                    <h3 className="text-amber-500 font-black text-lg flex items-center"><Plane className="mr-2" size={20}/> Flight Batching</h3>
+                    <p className="text-zinc-400 font-bold text-sm">{totalBatchWeight.toFixed(2)} kg / 1.00 kg</p>
                  </div>
-              ))}
-           </div>
-        )}
-
-        {adminTab === "orders" && (
-           <div className="space-y-6 pb-20">
-              <h3 className="text-amber-500 font-bold mb-2">Manage Store Orders</h3>
-              {allOrders.length === 0 && <p className="text-zinc-500 text-sm">No orders found.</p>}
-              {allOrders.map(order => {
-                 const currentUpdate = orderUpdateData[order.id] || { status: order.status, tracking: order.tracking_number || "" };
                  
-                 return (
-                 <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg relative overflow-hidden">
-                    {order.is_offline_sale && <div className="absolute top-0 right-0 bg-blue-900/50 text-blue-300 text-[9px] font-black px-2 py-1 rounded-bl-lg border-b border-l border-blue-800/50">OFFLINE SALE</div>}
-                    <div className="flex justify-between items-start">
-                       <div>
-                          <p className="text-white font-bold text-sm">{order.full_name}</p>
-                          <p className="text-amber-500 font-black text-sm">{order.product_name} <span className="text-zinc-500 font-normal text-xs">({order.selected_option})</span></p>
-                          {order.total_weight_kg > 0 && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className={order.total_weight_kg < 1 ? "text-red-500 font-bold" : "text-white"}>{order.total_weight_kg} kg</span></p>}
-                          {order.order_batch_id && <p className="text-[10px] text-zinc-600 font-mono mt-1">Batch: {order.order_batch_id}</p>}
-                       </div>
-                       <div className="text-right">
-                          {getStatusBadge(order.status)}
-                          <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
-                       </div>
+                 <div className="w-full bg-black rounded-full h-4 border border-zinc-800 overflow-hidden mb-3">
+                    <div className={`h-full transition-all duration-500 ${flightBatchPercentage >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{width: `${flightBatchPercentage}%`}}></div>
+                 </div>
+                 
+                 {flightBatchPercentage >= 100 ? (
+                    <div className="bg-green-500/20 text-green-400 p-3 rounded-lg text-sm font-black text-center border border-green-500/30">✅ Minimum weight reached! Ready to ship.</div>
+                 ) : (
+                    <p className="text-zinc-500 text-xs text-center">You need {(1.0 - totalBatchWeight).toFixed(2)}kg more to fill the bag.</p>
+                 )}
+              </div>
+
+              <h3 className="text-amber-500 font-bold mb-2 mt-4">Financial Metrics</h3>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Realized Cash (Sales)</p>
+                    <p className="text-amber-500 font-black text-lg">{totalRevenue.toLocaleString()} ብር</p>
+                 </div>
+                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Prize Pool (3%)</p>
+                    <p className="text-[#2AABEE] font-black text-lg">{prizePool.toLocaleString()} ብር</p>
+                 </div>
+                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Trapped Capital (Stock)</p>
+                    <p className="text-white font-black text-lg">${inventoryAssetValueCad.toLocaleString()} CAD</p>
+                 </div>
+                 <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Active Local Stock</p>
+                    <p className="text-white font-black text-lg">{activeLocalStock} Items</p>
+                 </div>
+              </div>
+
+              <button onClick={() => setShowFinancialDetails(!showFinancialDetails)} className="w-full bg-black border border-zinc-800 text-zinc-400 py-3 rounded-xl font-bold text-sm flex items-center justify-center hover:text-white transition-colors">
+                 <List size={16} className="mr-2" /> {showFinancialDetails ? "Hide" : "🔍 የሒሳብ ዝርዝር (View Details)"}
+              </button>
+
+              {showFinancialDetails && (
+                 <div className="bg-black border border-zinc-800 p-4 rounded-xl space-y-6 animate-in slide-in-from-top-2">
+                    <div>
+                      <h4 className="text-amber-500 font-bold text-sm border-b border-zinc-800 pb-2 mb-3">📦 Trapped Capital Breakdown</h4>
+                      {products.filter(p => p.stock_quantity > 0).length === 0 ? <p className="text-xs text-zinc-500">No stock trapped.</p> : (
+                         <ul className="space-y-2">
+                           {products.filter(p => p.stock_quantity > 0).map(p => (
+                              <li key={p.id} className="flex justify-between text-xs">
+                                <span className="text-zinc-300 truncate w-48">{p.name} (x{p.stock_quantity})</span>
+                                <span className="text-white font-mono">${(p.stock_quantity * p.cost_cad).toFixed(2)} CAD</span>
+                              </li>
+                           ))}
+                         </ul>
+                      )}
                     </div>
-                    
-                    {!order.is_offline_sale && (
+                    <div>
+                      <h4 className="text-green-500 font-bold text-sm border-b border-zinc-800 pb-2 mb-3">💰 Realized Cash Breakdown</h4>
+                      {onlineOrdersArr.length === 0 && offlineOrdersArr.length === 0 ? <p className="text-xs text-zinc-500">No realized sales yet.</p> : (
+                         <ul className="space-y-2">
+                           {offlineOrdersArr.map(o => (
+                              <li key={o.id} className="flex justify-between text-xs">
+                                <span className="text-blue-300 truncate w-48">[POS] {o.product_name}</span>
+                                <span className="text-white font-mono">{o.price} ብር</span>
+                              </li>
+                           ))}
+                           {onlineOrdersArr.map(o => (
+                              <li key={o.id} className="flex justify-between text-xs">
+                                <span className="text-zinc-300 truncate w-48">[APP] {o.product_name}</span>
+                                <span className="text-white font-mono">{o.price} ብር</span>
+                              </li>
+                           ))}
+                         </ul>
+                      )}
+                    </div>
+                 </div>
+              )}
+
+              <div className="bg-zinc-900 border border-amber-500/50 p-4 rounded-xl shadow-lg flex items-center justify-between mt-4">
+                 <div>
+                   <p className="text-xs text-amber-500 font-bold uppercase mb-1">Marketing & Startup Expenses</p>
+                   <p className="text-[10px] text-zinc-400">Budget Limit: $500</p>
+                 </div>
+                 <div className="flex items-center space-x-2">
+                   <span className="text-zinc-500 font-bold">$</span>
+                   <input 
+                     type="number" 
+                     value={startupExpenses} 
+                     onChange={(e) => handleUpdateExpenses(e.target.value)} 
+                     className="bg-black text-white font-black text-lg text-center w-20 rounded-lg border border-zinc-700 py-2 focus:border-amber-500 outline-none"
+                   />
+                 </div>
+              </div>
+            </div>
+          )}
+
+          {adminTab === "vip" && (
+             <div className="space-y-6">
+                {vipRequests.length === 0 && <p className="text-zinc-500 text-sm">No pending VIP requests.</p>}
+                {vipRequests.map(req => (
+                   <div key={req.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg relative">
+                      <p className="text-white font-bold">{req.full_name}</p>
+                      <p className="text-xs text-zinc-400">Phone: <span className="font-mono text-white">{req.phone_number}</span></p>
+                      <p className="text-xs text-zinc-400">Type: <span className="text-amber-500">{req.payment_type}</span></p>
+                      <p className="text-[10px] text-zinc-500">{new Date(req.created_at).toLocaleString()}</p>
+                      
+                      {req.receipt_url && (
+                         <a href={req.receipt_url} target="_blank" rel="noreferrer" className="block text-center bg-black border border-zinc-700 py-2 rounded-lg text-xs font-bold text-[#2AABEE] hover:bg-zinc-800">
+                            View Receipt Image
+                         </a>
+                      )}
+
+                      <button onClick={() => handleApproveVip(req.id, req.telegram_id)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-3 rounded-lg hover:bg-amber-400 transition-colors">
+                         Approve & Grant VIP
+                      </button>
+                   </div>
+                ))}
+             </div>
+          )}
+
+          {adminTab === "orders" && (
+             <div className="space-y-6">
+                {allOrders.length === 0 && <p className="text-zinc-500 text-sm">No orders found.</p>}
+                {allOrders.map(order => {
+                   const currentUpdate = orderUpdateData[order.id] || { status: order.status, tracking: order.tracking_number || "" };
+                   
+                   return (
+                   <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg relative overflow-hidden">
+                      {order.is_offline_sale && <div className="absolute top-0 right-0 bg-blue-900/50 text-blue-300 text-[9px] font-black px-2 py-1 rounded-bl-lg border-b border-l border-blue-800/50">OFFLINE SALE</div>}
+                      <div className="flex justify-between items-start">
+                         <div>
+                            <p className="text-white font-bold text-sm">{order.full_name}</p>
+                            <p className="text-amber-500 font-black text-sm">{order.product_name} <span className="text-zinc-500 font-normal text-xs">({order.selected_option})</span></p>
+                            {order.total_weight_kg > 0 && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className={order.total_weight_kg < 1 ? "text-red-500 font-bold" : "text-white"}>{order.total_weight_kg} kg</span></p>}
+                            {order.order_batch_id && <p className="text-[10px] text-zinc-600 font-mono mt-1">Batch: {order.order_batch_id}</p>}
+                         </div>
+                         <div className="text-right">
+                            {getStatusBadge(order.status)}
+                            <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
+                         </div>
+                      </div>
+                      
+                      {!order.is_offline_sale && (
+                        <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
+                           <div>
+                              <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
+                              <select value={currentUpdate.status} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
+                                 <option value="pending">Pending (በሂደት ላይ)</option>
+                                 <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
+                                 <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
+                                 <option value="arrived">Arrived (ደርሷል)</option>
+                              </select>
+                           </div>
+                           <div>
+                              <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Tracking Number</label>
+                              <input type="text" value={currentUpdate.tracking} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, tracking: e.target.value}})} placeholder="Optional tracking link/code" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500" />
+                           </div>
+                           
+                           <button onClick={() => handleUpdateAdminOrder(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-xs hover:bg-amber-400 transition-colors">
+                              Update & Notify User
+                           </button>
+                        </div>
+                      )}
+                   </div>
+                )})}
+             </div>
+          )}
+
+          {adminTab === "sourcing" && (
+             <div className="space-y-6">
+                {allSourcing.filter(o => o.status !== 'arrived').length === 0 && <p className="text-zinc-500 text-sm">No active sourcing orders found. (Arrived orders are hidden).</p>}
+                
+                {allSourcing.filter(o => o.status !== 'arrived').map(order => {
+                   const currentUpdate = sourcingUpdateData[order.id] || { status: order.status };
+                   return (
+                   <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg">
+                      <div className="flex justify-between items-start">
+                         <div>
+                            <p className="text-white font-bold text-sm">{order.full_name}</p>
+                            <p className="text-[#2AABEE] font-black text-sm">{order.product_name || "Custom Order"}</p>
+                            <p className="text-xs text-zinc-400 mt-1">Store: <span className="text-white">{order.store_name || "N/A"}</span></p>
+                            {order.product_link && <a href={order.product_link} target="_blank" rel="noreferrer" className="text-[10px] text-amber-500 underline mt-1 block truncate w-48">Link</a>}
+                         </div>
+                         <div className="text-right flex flex-col items-end">
+                            {getStatusBadge(order.status)}
+                            <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
+                         </div>
+                      </div>
+
+                      {order.image_url && (
+                         <a href={order.image_url} target="_blank" rel="noreferrer" className="block text-center bg-black border border-zinc-700 py-2 rounded-lg text-xs font-bold text-[#2AABEE] hover:bg-zinc-800">
+                            View Sourcing Image
+                         </a>
+                      )}
+                      
                       <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
                          <div>
                             <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
-                            <select value={currentUpdate.status} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
+                            <select value={currentUpdate.status} onChange={(e) => setSourcingUpdateData({...sourcingUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
                                <option value="pending">Pending (በሂደት ላይ)</option>
                                <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
                                <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
-                               <option value="arrived">Arrived (ደርሷል)</option>
+                               <option value="arrived">Arrived (ደርሷል - Hides from view)</option>
                             </select>
                          </div>
-                         <div>
-                            <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Tracking Number</label>
-                            <input type="text" value={currentUpdate.tracking} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, tracking: e.target.value}})} placeholder="Optional tracking link/code" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500" />
-                         </div>
-                         
-                         <button onClick={() => handleUpdateAdminOrder(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-xs hover:bg-amber-400 transition-colors">
+                         <button onClick={() => handleUpdateSourcing(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-[#2AABEE] text-white font-bold py-2 rounded-lg text-xs hover:bg-[#229ED9] transition-colors">
                             Update & Notify User
                          </button>
                       </div>
-                    )}
+                   </div>
+                )})}
+             </div>
+          )}
+
+          {adminTab === "categories" && (
+            <div className="space-y-6">
+              <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+                 <h3 className="text-amber-500 font-bold mb-4">ዋና ምድቦች (Primary Categories)</h3>
+                 <div className="flex space-x-2 mb-4">
+                   <input type="text" value={newCatInput} onChange={e => setNewCatInput(e.target.value)} placeholder="Add new primary..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                   <button onClick={() => addCategory('primary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
                  </div>
-              )})}
-           </div>
-        )}
-
-        {adminTab === "sourcing" && (
-           <div className="space-y-6 pb-20">
-              <h3 className="text-[#2AABEE] font-bold mb-2">Manage Sourcing Orders</h3>
-              {allSourcing.length === 0 && <p className="text-zinc-500 text-sm">No sourcing orders found.</p>}
-              {allSourcing.map(order => {
-                 const currentUpdate = sourcingUpdateData[order.id] || { status: order.status };
-                 return (
-                 <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg">
-                    <div className="flex justify-between items-start">
-                       <div>
-                          <p className="text-white font-bold text-sm">{order.full_name}</p>
-                          <p className="text-[#2AABEE] font-black text-sm">{order.product_name || "Custom Order"}</p>
-                          <p className="text-xs text-zinc-400 mt-1">Store: <span className="text-white">{order.store_name || "N/A"}</span></p>
-                          {order.product_link && <a href={order.product_link} target="_blank" rel="noreferrer" className="text-[10px] text-amber-500 underline mt-1 block truncate w-48">Link</a>}
+                 <div className="flex flex-col gap-2">
+                   {customCategories.map((c, index) => {
+                     const isHidden = hiddenCategories.includes(c);
+                     return (
+                     <div key={`prim_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                       {editCatIndex === index ? (
+                         <input autoFocus type="text" value={editCatValue} onChange={e => setEditCatValue(e.target.value)} onBlur={() => saveCategoryEdit('primary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
+                       ) : (
+                         <span className={isHidden ? "text-zinc-500 line-through" : ""}>{c}</span>
+                       )}
+                       <div className="flex items-center space-x-1">
+                         <button onClick={() => { setEditCatIndex(index); setEditCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
+                         <button onClick={() => moveCategory('primary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
+                         <button onClick={() => moveCategory('primary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
+                         <button onClick={() => toggleHideCategory('primary', c)} className={`p-1.5 ${isHidden ? 'text-amber-500' : 'text-zinc-400 hover:text-amber-500'}`}>
+                           {isHidden ? <EyeOff size={16}/> : <Eye size={16}/>}
+                         </button>
                        </div>
-                       <div className="text-right">
-                          {getStatusBadge(order.status)}
-                          <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
-                       </div>
-                    </div>
-
-                    {order.image_url && (
-                       <a href={order.image_url} target="_blank" rel="noreferrer" className="block text-center bg-black border border-zinc-700 py-2 rounded-lg text-xs font-bold text-[#2AABEE] hover:bg-zinc-800">
-                          View Sourcing Image
-                       </a>
-                    )}
-                    
-                    <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
-                       <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
-                          <select value={currentUpdate.status} onChange={(e) => setSourcingUpdateData({...sourcingUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
-                             <option value="pending">Pending (በሂደት ላይ)</option>
-                             <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
-                             <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
-                             <option value="arrived">Arrived (ደርሷል)</option>
-                          </select>
-                       </div>
-                       <button onClick={() => handleUpdateSourcing(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-[#2AABEE] text-white font-bold py-2 rounded-lg text-xs hover:bg-[#229ED9] transition-colors">
-                          Update & Notify User
-                       </button>
-                    </div>
-                 </div>
-              )})}
-           </div>
-        )}
-
-        {adminTab === "categories" && (
-          <div className="space-y-6 pb-20">
-            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-               <h3 className="text-amber-500 font-bold mb-4">ዋና ምድቦች (Primary Categories)</h3>
-               <div className="flex space-x-2 mb-4">
-                 <input type="text" value={newCatInput} onChange={e => setNewCatInput(e.target.value)} placeholder="Add new primary..." className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                 <button onClick={() => addCategory('primary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
-               </div>
-               <div className="flex flex-col gap-2">
-                 {customCategories.map((c, index) => {
-                   const isHidden = hiddenCategories.includes(c);
-                   return (
-                   <div key={`prim_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
-                     {editCatIndex === index ? (
-                       <input autoFocus type="text" value={editCatValue} onChange={e => setEditCatValue(e.target.value)} onBlur={() => saveCategoryEdit('primary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
-                     ) : (
-                       <span className={isHidden ? "text-zinc-500 line-through" : ""}>{c}</span>
-                     )}
-                     <div className="flex items-center space-x-1">
-                       <button onClick={() => { setEditCatIndex(index); setEditCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
-                       <button onClick={() => moveCategory('primary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
-                       <button onClick={() => moveCategory('primary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
-                       <button onClick={() => toggleHideCategory('primary', c)} className={`p-1.5 ${isHidden ? 'text-amber-500' : 'text-zinc-400 hover:text-amber-500'}`}>
-                         {isHidden ? <EyeOff size={16}/> : <Eye size={16}/>}
-                       </button>
                      </div>
-                   </div>
-                 )})}
-               </div>
-            </div>
+                   )})}
+                 </div>
+              </div>
 
-            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-               <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-amber-500 font-bold">ንዑስ ምድቦች (Subcategories)</h3>
-               </div>
-               <p className="text-xs text-zinc-400 mb-3">1. ንዑስ ምድብ ለማን እንደሚገባ ይምረጡ፦</p>
-               <select value={selectedPrimaryForSub} onChange={(e) => setSelectedPrimaryForSub(e.target.value)} className="w-full bg-black border border-zinc-700 text-amber-500 font-bold p-3 rounded-xl outline-none mb-4 focus:border-amber-500">
-                  {customCategories.length === 0 && <option value="">No Primary Categories</option>}
-                  {customCategories.map(c => <option key={`sub_opt_${c}`} value={c}>{c}</option>)}
-               </select>
+              <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+                 <div className="flex justify-between items-center mb-4">
+                   <h3 className="text-amber-500 font-bold">ንዑስ ምድቦች (Subcategories)</h3>
+                 </div>
+                 <p className="text-xs text-zinc-400 mb-3">1. ንዑስ ምድብ ለማን እንደሚገባ ይምረጡ፦</p>
+                 <select value={selectedPrimaryForSub} onChange={(e) => setSelectedPrimaryForSub(e.target.value)} className="w-full bg-black border border-zinc-700 text-amber-500 font-bold p-3 rounded-xl outline-none mb-4 focus:border-amber-500">
+                    {customCategories.length === 0 && <option value="">No Primary Categories</option>}
+                    {customCategories.map(c => <option key={`sub_opt_${c}`} value={c}>{c}</option>)}
+                 </select>
 
-               {selectedPrimaryForSub && (
-                 <>
-                   <div className="flex space-x-2 mb-4">
-                     <input type="text" value={newSubCatInput} onChange={e => setNewSubCatInput(e.target.value)} placeholder={`Add subcategory to ${selectedPrimaryForSub}...`} className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
-                     <button onClick={() => addCategory('secondary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
-                   </div>
-                   <div className="flex flex-col gap-2">
-                     {(customSubCats[selectedPrimaryForSub] || []).length === 0 && <span className="text-xs text-zinc-500 italic">ምንም የለም</span>}
-                     {(customSubCats[selectedPrimaryForSub] || []).map((c, index) => {
-                       const isHidden = hiddenSubCategories.includes(c);
-                       return (
-                       <div key={`sec_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
-                         {editSubCatIndex === index ? (
-                           <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
-                         ) : (
-                           <span className={isHidden ? "text-zinc-500 line-through" : ""}>{c}</span>
-                         )}
-                         <div className="flex items-center space-x-1">
-                           <button onClick={() => { setEditSubCatIndex(index); setEditSubCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
-                           <button onClick={() => moveCategory('secondary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
-                           <button onClick={() => moveCategory('secondary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
-                           <button onClick={() => toggleHideCategory('secondary', c)} className={`p-1.5 ${isHidden ? 'text-amber-500' : 'text-zinc-400 hover:text-amber-500'}`}>
-                             {isHidden ? <EyeOff size={16}/> : <Eye size={16}/>}
-                           </button>
+                 {selectedPrimaryForSub && (
+                   <>
+                     <div className="flex space-x-2 mb-4">
+                       <input type="text" value={newSubCatInput} onChange={e => setNewSubCatInput(e.target.value)} placeholder={`Add subcategory to ${selectedPrimaryForSub}...`} className="flex-1 bg-black border border-zinc-700 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                       <button onClick={() => addCategory('secondary')} className="bg-amber-500 text-black px-4 py-3 rounded-xl font-bold hover:bg-amber-400">Add</button>
+                     </div>
+                     <div className="flex flex-col gap-2">
+                       {(customSubCats[selectedPrimaryForSub] || []).length === 0 && <span className="text-xs text-zinc-500 italic">ምንም የለም</span>}
+                       {(customSubCats[selectedPrimaryForSub] || []).map((c, index) => {
+                         const isHidden = hiddenSubCategories.includes(c);
+                         return (
+                         <div key={`sec_${c}`} className="bg-zinc-800 text-white px-3 py-2 rounded-lg flex items-center justify-between text-sm">
+                           {editSubCatIndex === index ? (
+                             <input autoFocus type="text" value={editSubCatValue} onChange={e => setEditSubCatValue(e.target.value)} onBlur={() => saveCategoryEdit('secondary')} className="bg-black border border-amber-500 text-white px-2 py-1 rounded w-1/2 outline-none" />
+                           ) : (
+                             <span className={isHidden ? "text-zinc-500 line-through" : ""}>{c}</span>
+                           )}
+                           <div className="flex items-center space-x-1">
+                             <button onClick={() => { setEditSubCatIndex(index); setEditSubCatValue(c); }} className="p-1.5 text-zinc-400 hover:text-amber-500"><Edit3 size={16}/></button>
+                             <button onClick={() => moveCategory('secondary', index, -1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowUp size={16}/></button>
+                             <button onClick={() => moveCategory('secondary', index, 1)} className="p-1.5 text-zinc-400 hover:text-white"><ArrowDown size={16}/></button>
+                             <button onClick={() => toggleHideCategory('secondary', c)} className={`p-1.5 ${isHidden ? 'text-amber-500' : 'text-zinc-400 hover:text-amber-500'}`}>
+                               {isHidden ? <EyeOff size={16}/> : <Eye size={16}/>}
+                             </button>
+                           </div>
                          </div>
-                       </div>
-                     )})}
-                   </div>
-                 </>
-               )}
-            </div>
-          </div>
-        )}
-
-        {adminTab === "games" && (
-          <div className="space-y-8 pb-20">
-            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-              <h3 className="text-amber-500 font-bold mb-4">Post New Game</h3>
-              <div className="space-y-3">
-                <input type="text" placeholder="Team A Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_a} onChange={e => setNewGame({...newGame, team_a: e.target.value})} />
-                <div>
-                   <label className="block text-zinc-400 text-xs font-bold mb-1">Team A Logo (Image File)</label>
-                   <input type="file" accept="image/*" onChange={(e) => setTeamAFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
-                </div>
-                <div className="border-b border-zinc-800 my-4"></div>
-                <input type="text" placeholder="Team B Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_b} onChange={e => setNewGame({...newGame, team_b: e.target.value})} />
-                <div>
-                   <label className="block text-zinc-400 text-xs font-bold mb-1">Team B Logo (Image File)</label>
-                   <input type="file" accept="image/*" onChange={(e) => setTeamBFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
-                </div>
-                <button onClick={createGame} disabled={uploading || !newGame.team_a || !newGame.team_b} className="w-full bg-amber-500 disabled:bg-zinc-800 text-black p-4 rounded-xl mt-4 font-black hover:bg-amber-400">Publish Game</button>
+                       )})}
+                     </div>
+                   </>
+                 )}
               </div>
             </div>
+          )}
 
-            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-              <h3 className="text-amber-500 font-bold mb-4">Active Games (Set Final Scores)</h3>
-              {games.map(game => (
-                <div key={game.id} className="border-t border-zinc-800 py-4 flex flex-col space-y-3">
-                  <div className="flex justify-between items-center text-sm font-bold text-white">
-                    <span className="flex items-center space-x-2">
-                       {game.team_a_logo && <img src={game.team_a_logo} className="w-6 h-6 object-contain" alt="A" />}
-                       <span>{game.team_a} vs {game.team_b}</span>
-                       {game.team_b_logo && <img src={game.team_b_logo} className="w-6 h-6 object-contain" alt="B" />}
-                    </span>
-                    <button onClick={() => handleDelete("games", game.id)} className="text-red-500 p-1"><Trash2 size={16}/></button>
+          {adminTab === "games" && (
+            <div className="space-y-8">
+              <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+                <h3 className="text-amber-500 font-bold mb-4">Post New Game</h3>
+                <div className="space-y-3">
+                  <input type="text" placeholder="Team A Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_a} onChange={e => setNewGame({...newGame, team_a: e.target.value})} />
+                  <div>
+                     <label className="block text-zinc-400 text-xs font-bold mb-1">Team A Logo (Image File)</label>
+                     <input type="file" accept="image/*" onChange={(e) => setTeamAFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
                   </div>
-                  {game.status !== 'finished' ? (
-                    <div className="flex items-center space-x-2">
-                      <input type="number" placeholder="0" className="bg-black border border-zinc-700 text-white p-2 w-16 rounded-lg text-center" onChange={e => setScoresToUpdate({...scoresToUpdate, [game.id]: {...scoresToUpdate[game.id], a: e.target.value}})} />
-                      <span className="font-black text-zinc-500">-</span>
-                      <input type="number" placeholder="0" className="bg-black border border-zinc-700 text-white p-2 w-16 rounded-lg text-center" onChange={e => setScoresToUpdate({...scoresToUpdate, [game.id]: {...scoresToUpdate[game.id], b: e.target.value}})} />
-                      <button onClick={() => updateFinalScore(game.id)} className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 text-xs">End Game</button>
-                    </div>
-                  ) : (
-                    <span className="text-zinc-500 text-xs">Finished ({game.final_score_a} - {game.final_score_b})</span>
-                  )}
+                  <div className="border-b border-zinc-800 my-4"></div>
+                  <input type="text" placeholder="Team B Name" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" value={newGame.team_b} onChange={e => setNewGame({...newGame, team_b: e.target.value})} />
+                  <div>
+                     <label className="block text-zinc-400 text-xs font-bold mb-1">Team B Logo (Image File)</label>
+                     <input type="file" accept="image/*" onChange={(e) => setTeamBFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                  </div>
+                  <button onClick={createGame} disabled={uploading || !newGame.team_a || !newGame.team_b} className="w-full bg-amber-500 disabled:bg-zinc-800 text-black p-4 rounded-xl mt-4 font-black hover:bg-amber-400">Publish Game</button>
                 </div>
-              ))}
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+                <h3 className="text-amber-500 font-bold mb-4">Active Games (Set Final Scores)</h3>
+                {games.map(game => (
+                  <div key={game.id} className="border-t border-zinc-800 py-4 flex flex-col space-y-3">
+                    <div className="flex justify-between items-center text-sm font-bold text-white">
+                      <span className="flex items-center space-x-2">
+                         {game.team_a_logo && <img src={game.team_a_logo} className="w-6 h-6 object-contain" alt="A" />}
+                         <span>{game.team_a} vs {game.team_b}</span>
+                         {game.team_b_logo && <img src={game.team_b_logo} className="w-6 h-6 object-contain" alt="B" />}
+                      </span>
+                      <button onClick={() => handleDelete("games", game.id)} className="text-red-500 p-1"><Trash2 size={16}/></button>
+                    </div>
+                    {game.status !== 'finished' ? (
+                      <div className="flex items-center space-x-2">
+                        <input type="number" placeholder="0" className="bg-black border border-zinc-700 text-white p-2 w-16 rounded-lg text-center" onChange={e => setScoresToUpdate({...scoresToUpdate, [game.id]: {...scoresToUpdate[game.id], a: e.target.value}})} />
+                        <span className="font-black text-zinc-500">-</span>
+                        <input type="number" placeholder="0" className="bg-black border border-zinc-700 text-white p-2 w-16 rounded-lg text-center" onChange={e => setScoresToUpdate({...scoresToUpdate, [game.id]: {...scoresToUpdate[game.id], b: e.target.value}})} />
+                        <button onClick={() => updateFinalScore(game.id)} className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 text-xs">End Game</button>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-500 text-xs">Finished ({game.final_score_a} - {game.final_score_b})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && adminTab !== "sourcing" && adminTab !== "overview" && adminTab !== "vip" && (
-          <form onSubmit={handleAdminSubmit} className="space-y-4 pb-20">
-            {adminTab === "posts" && (
-              <>
-                <select required value={formData.postCategory || ""} onChange={(e) => setFormData({ ...formData, postCategory: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
-                  <option value="">ምድብ ይምረጡ</option>
-                  <option value="ዋና">ዋና</option>
-                  <option value="ስፖርት">ስፖርት</option>
-                  <option value="ሹክሹክታ">ሹክሹክታ</option>
-                  <option value="ማህበራዊ">ማህበራዊ</option>
-                </select>
+          {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && adminTab !== "sourcing" && adminTab !== "overview" && adminTab !== "vip" && (
+            <form onSubmit={handleAdminSubmit} className="space-y-4">
+              {adminTab === "posts" && (
+                <>
+                  <select required value={formData.postCategory || ""} onChange={(e) => setFormData({ ...formData, postCategory: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
+                    <option value="">ምድብ ይምረጡ</option>
+                    <option value="ዋና">ዋና</option>
+                    <option value="ስፖርት">ስፖርት</option>
+                    <option value="ሹክሹክታ">ሹክሹክታ</option>
+                    <option value="ማህበራዊ">ማህበራዊ</option>
+                  </select>
 
-                <select required value={formData.author || ""} onChange={(e) => setFormData({ ...formData, author: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-amber-500 font-bold p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
-                  <option value="">ጸሐፊ (Author) ይምረጡ</option>
-                  <option value="">GOLETH</option>
-                  <option value="">አማኑኤል</option>
-                </select>
+                  <select required value={formData.author || ""} onChange={(e) => setFormData({ ...formData, author: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-amber-500 font-bold p-4 rounded-xl focus:border-amber-500 outline-none transition-colors">
+                    <option value="">ጸሐፊ (Author) ይምረጡ</option>
+                    <option value="">GOLETH</option>
+                    <option value="">አማኑኤል</option>
+                  </select>
 
-                <input required value={formData.title || ""} placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-                <input value={formData.subtitle || ""} placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-                <textarea value={formData.excerpt || ""} rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
-                
-                <div className="relative">
-                  <textarea required value={formData.body || ""} rows="8" placeholder="ሙሉ ጽሑፍ (Body)." onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
-                  <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[image1]</b> and <b>[image2]</b> inside the text to place your pictures.</p>
-                </div>
-
-                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-4">
-                   <div>
-                     <label className="block text-white font-bold text-sm mb-2">1. ዋና ምስል (Main Feed Image)</label>
-                     {existingMainImage && (
-                        <div className="mb-3">
-                           <p className="text-[10px] text-zinc-400 mb-1 uppercase font-bold tracking-widest">Current Image:</p>
-                           <img src={existingMainImage} alt="Current Main" className="h-16 rounded-md object-cover border border-zinc-700" />
-                        </div>
-                     )}
-                     <input type="file" accept="image/*" onChange={(e) => setMainImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-amber-500 file:text-black file:font-bold file:border-0 file:cursor-pointer" />
-                     {existingMainImage && <p className="text-[10px] text-zinc-500 mt-2">Select a new file only if you want to replace the current one.</p>}
-                   </div>
-                   
-                   <div className="border-t border-zinc-800 pt-4">
-                     <label className="block text-white font-bold text-sm mb-2">2. የጽሑፍ ውስጥ ምስሎች (Inline Images)</label>
-                     {existingInlineImages.length > 0 && (
-                        <div className="mb-3 flex gap-2 overflow-x-auto pb-2">
-                           {existingInlineImages.map((img, idx) => (
-                              <div key={idx} className="relative">
-                                 <span className="absolute top-0 left-0 bg-amber-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded-br-lg z-10 shadow-sm">[image{idx + 1}]</span>
-                                 <img src={img} alt={`Inline ${idx + 1}`} className="h-20 w-20 rounded-md object-cover border border-zinc-700 shrink-0" />
-                              </div>
-                           ))}
-                        </div>
-                     )}
-                     <p className="text-xs text-zinc-400 mb-3">Upload multiple files at once. They will become <b>[image1]</b>, <b>[image2]</b>, etc.</p>
-                     <input type="file" multiple accept="image/*" onChange={(e) => setInlineImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
-                     {existingInlineImages.length > 0 && <p className="text-[10px] text-amber-500 mt-2">Warning: Selecting new files will replace all existing inline images.</p>}
-                   </div>
-                </div>
-
-                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                   <label className="block text-white font-bold text-sm mb-2">3. ተያያዥ ጽሑፎች/እቃዎች (Related Items)</label>
-                   <p className="text-xs text-zinc-400 mb-3">እነዚህ ጽሑፉ መጨረሻ ላይ ይታያሉ (እስከ 2 መምረጥ ይመከራል)።</p>
-                   <select onChange={handleAddRelated} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-lg mb-3 outline-none focus:border-amber-500">
-                      <option value="">+ ምረጥ (Select Related...)</option>
-                      <optgroup label="Articles (ዜናዎች)">
-                        {posts.filter(p => p.id !== editId).map(p => <option key={`post_${p.id}`} value={`post_${p.id}`}>{p.title}</option>)}
-                      </optgroup>
-                      <optgroup label="Shop Items (ሱቅ)">
-                        {products.map(p => <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.name}</option>)}
-                      </optgroup>
-                   </select>
-
-                   {formData.relatedLinks && formData.relatedLinks.length > 0 && (
-                     <div className="space-y-2 mt-2">
-                       {formData.relatedLinks.map(link => {
-                         const [type, id] = link.split('_');
-                         const item = type === 'post' ? posts.find(p => p.id === parseInt(id)) : products.find(p => p.id === parseInt(id));
-                         return (
-                           <div key={link} className="flex justify-between items-center bg-black p-2 rounded-lg text-xs border border-zinc-800">
-                             <span className="text-zinc-300 truncate w-64">{item ? (item.title || item.name) : "Loading..."}</span>
-                             <button type="button" onClick={() => removeRelated(link)} className="text-red-500 font-bold ml-2 hover:text-red-400">X</button>
-                           </div>
-                         );
-                       })}
-                     </div>
-                   )}
-                </div>
-              </>
-            )}
-
-            {adminTab === "products" && (
-              <>
-                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl mb-4 flex items-center justify-between">
-                  <span className="text-white font-bold text-sm">ይህ እቃ ቅናሽ ላይ ነው? (Is it on Sale?)</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={formData.isSale || false} onChange={e => setFormData({...formData, isSale: e.target.checked})} className="sr-only peer" />
-                    <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                  </label>
-                </div>
-
-                <input required value={formData.title || ""} placeholder="የእቃው ስም" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
-                
-                <div className="grid grid-cols-2 gap-4 mt-2">
-                  <input required value={formData.cadCost || ""} type="number" step="0.01" placeholder="Base Cost (CAD)" onChange={(e) => setFormData({ ...formData, cadCost: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <div>
-                    <input required value={formData.stockQty || ""} type="number" placeholder="Stock Qty (Single units)" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                    <p className="text-[10px] text-zinc-500 mt-1 pl-1">Ex: If you bought a 5-pack, enter '5'.</p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <input required value={formData.weightKg || ""} type="number" step="0.1" placeholder="Weight (kg)" onChange={(e) => setFormData({ ...formData, weightKg: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                  <input value={formData.specialFreightFee || ""} type="number" placeholder="Special Freight Fee (ETB)" onChange={(e) => setFormData({ ...formData, specialFreightFee: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-4 mb-4 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                  <div>
-                    <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Calculated Regular Price</label>
-                    <input readOnly value={formData.price || ""} type="number" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-lg outline-none opacity-80 font-mono" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">Calculated VIP Price</label>
-                    <input readOnly value={formData.vipPrice || ""} type="number" className="w-full bg-black border border-amber-500/50 text-amber-500 p-3 rounded-lg outline-none opacity-80 font-mono font-bold" />
-                  </div>
-                  <p className="col-span-2 text-[10px] text-zinc-500 leading-tight mt-1">Pricing is auto-calculated: (CAD + 13% Tax) + 18% Markup * 130 Rate + Freight.</p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                  <div className="relative">
-                    <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድቦች (Primary Categories) - Select multiple</label>
-                    <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
-                       {customCategories.map(c => (
-                         <label key={c} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
-                           <input type="checkbox" checked={formData.shopCat?.includes(c)} onChange={(e) => {
-                             const newCats = e.target.checked ? [...formData.shopCat, c] : formData.shopCat.filter(cat => cat !== c);
-                             setFormData({...formData, shopCat: newCats});
-                           }} className="accent-amber-500" />
-                           <span className="text-sm">{c}</span>
-                         </label>
-                       ))}
-                    </div>
-                  </div>
-
-                  <div className="relative border-t border-zinc-800 pt-4 mt-2">
-                    <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድቦች (Subcategories) - Select multiple</label>
-                    <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
-                       {Object.entries(customSubCats).flatMap(([prim, subs]) => subs.map(sub => ({prim, sub}))).map(({prim, sub}, i) => {
-                         return (
-                           <label key={`${prim}_${sub}_${i}`} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
-                             <input type="checkbox" checked={formData.shopSubCat?.includes(sub)} onChange={(e) => {
-                               const newSubCats = e.target.checked ? [...formData.shopSubCat, sub] : formData.shopSubCat.filter(cat => cat !== sub);
-                               setFormData({...formData, shopSubCat: newSubCats});
-                             }} className="accent-amber-500" />
-                             <span className="text-sm">{sub} <span className="text-[10px] text-zinc-500 ml-1">({prim})</span></span>
-                           </label>
-                         );
-                       })}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="relative">
-                  <button type="button" onClick={() => setShowSizeDropdown(!showSizeDropdown)} className="w-full bg-zinc-900 border border-zinc-800 text-left p-4 rounded-xl focus:border-amber-500 text-zinc-400 flex justify-between items-center transition-colors">
-                    <span>መጠኖች ይምረጡ {formData.options?.length > 0 && <span className="text-amber-500 font-bold ml-1">({formData.options.length})</span>}</span>
-                    <span>{showSizeDropdown ? "▲" : "▼"}</span>
-                  </button>
+                  <input required value={formData.title || ""} placeholder="ርዕስ (Title)" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
+                  <input value={formData.subtitle || ""} placeholder="ንዑስ ርዕስ (Subtitle)" onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
+                  <textarea value={formData.excerpt || ""} rows="2" placeholder="አጭር ማብራሪያ (Excerpt)" onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
                   
-                  {showSizeDropdown && (
-                    <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-[400px] overflow-y-auto p-4 shadow-2xl">
-                      <div className="mb-4 bg-black p-3 rounded-xl border border-amber-500/30">
-                         <label className="block text-amber-500 text-xs font-bold mb-2">አዲስ መጠን / ቀለም ያስገቡ (Add Custom Size/Option)</label>
-                         <div className="flex space-x-2">
-                           <input type="text" value={customSizeInput} onChange={(e) => setCustomSizeInput(e.target.value)} placeholder="e.g. Red, 4XL, 100ml..." className="flex-1 bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-sm focus:border-amber-500 outline-none" />
-                           <button type="button" onClick={handleAddCustomSize} className="bg-amber-500 text-black px-3 py-2 rounded-lg font-bold text-sm hover:bg-amber-400">Add</button>
-                         </div>
-                      </div>
-                      <div className="space-y-3">
-                        {Object.entries(categorizedOptions).map(([categoryName, sizes]) => (
-                          <div key={categoryName} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700">
-                            <button type="button" onClick={() => toggleOptionCategory(categoryName)} className="w-full text-left px-4 py-3 flex justify-between items-center text-sm font-bold text-amber-500 hover:bg-zinc-800 transition-colors">
-                              <span>{categoryName}</span><span>{expandedOptionCategories[categoryName] ? "▲" : "▼"}</span>
-                            </button>
-                            {expandedOptionCategories[categoryName] && (
-                              <div className="p-4 flex flex-wrap gap-2 bg-black border-t border-zinc-700">
-                                {sizes.length === 0 && <p className="text-xs text-zinc-500">ምንም የለም</p>}
-                                {sizes.map(size => (
-                                  <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors border border-zinc-800">
-                                    <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500 w-4 h-4" />
-                                    <span className="text-xs font-bold">{size}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            )}
+                  <div className="relative">
+                    <textarea required value={formData.body || ""} rows="8" placeholder="ሙሉ ጽሑፍ (Body)." onChange={(e) => setFormData({ ...formData, body: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors"></textarea>
+                    <p className="text-[10px] text-amber-500 mt-1 pl-2">Tip: Type <b>[image1]</b> and <b>[image2]</b> inside the text to place your pictures.</p>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-4">
+                     <div>
+                       <label className="block text-white font-bold text-sm mb-2">1. ዋና ምስል (Main Feed Image)</label>
+                       {existingMainImage && (
+                          <div className="mb-3">
+                             <p className="text-[10px] text-zinc-400 mb-1 uppercase font-bold tracking-widest">Current Image:</p>
+                             <img src={existingMainImage} alt="Current Main" className="h-16 rounded-md object-cover border border-zinc-700" />
                           </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-lg transition-colors sticky bottom-0">አረጋግጥ (Done)</button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                   <label className="block text-white font-bold text-sm mb-2">ስለ እቃው (Product Description) - Optional</label>
-                   <textarea value={formData.description || ""} rows="3" placeholder="Write details about the product here..." onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors text-sm"></textarea>
-                </div>
-
-                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                   <label className="block text-zinc-400 font-bold text-xs mb-2">Private Source URL (Backend Only)</label>
-                   <input type="url" value={formData.sourceUrl || ""} placeholder="https://..." onChange={(e) => setFormData({ ...formData, sourceUrl: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors text-sm" />
-                   <p className="text-[10px] text-zinc-500 mt-2">This link is saved to Supabase but never shown to users.</p>
-                </div>
-
-                <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
-                   <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች (Image Upload)</label>
-                   <input type="file" multiple accept="image/*" onChange={(e) => { setProductImageFiles(Array.from(e.target.files)); setSelectedMainImgIdx(0); }} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
-                   {productImageFiles.length > 0 && (
-                     <div className="mt-4 border-t border-zinc-800 pt-3">
-                       <p className="text-xs text-amber-500 font-bold mb-2">Tap an image to set it as MAIN (Front):</p>
-                       <div className="flex space-x-2 overflow-x-auto pb-2">
-                         {productImageFiles.map((file, idx) => (
-                           <div key={idx} onClick={() => setSelectedMainImgIdx(idx)} className={`relative p-1 shrink-0 rounded-lg cursor-pointer transition-all border-2 ${selectedMainImgIdx === idx ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-zinc-800'}`}>
-                             <img src={URL.createObjectURL(file)} alt={`preview-${idx}`} className="w-16 h-16 object-cover rounded-md" />
-                             {selectedMainImgIdx === idx && <span className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-1 rounded-bl-md z-10">MAIN</span>}
-                           </div>
-                         ))}
-                       </div>
+                       )}
+                       <input type="file" accept="image/*" onChange={(e) => setMainImageFile(e.target.files[0])} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-amber-500 file:text-black file:font-bold file:border-0 file:cursor-pointer" />
+                       {existingMainImage && <p className="text-[10px] text-zinc-500 mt-2">Select a new file only if you want to replace the current one.</p>}
                      </div>
-                   )}
-                </div>
-              </>
-            )}
-            
-            <button disabled={uploading} type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-4 transition-colors">
-              {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል (Update)" : "አትም (Publish)")}
-            </button>
-          </form>
-        )}
+                     
+                     <div className="border-t border-zinc-800 pt-4">
+                       <label className="block text-white font-bold text-sm mb-2">2. የጽሑፍ ውስጥ ምስሎች (Inline Images)</label>
+                       {existingInlineImages.length > 0 && (
+                          <div className="mb-3 flex gap-2 overflow-x-auto pb-2">
+                             {existingInlineImages.map((img, idx) => (
+                                <div key={idx} className="relative">
+                                   <span className="absolute top-0 left-0 bg-amber-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded-br-lg z-10 shadow-sm">[image{idx + 1}]</span>
+                                   <img src={img} alt={`Inline ${idx + 1}`} className="h-20 w-20 rounded-md object-cover border border-zinc-700 shrink-0" />
+                                </div>
+                             ))}
+                          </div>
+                       )}
+                       <p className="text-xs text-zinc-400 mb-3">Upload multiple files at once. They will become <b>[image1]</b>, <b>[image2]</b>, etc.</p>
+                       <input type="file" multiple accept="image/*" onChange={(e) => setInlineImageFiles(Array.from(e.target.files))} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
+                       {existingInlineImages.length > 0 && <p className="text-[10px] text-amber-500 mt-2">Warning: Selecting new files will replace all existing inline images.</p>}
+                     </div>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                     <label className="block text-white font-bold text-sm mb-2">3. ተያያዥ ጽሑፎች/እቃዎች (Related Items)</label>
+                     <p className="text-xs text-zinc-400 mb-3">እነዚህ ጽሑፉ መጨረሻ ላይ ይታያሉ (እስከ 2 መምረጥ ይመከራል)።</p>
+                     <select onChange={handleAddRelated} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-lg mb-3 outline-none focus:border-amber-500">
+                        <option value="">+ ምረጥ (Select Related...)</option>
+                        <optgroup label="Articles (ዜናዎች)">
+                          {posts.filter(p => p.id !== editId).map(p => <option key={`post_${p.id}`} value={`post_${p.id}`}>{p.title}</option>)}
+                        </optgroup>
+                        <optgroup label="Shop Items (ሱቅ)">
+                          {products.map(p => <option key={`product_${p.id}`} value={`product_${p.id}`}>{p.name}</option>)}
+                        </optgroup>
+                     </select>
+
+                     {formData.relatedLinks && formData.relatedLinks.length > 0 && (
+                       <div className="space-y-2 mt-2">
+                         {formData.relatedLinks.map(link => {
+                           const [type, id] = link.split('_');
+                           const item = type === 'post' ? posts.find(p => p.id === parseInt(id)) : products.find(p => p.id === parseInt(id));
+                           return (
+                             <div key={link} className="flex justify-between items-center bg-black p-2 rounded-lg text-xs border border-zinc-800">
+                               <span className="text-zinc-300 truncate w-64">{item ? (item.title || item.name) : "Loading..."}</span>
+                               <button type="button" onClick={() => removeRelated(link)} className="text-red-500 font-bold ml-2 hover:text-red-400">X</button>
+                             </div>
+                           );
+                         })}
+                       </div>
+                     )}
+                  </div>
+                </>
+              )}
+
+              {adminTab === "products" && (
+                <>
+                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl mb-4 flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">ይህ እቃ ቅናሽ ላይ ነው? (Is it on Sale?)</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" checked={formData.isSale || false} onChange={e => setFormData({...formData, isSale: e.target.checked})} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+
+                  <input required value={formData.title || ""} placeholder="የእቃው ስም" onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none transition-colors" />
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-2">
+                    <input required value={formData.cadCost || ""} type="number" step="0.01" placeholder="Base Cost (CAD)" onChange={(e) => setFormData({ ...formData, cadCost: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                    <div>
+                      <input required value={formData.stockQty || ""} type="number" placeholder="Stock Qty (Single units)" onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                      <p className="text-[10px] text-zinc-500 mt-1 pl-1">Ex: If you bought a 5-pack, enter '5'.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <input required value={formData.weightKg || ""} type="number" step="0.1" placeholder="Weight (kg)" onChange={(e) => setFormData({ ...formData, weightKg: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                    <input value={formData.specialFreightFee || ""} type="number" placeholder="Special Freight Fee (ETB)" onChange={(e) => setFormData({ ...formData, specialFreightFee: e.target.value })} className="w-full bg-zinc-900 border border-zinc-800 text-white p-4 rounded-xl outline-none focus:border-amber-500" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4 mb-4 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Calculated Regular Price</label>
+                      <input readOnly value={formData.price || ""} type="number" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-lg outline-none opacity-80 font-mono" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-amber-500 font-bold uppercase block mb-1">Calculated VIP Price</label>
+                      <input readOnly value={formData.vipPrice || ""} type="number" className="w-full bg-black border border-amber-500/50 text-amber-500 p-3 rounded-lg outline-none opacity-80 font-mono font-bold" />
+                    </div>
+                    <p className="col-span-2 text-[10px] text-zinc-500 leading-tight mt-1">Pricing is auto-calculated: (CAD + 13% Tax) + 18% Markup * 130 Rate + Freight.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                    <div className="relative">
+                      <label className="block text-zinc-400 text-xs font-bold mb-2">ዋና ምድቦች (Primary Categories) - Select multiple</label>
+                      <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
+                         {customCategories.map(c => (
+                           <label key={c} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
+                             <input type="checkbox" checked={formData.shopCat?.includes(c)} onChange={(e) => {
+                               const newCats = e.target.checked ? [...formData.shopCat, c] : formData.shopCat.filter(cat => cat !== c);
+                               setFormData({...formData, shopCat: newCats});
+                             }} className="accent-amber-500" />
+                             <span className="text-sm">{c}</span>
+                           </label>
+                         ))}
+                      </div>
+                    </div>
+
+                    <div className="relative border-t border-zinc-800 pt-4 mt-2">
+                      <label className="block text-zinc-400 text-xs font-bold mb-2">ንዑስ ምድቦች (Subcategories) - Select multiple</label>
+                      <div className="bg-black p-3 rounded-lg border border-zinc-700 max-h-40 overflow-y-auto space-y-2">
+                         {Object.entries(customSubCats).flatMap(([prim, subs]) => subs.map(sub => ({prim, sub}))).map(({prim, sub}, i) => {
+                           return (
+                             <label key={`${prim}_${sub}_${i}`} className="flex items-center space-x-2 text-white cursor-pointer hover:bg-zinc-800 p-1 rounded">
+                               <input type="checkbox" checked={formData.shopSubCat?.includes(sub)} onChange={(e) => {
+                                 const newSubCats = e.target.checked ? [...formData.shopSubCat, sub] : formData.shopSubCat.filter(cat => cat !== sub);
+                                 setFormData({...formData, shopSubCat: newSubCats});
+                               }} className="accent-amber-500" />
+                               <span className="text-sm">{sub} <span className="text-[10px] text-zinc-500 ml-1">({prim})</span></span>
+                             </label>
+                           );
+                         })}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="relative">
+                    <button type="button" onClick={() => setShowSizeDropdown(!showSizeDropdown)} className="w-full bg-zinc-900 border border-zinc-800 text-left p-4 rounded-xl focus:border-amber-500 text-zinc-400 flex justify-between items-center transition-colors">
+                      <span>መጠኖች ይምረጡ {formData.options?.length > 0 && <span className="text-amber-500 font-bold ml-1">({formData.options.length})</span>}</span>
+                      <span>{showSizeDropdown ? "▲" : "▼"}</span>
+                    </button>
+                    
+                    {showSizeDropdown && (
+                      <div className="absolute z-10 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl max-h-[400px] overflow-y-auto p-4 shadow-2xl">
+                        <div className="mb-4 bg-black p-3 rounded-xl border border-amber-500/30">
+                           <label className="block text-amber-500 text-xs font-bold mb-2">አዲስ መጠን / ቀለም ያስገቡ (Add Custom Size/Option)</label>
+                           <div className="flex space-x-2">
+                             <input type="text" value={customSizeInput} onChange={(e) => setCustomSizeInput(e.target.value)} placeholder="e.g. Red, 4XL, 100ml..." className="flex-1 bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-sm focus:border-amber-500 outline-none" />
+                             <button type="button" onClick={handleAddCustomSize} className="bg-amber-500 text-black px-3 py-2 rounded-lg font-bold text-sm hover:bg-amber-400">Add</button>
+                           </div>
+                        </div>
+                        <div className="space-y-3">
+                          {Object.entries(categorizedOptions).map(([categoryName, sizes]) => (
+                            <div key={categoryName} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-700">
+                              <button type="button" onClick={() => toggleOptionCategory(categoryName)} className="w-full text-left px-4 py-3 flex justify-between items-center text-sm font-bold text-amber-500 hover:bg-zinc-800 transition-colors">
+                                <span>{categoryName}</span><span>{expandedOptionCategories[categoryName] ? "▲" : "▼"}</span>
+                              </button>
+                              {expandedOptionCategories[categoryName] && (
+                                <div className="p-4 flex flex-wrap gap-2 bg-black border-t border-zinc-700">
+                                  {sizes.length === 0 && <p className="text-xs text-zinc-500">ምንም የለም</p>}
+                                  {sizes.map(size => (
+                                    <label key={size} className="flex items-center space-x-2 text-white cursor-pointer bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors border border-zinc-800">
+                                      <input type="checkbox" value={size} checked={formData.options?.includes(size)} onChange={handleSizeChange} className="accent-amber-500 w-4 h-4" />
+                                      <span className="text-xs font-bold">{size}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setShowSizeDropdown(false)} className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-lg transition-colors sticky bottom-0">አረጋግጥ (Done)</button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                     <label className="block text-white font-bold text-sm mb-2">ስለ እቃው (Product Description) - Optional</label>
+                     <textarea value={formData.description || ""} rows="3" placeholder="Write details about the product here..." onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors text-sm"></textarea>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                     <label className="block text-zinc-400 font-bold text-xs mb-2">Private Source URL (Backend Only)</label>
+                     <input type="url" value={formData.sourceUrl || ""} placeholder="https://..." onChange={(e) => setFormData({ ...formData, sourceUrl: e.target.value })} className="w-full bg-black border border-zinc-700 text-white p-3 rounded-lg focus:border-amber-500 outline-none transition-colors text-sm" />
+                     <p className="text-[10px] text-zinc-500 mt-2">This link is saved to Supabase but never shown to users.</p>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                     <label className="block text-white font-bold text-sm mb-2">የእቃው ምስሎች (Image Upload)</label>
+                     <input type="file" multiple accept="image/*" onChange={(e) => { setProductImageFiles(Array.from(e.target.files)); setSelectedMainImgIdx(0); }} className="w-full text-zinc-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer hover:file:bg-zinc-700" />
+                     {productImageFiles.length > 0 && (
+                       <div className="mt-4 border-t border-zinc-800 pt-3">
+                         <p className="text-xs text-amber-500 font-bold mb-2">Tap an image to set it as MAIN (Front):</p>
+                         <div className="flex space-x-2 overflow-x-auto pb-2">
+                           {productImageFiles.map((file, idx) => (
+                             <div key={idx} onClick={() => setSelectedMainImgIdx(idx)} className={`relative p-1 shrink-0 rounded-lg cursor-pointer transition-all border-2 ${selectedMainImgIdx === idx ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-zinc-800'}`}>
+                               <img src={URL.createObjectURL(file)} alt={`preview-${idx}`} className="w-16 h-16 object-cover rounded-md" />
+                               {selectedMainImgIdx === idx && <span className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-1 rounded-bl-md z-10">MAIN</span>}
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     )}
+                  </div>
+                </>
+              )}
+              
+              <button disabled={uploading} type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl mt-4 transition-colors">
+                {uploading ? "በመጫን ላይ..." : (editId ? "አስተካክል (Update)" : "አትም (Publish)")}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     );
   };
@@ -2545,7 +2578,7 @@ export default function App() {
 
       {renderProductDetail()}
 
-      {showProfileModal && renderProfileModal()}
+      {showProfileSlideOver && renderProfileSlideOver()}
       {showSuccessModal && renderSuccessModal()}
       {showOrderForm && renderOrderForm()}
       {renderOfflineSaleModal()}
