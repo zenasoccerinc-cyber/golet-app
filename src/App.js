@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List, LayoutDashboard, FileText, Settings, Archive
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
