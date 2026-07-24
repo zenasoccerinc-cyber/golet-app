@@ -96,9 +96,11 @@ export default function App() {
   const [userOrders, setUserOrders] = useState([]);
   const [userSourcing, setUserSourcing] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
+  const [allSourcing, setAllSourcing] = useState([]);
   const [vipRequests, setVipRequests] = useState([]);
 
   const [orderUpdateData, setOrderUpdateData] = useState({});
+  const [sourcingUpdateData, setSourcingUpdateData] = useState({});
 
   const [currentUser, setCurrentUser] = useState(null);
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
@@ -164,7 +166,6 @@ export default function App() {
     return { regular: totalRegular, vip: totalVip };
   };
 
-  // Clamped at 0 to prevent negative metrics from glitchy stock counts
   const inventoryAssetValueCad = products.reduce((sum, p) => sum + (Math.max(0, p.stock_quantity || 0) * (p.cost_cad || 0)), 0);
   const activeLocalStock = products.reduce((sum, p) => sum + Math.max(0, p.stock_quantity || 0), 0);
   
@@ -204,6 +205,7 @@ export default function App() {
   useEffect(() => {
     if (isCEO) {
       fetchAllOrders();
+      fetchAllSourcing();
       fetchVipRequests();
     }
   }, [isCEO]);
@@ -288,6 +290,13 @@ export default function App() {
     try {
       const { data } = await supabase.from('product_orders').select('*').order('created_at', { ascending: false });
       if (data) setAllOrders(data);
+    } catch (e) {}
+  };
+
+  const fetchAllSourcing = async () => {
+    try {
+      const { data } = await supabase.from('sourcing_requests').select('*').order('created_at', { ascending: false });
+      if (data) setAllSourcing(data);
     } catch (e) {}
   };
 
@@ -472,7 +481,6 @@ export default function App() {
     });
 
     const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
-    // Fixed logic: Flat 1300 ETB for the entire cart next-day delivery
     const nextDayBirr = checkoutShipping === "next_day" ? 1300 : 0; 
     const vipSignupBirr = includeVipSignup ? (userRegion === "ሀገር ውስጥ" ? 300 : 1950) : 0; 
     
@@ -713,6 +721,33 @@ export default function App() {
     setUploading(false);
   };
 
+  const handleUpdateSourcing = async (orderId, telegramId, productName) => {
+    const order = allSourcing.find(o => o.id === orderId);
+    if (!order) return;
+    const update = sourcingUpdateData[orderId] || { status: order.status };
+    
+    setUploading(true);
+    const { data, error } = await supabase.from('sourcing_requests').update({ status: update.status }).eq('id', orderId).select();
+    
+    if (error || (!data || data.length === 0)) {
+       alert("Update failed! Check RLS policies.");
+    } else {
+       alert("Sourcing order updated!");
+       setAllSourcing(prev => prev.map(o => o.id === orderId ? { ...o, status: update.status } : o));
+       
+       let statusAmharic = "";
+       if (update.status === 'approved') statusAmharic = "ተቀባይነት አግኝቷል (Approved) ✅";
+       if (update.status === 'shipped') statusAmharic = "በመንገድ ላይ ነው (Shipped) 🚚";
+       if (update.status === 'arrived') statusAmharic = "እጅዎ ላይ ደርሷል (Arrived) 🎉";
+
+       if (statusAmharic) {
+          let msg = `📦 <b>የልዩ እቃ ትዕዛዝ መረጃ</b>\n\n<b>እቃ:</b> ${productName || "Custom Order"}\n<b>ሁኔታ:</b> ${statusAmharic}`;
+          try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: telegramId, text: msg, parse_mode: "HTML" }) }); } catch (err) {}
+       }
+    }
+    setUploading(false);
+  };
+
   const handleLogoTap = () => { setActiveTab("ሱቅ"); if (activePost) window.history.back(); window.scrollTo(0,0); };
 
   const handleAddCustomSize = () => {
@@ -819,6 +854,7 @@ export default function App() {
     }); 
     setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); 
     if (type === 'orders') fetchAllOrders();
+    if (type === 'sourcing') fetchAllSourcing();
     if (type === 'vip') fetchVipRequests();
   };
   
@@ -872,8 +908,8 @@ export default function App() {
     const isRegionLocked = !!currentUserProfile?.region;
     
     return (
-      <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
-        <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+      <div className="fixed inset-0 bg-black/95 z-[70] overflow-y-auto flex items-center justify-center p-6 animate-in fade-in zoom-in duration-200">
+        <div className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto">
           <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
           <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">የግል መረጃ</h2>
           <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ያስተካክሉ።</p>
@@ -1560,19 +1596,6 @@ export default function App() {
     return (
       <div className="pb-24">
         
-        {isCEO && pendingOrdersWeight > 0 && (
-           <div className="bg-zinc-900 border border-amber-500 p-4 rounded-xl mb-4 shadow-lg">
-              <div className="flex justify-between items-end mb-2">
-                 <div className="flex items-center text-amber-500 font-black text-sm uppercase tracking-wider"><Plane size={16} className="mr-2"/> Flight Batch Status</div>
-                 <div className="text-right text-xs text-zinc-400 font-bold">{pendingOrdersWeight.toFixed(2)} / 1.00 kg</div>
-              </div>
-              <div className="w-full bg-black rounded-full h-3 border border-zinc-800 overflow-hidden">
-                 <div className={`h-full transition-all duration-500 ${flightBatchPercentage >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{width: `${flightBatchPercentage}%`}}></div>
-              </div>
-              {flightBatchPercentage >= 100 && <p className="text-green-500 text-[10px] font-black uppercase tracking-widest mt-2">✅ Batch Ready for Flight</p>}
-           </div>
-        )}
-
         <div className="flex justify-between items-center mb-3">
            <div className="flex flex-wrap gap-2 flex-1">
              {uniquePrimary.map(cat => (
@@ -1861,7 +1884,7 @@ export default function App() {
 
         {!editId && (
           <div className="flex space-x-2 mb-6 border-b border-zinc-800 pb-4 overflow-x-auto no-scrollbar">
-            {["overview", "posts", "products", "games", "categories", "orders", "vip"].map((tab) => (
+            {["overview", "posts", "products", "games", "categories", "orders", "sourcing", "vip"].map((tab) => (
               <button key={tab} onClick={() => { setAdminTab(tab); if(tab !== 'overview') openNewPost(tab); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors capitalize shrink-0 ${adminTab === tab ? "bg-amber-500 text-black" : "bg-zinc-900 text-zinc-400 hover:text-white"}`}>
                 {tab} {tab === "vip" && vipRequests.length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] px-1.5 rounded-full">{vipRequests.length}</span>}
               </button>
@@ -2042,6 +2065,52 @@ export default function App() {
            </div>
         )}
 
+        {adminTab === "sourcing" && (
+           <div className="space-y-6 pb-20">
+              <h3 className="text-[#2AABEE] font-bold mb-2">Manage Sourcing Orders</h3>
+              {allSourcing.length === 0 && <p className="text-zinc-500 text-sm">No sourcing orders found.</p>}
+              {allSourcing.map(order => {
+                 const currentUpdate = sourcingUpdateData[order.id] || { status: order.status };
+                 return (
+                 <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg">
+                    <div className="flex justify-between items-start">
+                       <div>
+                          <p className="text-white font-bold text-sm">{order.full_name}</p>
+                          <p className="text-[#2AABEE] font-black text-sm">{order.product_name || "Custom Order"}</p>
+                          <p className="text-xs text-zinc-400 mt-1">Store: <span className="text-white">{order.store_name || "N/A"}</span></p>
+                          {order.product_link && <a href={order.product_link} target="_blank" rel="noreferrer" className="text-[10px] text-amber-500 underline mt-1 block truncate w-48">Link</a>}
+                       </div>
+                       <div className="text-right">
+                          {getStatusBadge(order.status)}
+                          <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
+                       </div>
+                    </div>
+
+                    {order.image_url && (
+                       <a href={order.image_url} target="_blank" rel="noreferrer" className="block text-center bg-black border border-zinc-700 py-2 rounded-lg text-xs font-bold text-[#2AABEE] hover:bg-zinc-800">
+                          View Sourcing Image
+                       </a>
+                    )}
+                    
+                    <div className="bg-black p-3 rounded-lg border border-zinc-800 space-y-3">
+                       <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
+                          <select value={currentUpdate.status} onChange={(e) => setSourcingUpdateData({...sourcingUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
+                             <option value="pending">Pending (በሂደት ላይ)</option>
+                             <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
+                             <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
+                             <option value="arrived">Arrived (ደርሷል)</option>
+                          </select>
+                       </div>
+                       <button onClick={() => handleUpdateSourcing(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-[#2AABEE] text-white font-bold py-2 rounded-lg text-xs hover:bg-[#229ED9] transition-colors">
+                          Update & Notify User
+                       </button>
+                    </div>
+                 </div>
+              )})}
+           </div>
+        )}
+
         {adminTab === "categories" && (
           <div className="space-y-6 pb-20">
             <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
@@ -2165,7 +2234,7 @@ export default function App() {
           </div>
         )}
 
-        {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && adminTab !== "overview" && adminTab !== "vip" && (
+        {adminTab !== "games" && adminTab !== "categories" && adminTab !== "orders" && adminTab !== "sourcing" && adminTab !== "overview" && adminTab !== "vip" && (
           <form onSubmit={handleAdminSubmit} className="space-y-4 pb-20">
             {adminTab === "posts" && (
               <>
