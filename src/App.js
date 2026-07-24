@@ -10,6 +10,7 @@ import CartSlideOver from "./components/CartSlideOver"; // CEO Edit: Linking the
 import AdminPanel from "./components/AdminPanel"; // CEO Edit: Linking the Command Center
 import Shop from "./components/Shop";
 import ProductDetail from "./components/ProductDetail";
+import VipPanel from "./components/VipPanel";
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
@@ -1006,7 +1007,29 @@ export default function App() {
         {!activePost && !selectedProduct && (
           <>
             {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderPostFeed()}
-            {activeTab === "ቪአይፒ" && renderVIP()}
+            {activeTab === "ቪአይፒ" && (
+  <VipPanel
+    currentUser={currentUser}
+    setShowLoginModal={setShowLoginModal}
+    hasPendingVip={hasPendingVip}
+    isCEO={isCEO}
+    isVIP={isVIP}
+    vipStatus={vipStatus}
+    isFullNameValid={isFullNameValid}
+    orderName={orderName}
+    setOrderName={setOrderName}
+    vipPhone={vipPhone}
+    setVipPhone={setVipPhone}
+    vipReceiptFile={vipReceiptFile}
+    setVipReceiptFile={setVipReceiptFile}
+    vipPaymentType={vipPaymentType}
+    setVipPaymentType={setVipPaymentType}
+    currentUserProfile={currentUserProfile}
+    handleVipPaymentSubmit={handleVipPaymentSubmit}
+    uploading={uploading}
+    renderActualGames={typeof renderActualGames !== 'undefined' ? renderActualGames : null}
+  />
+)}
 {activeTab === "ሱቅ" && (
   <Shop
     customCategories={customCategories}
