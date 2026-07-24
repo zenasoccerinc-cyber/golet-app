@@ -3,6 +3,7 @@ import {
   Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List, LayoutDashboard, FileText, Settings, Archive
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
+import SuccessModal from "./components/SuccessModal"; // CEO Edit: Linking the new Success Modal
 
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -1245,18 +1246,6 @@ export default function App() {
              </div>
           </div>
        </div>
-    </div>
-  );
-
-  const renderSuccessModal = () => (
-    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in zoom-in duration-200 justify-center">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 relative shadow-2xl max-w-md mx-auto w-full text-center">
-        <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
-        <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
-        <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
-        <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በጥሩ ሁኔታ ተልኳል። ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።</p>
-        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-colors text-lg shadow-lg">እሺ (OK)</button>
-      </div>
     </div>
   );
 
@@ -2579,7 +2568,7 @@ export default function App() {
       {renderProductDetail()}
 
       {showProfileSlideOver && renderProfileSlideOver()}
-      {showSuccessModal && renderSuccessModal()}
+      {showSuccessModal && <SuccessModal setShowSuccessModal={setShowSuccessModal} />} {/* CEO Edit: Using the standalone Success Modal */}
       {showOrderForm && renderOrderForm()}
       {renderOfflineSaleModal()}
       {showAdmin && renderAdmin()}
