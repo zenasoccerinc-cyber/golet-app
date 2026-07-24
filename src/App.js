@@ -11,6 +11,7 @@ import AdminPanel from "./components/AdminPanel"; // CEO Edit: Linking the Comma
 import Shop from "./components/Shop";
 import ProductDetail from "./components/ProductDetail";
 import VipPanel from "./components/VipPanel";
+import ActualGames from "./components/ActualGames";
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
@@ -1008,7 +1009,7 @@ export default function App() {
           <>
             {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderPostFeed()}
             {activeTab === "ቪአይፒ" && (
-  <VipPanel
+<VipPanel
     currentUser={currentUser}
     setShowLoginModal={setShowLoginModal}
     hasPendingVip={hasPendingVip}
@@ -1027,9 +1028,19 @@ export default function App() {
     currentUserProfile={currentUserProfile}
     handleVipPaymentSubmit={handleVipPaymentSubmit}
     uploading={uploading}
-    renderActualGames={typeof renderActualGames !== 'undefined' ? renderActualGames : null}
+    renderActualGames={(isBlurred) => (
+      <ActualGames 
+        isBlurred={isBlurred}
+        games={games}
+        userPredictions={userPredictions}
+        predictionInputs={predictionInputs}
+        setPredictionInputs={setPredictionInputs}
+        submitPrediction={submitPrediction}
+      />
+    )}
   />
 )}
+
 {activeTab === "ሱቅ" && (
   <Shop
     customCategories={customCategories}
@@ -1051,30 +1062,30 @@ export default function App() {
     handleEdit={handleEdit}
     handleDelete={handleDelete}
   />
-)}          </>
+)}
+          </>
         )}
       </main>
 
-      {renderProductDetail()}
+      <ProductDetail
+        selectedProduct={selectedProduct}
+        isVIP={isVIP}
+        isCEO={isCEO}
+        cart={cart}
+        setShowCart={setShowCart}
+        handleOpenOfflineSale={handleOpenOfflineSale}
+        handleEdit={handleEdit}
+        handleDelete={handleDelete}
+        selectedOption={selectedOption}
+        setSelectedOption={setSelectedOption}
+        quantity={quantity}
+        setQuantity={setQuantity}
+        addToCart={addToCart}
+        formatOptionDisplay={formatOptionDisplay}
+      />
 
-      {/* CEO Edit: Using the standalone Profile Menu and passing required data */}
-<ProductDetail
-  selectedProduct={selectedProduct}
-  isVIP={isVIP}
-  isCEO={isCEO}
-  cart={cart}
-  setShowCart={setShowCart}
-  handleOpenOfflineSale={handleOpenOfflineSale}
-  handleEdit={handleEdit}
-  handleDelete={handleDelete}
-  selectedOption={selectedOption}
-  setSelectedOption={setSelectedOption}
-  quantity={quantity}
-  setQuantity={setQuantity}
-  addToCart={addToCart}
-  formatOptionDisplay={formatOptionDisplay}
-/>
-<ProfileSlideOver
+      {showProfileSlideOver && (
+        <ProfileSlideOver
           setShowProfileSlideOver={setShowProfileSlideOver}
           currentUserProfile={currentUserProfile}
           saveUserProfile={saveUserProfile}
@@ -1082,9 +1093,11 @@ export default function App() {
           uploading={uploading}
         />
       )}
-      {showSuccessModal && <SuccessModal setShowSuccessModal={setShowSuccessModal} />} {/* CEO Edit: Using the standalone Success Modal */}
+
+      {showSuccessModal && <SuccessModal setShowSuccessModal={setShowSuccessModal} />} 
+
       {showOrderForm && renderOrderForm()}
-      {/* CEO Edit: Using the standalone Offline Sale (POS) Modal */}
+
       <OfflineSaleModal
         showOfflineSaleModal={showOfflineSaleModal}
         setShowOfflineSaleModal={setShowOfflineSaleModal}
@@ -1098,7 +1111,7 @@ export default function App() {
         submitOfflineSale={submitOfflineSale}
         uploading={uploading}
       />
-      {/* CEO Edit: Using the standalone Admin Component */}
+
       <AdminPanel
         showAdminPanel={showAdmin}
         setShowAdminPanel={setShowAdmin}
