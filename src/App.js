@@ -12,6 +12,7 @@ import Shop from "./components/Shop";
 import ProductDetail from "./components/ProductDetail";
 import VipPanel from "./components/VipPanel";
 import ActualGames from "./components/ActualGames";
+import ActualGames from "./components/ActualGames";
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
