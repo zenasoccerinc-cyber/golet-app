@@ -8,6 +8,7 @@ import AccountSlideOver from "./components/AccountSlideOver"; // CEO Edit: Linki
 import OfflineSaleModal from "./components/OfflineSaleModal"; // CEO Edit: Linking the POS Modal
 import CartSlideOver from "./components/CartSlideOver"; // CEO Edit: Linking the Cart Screen
 import AdminPanel from "./components/AdminPanel"; // CEO Edit: Linking the Command Center
+import Shop from "./components/Shop";
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
@@ -1005,8 +1006,28 @@ export default function App() {
           <>
             {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderPostFeed()}
             {activeTab === "ቪአይፒ" && renderVIP()}
-            {activeTab === "ሱቅ" && renderShop()}
-          </>
+{activeTab === "ሱቅ" && (
+  <Shop
+    customCategories={customCategories}
+    hiddenCategories={hiddenCategories}
+    shopCategory={shopCategory}
+    customSubCats={customSubCats}
+    hiddenSubCategories={hiddenSubCategories}
+    shopSubCategory={shopSubCategory}
+    products={products}
+    isVIP={isVIP}
+    isCEO={isCEO}
+    setShopCategory={setShopCategory}
+    setShopSubCategory={setShopSubCategory}
+    setShowCart={setShowCart}
+    cart={cart}
+    renderOrderBanner={typeof renderOrderBanner !== 'undefined' ? renderOrderBanner : null}
+    openProduct={openProduct}
+    handleOpenOfflineSale={handleOpenOfflineSale}
+    handleEdit={handleEdit}
+    handleDelete={handleDelete}
+  />
+)}          </>
         )}
       </main>
 
