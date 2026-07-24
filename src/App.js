@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List, LayoutDashboard, FileText, Settings, Archive
+  Home, Trophy, Flame, Users, Target, ShoppingBag, X, Trash2, Edit2, ChevronLeft, PlusCircle, Send, CheckCircle, LogOut, ArrowUp, ArrowDown, Edit3, User, Package, Plus, Minus, Eye, EyeOff, DollarSign, ShoppingCart, Plane, List
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -176,11 +176,9 @@ export default function App() {
   const totalRevenue = onlineRevenue + loggedOfflineRevenue;
   const prizePool = Math.round(totalRevenue * 0.03); 
   
-  // VIP Revenue Math
   const localVipRevenue = approvedVipPayments.filter(v => v.payment_type === 'ሀገር ውስጥ').reduce((sum) => sum + 300, 0);
   const diasporaVipRevenue = approvedVipPayments.filter(v => v.payment_type === 'ዳያስፖራ').reduce((sum) => sum + 1950, 0);
 
-  // Flight Batch Math Updates: Orders = APPROVED only. Sourcing = APPROVED only (using dynamic weight)
   const approvedOrdersWeight = allOrders.filter(o => o.status === 'approved' && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
   const approvedSourcingWeight = allSourcing.filter(o => o.status === 'approved').reduce((sum, o) => sum + (o.total_weight_kg || 0), 0); 
   const totalBatchWeight = approvedOrdersWeight + approvedSourcingWeight;
@@ -528,7 +526,7 @@ export default function App() {
 
   const handleApproveVip = async (paymentId, telegramId) => {
      setUploading(true);
-     const { error: pError } = await supabase.from('vip_payments').update({ status: 'approved', approved_at: new Date() }).eq('id', paymentId);
+     const { error: pError } = await supabase.from('vip_payments').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', paymentId);
      
      const expireDate = new Date();
      expireDate.setMonth(expireDate.getMonth() + 1);
@@ -1239,28 +1237,26 @@ export default function App() {
 
   const renderAdmin = () => {
     
-    // BADGES LOGIC
     const pendingOrdersCount = allOrders.filter(o => o.status === 'pending' && !o.is_offline_sale).length;
     const pendingSourcingCount = allSourcing.filter(o => o.status === 'pending').length;
     const pendingVipCount = pendingVipRequests.length;
     
-    // MENU CONFIG
     const adminMenu = [
-      { id: "overview", label: "Overview", icon: LayoutDashboard, badge: 0 },
+      { id: "overview", label: "Overview", icon: Home, badge: 0 },
       { id: "orders", label: "Orders", icon: Package, badge: pendingOrdersCount },
       { id: "sourcing", label: "Sourcing", icon: PlusCircle, badge: pendingSourcingCount },
       { id: "vip", label: "VIP", icon: Target, badge: pendingVipCount },
       { id: "products", label: "Products", icon: ShoppingBag, badge: 0 },
-      { id: "posts", label: "Articles", icon: FileText, badge: 0 },
+      { id: "posts", label: "Articles", icon: Edit3, badge: 0 },
       { id: "games", label: "Games", icon: Trophy, badge: 0 },
-      { id: "categories", label: "Categories", icon: Settings, badge: 0 }
+      { id: "categories", label: "Categories", icon: List, badge: 0 }
     ];
 
     return (
       <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in duration-200">
         <div className="flex justify-between items-center p-6 pb-4 border-b border-zinc-900 bg-black sticky top-0 z-10 shrink-0">
           <h2 className="text-amber-500 font-black text-2xl tracking-wide flex items-center">
-            {editId ? "Edit Listing" : <><LayoutDashboard className="mr-2" /> CEO Dashboard</>}
+            {editId ? "Edit Listing" : <><Home className="mr-2" /> CEO Dashboard</>}
           </h2>
           <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors"><X className="text-white w-6 h-6" /></button>
         </div>
