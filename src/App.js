@@ -48,7 +48,9 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
+  const [showProfileSlideOver, setShowProfileSlideOver] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   
   const [showOfflineSaleModal, setShowOfflineSaleModal] = useState(false);
   const [offlineSaleProduct, setOfflineSaleProduct] = useState(null);
@@ -95,9 +97,7 @@ export default function App() {
   const [userSourcing, setUserSourcing] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
   const [allSourcing, setAllSourcing] = useState([]);
-  
-  const [pendingVipRequests, setPendingVipRequests] = useState([]);
-  const [approvedVipPayments, setApprovedVipPayments] = useState([]);
+  const [vipRequests, setVipRequests] = useState([]);
 
   const [orderUpdateData, setOrderUpdateData] = useState({});
   const [sourcingUpdateData, setSourcingUpdateData] = useState({});
@@ -176,12 +176,10 @@ export default function App() {
   const totalRevenue = onlineRevenue + loggedOfflineRevenue;
   const prizePool = Math.round(totalRevenue * 0.03); 
   
-  const localVipRevenue = approvedVipPayments.filter(v => v.payment_type === 'ሀገር ውስጥ').reduce((sum) => sum + 300, 0);
-  const diasporaVipRevenue = approvedVipPayments.filter(v => v.payment_type === 'ዳያስፖራ').reduce((sum) => sum + 1950, 0);
-
-  const approvedOrdersWeight = allOrders.filter(o => o.status === 'approved' && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
-  const approvedSourcingWeight = allSourcing.filter(o => o.status === 'approved').reduce((sum, o) => sum + (o.total_weight_kg || 0), 0); 
-  const totalBatchWeight = approvedOrdersWeight + approvedSourcingWeight;
+  // Flight Batch Math Updates: Orders = Pending only. Sourcing = Approved only (0.5kg assumed)
+  const pendingOrdersWeight = allOrders.filter(o => o.status === 'pending' && !o.is_offline_sale).reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
+  const approvedSourcingWeight = allSourcing.filter(o => o.status === 'approved').length * 0.5; 
+  const totalBatchWeight = pendingOrdersWeight + approvedSourcingWeight;
   const flightBatchPercentage = Math.min((totalBatchWeight / 1.0) * 100, 100);
 
   useEffect(() => {
@@ -202,7 +200,7 @@ export default function App() {
       } catch (e) {}
     }
 
-    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowCart(false); setQuantity(1); };
+    const handlePopState = () => { setActivePost(null); setSelectedProduct(null); setShowCart(false); setShowAccountMenu(false); setShowProfileSlideOver(false); setQuantity(1); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -211,7 +209,7 @@ export default function App() {
     if (isCEO) {
       fetchAllOrders();
       fetchAllSourcing();
-      fetchAllVipData();
+      fetchVipRequests();
     }
   }, [isCEO]);
 
@@ -305,13 +303,10 @@ export default function App() {
     } catch (e) {}
   };
 
-  const fetchAllVipData = async () => {
+  const fetchVipRequests = async () => {
     try {
-      const { data } = await supabase.from('vip_payments').select('*').order('created_at', { ascending: false });
-      if (data) {
-         setPendingVipRequests(data.filter(v => v.status === 'pending'));
-         setApprovedVipPayments(data.filter(v => v.status === 'approved'));
-      }
+      const { data } = await supabase.from('vip_payments').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+      if (data) setVipRequests(data);
     } catch (e) {}
   };
 
@@ -348,6 +343,10 @@ export default function App() {
       localStorage.setItem('goleth_profile', JSON.stringify(userRecord));
       setIsCEO(Boolean(userRecord.is_admin));
 
+      if (!userRecord.full_name || !userRecord.phone_number) {
+         setShowProfileSlideOver(true);
+      }
+
       let currentStatus = "none";
       let activeVip = Boolean(userRecord.is_vip);
 
@@ -363,16 +362,12 @@ export default function App() {
 
       setIsVIP(activeVip); setVipStatus(currentStatus);
       fetchUserPredictions(telegramUser.id); checkPendingVip(telegramUser.id);
-      
-      if (!userRecord.full_name || !userRecord.phone_number) {
-         setActiveTab("ፕሮፋይል");
-      }
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('goleth_user'); localStorage.removeItem('goleth_profile'); localStorage.removeItem('goleth_pending_vip');
-    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setUserOrders([]); setUserSourcing([]); setActiveTab("ሱቅ");
+    setCurrentUser(null); setCurrentUserProfile(null); setIsVIP(false); setVipStatus("none"); setUserPredictions({}); setHasPendingVip(false); setIsCEO(false); setShowAdmin(false); setShowAccountMenu(false); setUserOrders([]); setUserSourcing([]); setShowProfileSlideOver(false);
   };
 
   const saveUserProfile = async (e) => {
@@ -398,7 +393,7 @@ export default function App() {
         localStorage.setItem('goleth_profile', JSON.stringify(data[0])); 
         setOrderName(name);
         setVipPhone(phone);
-        alert("መረጃዎ ተስተካክሏል (Profile Updated)");
+        setShowProfileSlideOver(false); 
       } else {
         alert("Server validation failed. Close and try again.");
       }
@@ -526,7 +521,7 @@ export default function App() {
 
   const handleApproveVip = async (paymentId, telegramId) => {
      setUploading(true);
-     const { error: pError } = await supabase.from('vip_payments').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', paymentId);
+     const { error: pError } = await supabase.from('vip_payments').update({ status: 'approved', approved_at: new Date() }).eq('id', paymentId);
      
      const expireDate = new Date();
      expireDate.setMonth(expireDate.getMonth() + 1);
@@ -541,7 +536,7 @@ export default function App() {
      } else {
         const userMsg = `🎉 <b>እንኳን ደስ አሎት!</b>\n\nየVIP አባልነትዎ አሁን ጀምሯል። ለቀጣይ አንድ ወር ልዩ ቅናሾችን ያገኛሉ። ወደ መተግበሪያው ገብተው ይጠቀሙ!`;
         try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: telegramId, text: userMsg, parse_mode: "HTML" }) }); } catch (err) {}
-        fetchAllVipData();
+        setVipRequests(prev => prev.filter(r => r.id !== paymentId));
         alert("VIP Approved successfully!");
      }
      setUploading(false);
@@ -732,21 +727,16 @@ export default function App() {
   const handleUpdateSourcing = async (orderId, telegramId, productName) => {
     const order = allSourcing.find(o => o.id === orderId);
     if (!order) return;
-    const update = sourcingUpdateData[orderId] || { status: order.status, weight: order.total_weight_kg || "" };
+    const update = sourcingUpdateData[orderId] || { status: order.status };
     
     setUploading(true);
-    const payload = { status: update.status };
-    if (update.weight !== undefined && update.weight !== "") {
-       payload.total_weight_kg = Number(update.weight);
-    }
-
-    const { data, error } = await supabase.from('sourcing_requests').update(payload).eq('id', orderId).select();
+    const { data, error } = await supabase.from('sourcing_requests').update({ status: update.status }).eq('id', orderId).select();
     
     if (error || (!data || data.length === 0)) {
        alert("Update failed! Check RLS policies.");
     } else {
        alert("Sourcing order updated!");
-       setAllSourcing(prev => prev.map(o => o.id === orderId ? { ...o, ...payload } : o));
+       setAllSourcing(prev => prev.map(o => o.id === orderId ? { ...o, status: update.status } : o));
        
        let statusAmharic = "";
        if (update.status === 'approved') statusAmharic = "ተቀባይነት አግኝቷል (Approved) ✅";
@@ -868,7 +858,7 @@ export default function App() {
     setExistingMainImage(null); setExistingInlineImages([]); setMainImageFile(null); setInlineImageFiles([]); setProductImageFiles([]); setSelectedMainImgIdx(0); 
     if (type === 'orders') fetchAllOrders();
     if (type === 'sourcing') fetchAllSourcing();
-    if (type === 'vip') fetchAllVipData();
+    if (type === 'vip') fetchVipRequests();
   };
   
   const handleSizeChange = (e) => { const value = e.target.value; setFormData((prev) => { const options = prev.options || []; if (options.includes(value)) return { ...prev, options: options.filter((s) => s !== value) }; return { ...prev, options: [...options, value] }; }); };
@@ -917,6 +907,43 @@ export default function App() {
     );
   };
 
+  const renderProfileSlideOver = () => {
+    const isRegionLocked = !!currentUserProfile?.region;
+    
+    return (
+      <div className="fixed inset-0 z-[80] flex justify-end">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowProfileSlideOver(false)}></div>
+        <div className="relative w-full max-w-sm bg-zinc-950 h-full overflow-y-auto border-l border-zinc-800 animate-in slide-in-from-right duration-300 flex flex-col p-6 shadow-2xl">
+          <button onClick={() => setShowProfileSlideOver(false)} className="absolute top-4 right-4 bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition-colors"><X className="text-white w-5 h-5" /></button>
+          
+          <h2 className="text-2xl font-black text-amber-500 mb-2 mt-2">የግል መረጃ</h2>
+          <p className="text-zinc-300 text-sm mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን ያስተካክሉ።</p>
+          
+          <form onSubmit={saveUserProfile} className="space-y-4">
+            <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም ክፍተት በማድረግ ይጻፉ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)') }} />
+            <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-mono" />
+            
+            <div className="relative">
+              <select required name="location" disabled={isRegionLocked} defaultValue={currentUserProfile?.region === 'Diaspora' ? 'USA' : (currentUserProfile?.region === 'Local' ? 'Ethiopia' : '')} className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                <option value="">የት ሀገር ነዎት? (Location)</option>
+                <option value="Ethiopia">Ethiopia (ኢትዮጵያ) - Local</option>
+                <option value="USA">USA - Diaspora</option>
+                <option value="Canada">Canada - Diaspora</option>
+                <option value="Europe">Europe - Diaspora</option>
+                <option value="Australia">Australia - Diaspora</option>
+              </select>
+              {isRegionLocked && <p className="text-[10px] text-zinc-500 mt-1">Location is locked for pricing accuracy. Contact support to change.</p>}
+            </div>
+
+            <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-4 rounded-xl shadow-lg transition-colors mt-4">
+              {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save)"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
        case 'pending': return <span className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] font-black uppercase">Pending</span>;
@@ -925,118 +952,6 @@ export default function App() {
        case 'arrived': return <span className="bg-green-900/50 text-green-400 border border-green-900 px-2 py-1 rounded text-[10px] font-black uppercase">Arrived</span>;
        default: return <span className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] font-black uppercase">{status || 'Pending'}</span>;
     }
-  };
-
-  const renderProfilePage = () => {
-    const isRegionLocked = !!currentUserProfile?.region;
-
-    return (
-      <div className="pb-24 pt-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="flex justify-between items-center mb-8">
-           <h2 className="text-3xl font-black text-amber-500 flex items-center"><User className="mr-3 text-amber-500" size={32}/> የኔ ፕሮፋይል (Profile)</h2>
-        </div>
-
-        {isCEO && (
-           <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 border border-amber-500/30 p-5 rounded-2xl mb-8 shadow-lg text-white">
-              <h3 className="font-black text-lg uppercase tracking-widest mb-1 text-amber-500">CEO Admin Badge</h3>
-              <p className="font-bold text-sm opacity-90">{currentUserProfile?.full_name}</p>
-           </div>
-        )}
-
-        {isVIP && !isCEO && (
-           <div className="bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-600 p-6 rounded-2xl mb-8 shadow-[0_0_30px_rgba(245,158,11,0.2)] text-black relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-20"><Target size={80}/></div>
-              <h3 className="font-black text-xl uppercase tracking-widest mb-1 relative z-10">Goleth VIP Member</h3>
-              <p className="font-bold text-base opacity-90 mb-6 relative z-10">{currentUserProfile?.full_name}</p>
-              <div className="flex justify-between items-end relative z-10">
-                 <div>
-                    <p className="text-[10px] uppercase font-black opacity-70">Status</p>
-                    <p className="font-bold text-sm">Active</p>
-                 </div>
-                 <div className="text-right">
-                    <p className="text-[10px] uppercase font-black opacity-70">Expires</p>
-                    <p className="font-bold font-mono text-sm">{currentUserProfile?.vip_until ? new Date(currentUserProfile.vip_until).toLocaleDateString() : 'Lifetime'}</p>
-                 </div>
-              </div>
-           </div>
-        )}
-
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8 shadow-2xl relative">
-          <h2 className="text-xl font-black text-white mb-2 mt-2">የግል መረጃ ማስተካከያ</h2>
-          <p className="text-zinc-400 text-xs mb-6">ለፈጣን አገልግሎት እባክዎ መረጃዎን በትክክል ያስገቡ።</p>
-          <form onSubmit={saveUserProfile} className="space-y-4">
-            <input required name="fullName" defaultValue={currentUserProfile?.full_name || ""} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም ክፍተት በማድረግ ይጻፉ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none" onChange={(e) => { e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)') }} />
-            <input required name="phone" type="tel" maxLength="10" pattern="[0-9]{10}" defaultValue={currentUserProfile?.phone_number || ""} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none font-mono" />
-            
-            <div className="relative">
-              <select required name="location" disabled={isRegionLocked} defaultValue={currentUserProfile?.region === 'Diaspora' ? 'USA' : (currentUserProfile?.region === 'Local' ? 'Ethiopia' : '')} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none font-bold disabled:opacity-50 disabled:cursor-not-allowed">
-                <option value="">የት ሀገር ነዎት? (Location)</option>
-                <option value="Ethiopia">Ethiopia (ኢትዮጵያ) - Local</option>
-                <option value="USA">USA - Diaspora</option>
-                <option value="Canada">Canada - Diaspora</option>
-                <option value="Europe">Europe - Diaspora</option>
-                <option value="Australia">Australia - Diaspora</option>
-              </select>
-              {isRegionLocked && <p className="text-[10px] text-amber-500 mt-1">Location is locked for pricing accuracy. Contact support to change.</p>}
-            </div>
-
-            <button type="submit" disabled={uploading} className="w-full bg-amber-500 disabled:bg-zinc-800 hover:bg-amber-400 text-black font-black py-4 rounded-xl shadow-lg transition-colors mt-4">
-              {uploading ? "በማስቀመጥ ላይ..." : "አስቀምጥ (Save Details)"}
-            </button>
-          </form>
-        </div>
-
-        <div className="space-y-6">
-           <div>
-             <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider mb-4 flex items-center"><Package className="mr-2" size={16}/> መደበኛ ትዕዛዞች (Orders)</h3>
-             {userOrders.length === 0 ? (
-                <p className="text-zinc-500 text-sm text-center py-6 bg-zinc-900/50 rounded-2xl border border-zinc-800/50">ምንም ትዕዛዝ የለም (No orders yet).</p>
-             ) : (
-                <div className="space-y-3">
-                   {userOrders.map(order => (
-                      <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-                         <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-bold text-white text-base line-clamp-1 flex-1 pr-2">{order.product_name}</h4>
-                            {getStatusBadge(order.status)}
-                         </div>
-                         <p className="text-xs text-zinc-500 mb-2">{new Date(order.created_at).toLocaleDateString()}</p>
-                         {order.tracking_number && (
-                            <div className="mt-3 bg-black border border-amber-500/20 p-3 rounded-xl">
-                               <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1">Tracking Number</p>
-                               <p className="font-mono text-white text-sm font-bold">{order.tracking_number}</p>
-                            </div>
-                         )}
-                      </div>
-                   ))}
-                </div>
-             )}
-           </div>
-
-           <div>
-             <h3 className="font-bold text-[#2AABEE] text-sm uppercase tracking-wider mb-4 flex items-center"><PlusCircle className="mr-2" size={16}/> ልዩ ትዕዛዞች (Sourcing)</h3>
-             {userSourcing.length === 0 ? (
-                <p className="text-zinc-500 text-sm text-center py-6 bg-zinc-900/50 rounded-2xl border border-zinc-800/50">ምንም ልዩ ትዕዛዝ የለም.</p>
-             ) : (
-                <div className="space-y-3">
-                   {userSourcing.map(order => (
-                      <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-                         <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-bold text-white text-base line-clamp-1 flex-1 pr-2">{order.product_name || order.store_name || "Custom Order"}</h4>
-                            {getStatusBadge(order.status)}
-                         </div>
-                         <p className="text-xs text-zinc-500 mb-2">{new Date(order.created_at).toLocaleDateString()}</p>
-                      </div>
-                   ))}
-                </div>
-             )}
-           </div>
-        </div>
-
-        <button onClick={handleLogout} className="mt-12 w-full py-4 bg-red-900/20 text-red-500 border border-red-900/50 rounded-xl font-bold flex items-center justify-center hover:bg-red-900/40 transition-colors">
-           <LogOut size={16} className="mr-2"/> ዘግተህ ውጣ (Sign Out)
-        </button>
-      </div>
-    );
   };
 
   const renderOfflineSaleModal = () => {
@@ -1235,28 +1150,760 @@ export default function App() {
     );
   };
 
+  const renderAccountSlideOver = () => (
+    <div className="fixed inset-0 z-[80] flex justify-end">
+       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowAccountMenu(false)}></div>
+       <div className="relative w-full max-w-sm bg-zinc-950 h-full overflow-y-auto border-l border-zinc-800 animate-in slide-in-from-right duration-300 p-6 flex flex-col">
+          <div className="flex justify-between items-center mb-6">
+             <h2 className="text-xl font-black text-white flex items-center"><User className="mr-2 text-amber-500" size={24}/> የእኔ አካውንት</h2>
+             <button onClick={() => setShowAccountMenu(false)} className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition-colors"><X size={20}/></button>
+          </div>
+
+          <button onClick={handleLogout} className="mb-6 w-full py-3 bg-red-900/20 text-red-500 border border-red-900/50 rounded-xl font-bold flex items-center justify-center hover:bg-red-900/40 transition-colors">
+             <LogOut size={16} className="mr-2"/> ዘግተህ ውጣ (Sign Out)
+          </button>
+
+          {isCEO && (
+             <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 border border-amber-500/30 p-5 rounded-2xl mb-8 shadow-lg text-white">
+                <h3 className="font-black text-lg uppercase tracking-widest mb-1 text-amber-500">CEO Admin Badge</h3>
+                <p className="font-bold text-sm opacity-90">{currentUserProfile?.full_name}</p>
+             </div>
+          )}
+
+          {isVIP && !isCEO && (
+             <div className="bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-600 p-5 rounded-2xl mb-8 shadow-[0_0_30px_rgba(245,158,11,0.2)] text-black relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-20"><Target size={80}/></div>
+                <h3 className="font-black text-lg uppercase tracking-widest mb-1 relative z-10">Goleth VIP Member</h3>
+                <p className="font-bold text-sm opacity-90 mb-6 relative z-10">{currentUserProfile?.full_name}</p>
+                <div className="flex justify-between items-end relative z-10">
+                   <div>
+                      <p className="text-[10px] uppercase font-black opacity-70">Status</p>
+                      <p className="font-bold text-sm">Active</p>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-[10px] uppercase font-black opacity-70">Expires</p>
+                      <p className="font-bold font-mono text-sm">{currentUserProfile?.vip_until ? new Date(currentUserProfile.vip_until).toLocaleDateString() : 'Lifetime'}</p>
+                   </div>
+                </div>
+             </div>
+          )}
+
+          <div className="mb-8">
+             <div className="flex justify-between items-center mb-3">
+               <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider">የግል መረጃ (Details)</h3>
+             </div>
+             <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-sm text-zinc-300 space-y-2">
+                <p><span className="text-zinc-500 mr-2">ስም:</span> {currentUserProfile?.full_name}</p>
+                <p><span className="text-zinc-500 mr-2">ስልክ:</span> {currentUserProfile?.phone_number}</p>
+                <p><span className="text-zinc-500 mr-2">አድራሻ:</span> {currentUserProfile?.region}</p>
+             </div>
+          </div>
+
+          <div className="flex-1 space-y-8">
+             <div>
+               <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wider mb-4 flex items-center"><Package className="mr-2" size={16}/> መደበኛ ትዕዛዞች (Orders)</h3>
+               {userOrders.length === 0 ? (
+                  <p className="text-zinc-500 text-sm text-center py-4 bg-black rounded-lg border border-zinc-800">ምንም ትዕዛዝ የለም (No orders yet).</p>
+               ) : (
+                  <div className="space-y-3">
+                     {userOrders.map(order => (
+                        <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                           <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-white text-sm line-clamp-1 flex-1 pr-2">{order.product_name}</h4>
+                              {getStatusBadge(order.status)}
+                           </div>
+                           <p className="text-xs text-zinc-500 mb-2">{new Date(order.created_at).toLocaleDateString()}</p>
+                           {order.tracking_number && (
+                              <div className="mt-3 bg-black border border-amber-500/20 p-2.5 rounded-lg">
+                                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1">Tracking Number</p>
+                                 <p className="font-mono text-white text-xs font-bold">{order.tracking_number}</p>
+                              </div>
+                           )}
+                        </div>
+                     ))}
+                  </div>
+               )}
+             </div>
+
+             <div>
+               <h3 className="font-bold text-[#2AABEE] text-sm uppercase tracking-wider mb-4 flex items-center"><PlusCircle className="mr-2" size={16}/> ልዩ ትዕዛዞች (Sourcing)</h3>
+               {userSourcing.length === 0 ? (
+                  <p className="text-zinc-500 text-sm text-center py-4 bg-black rounded-lg border border-zinc-800">ምንም ልዩ ትዕዛዝ የለም.</p>
+               ) : (
+                  <div className="space-y-3">
+                     {userSourcing.map(order => (
+                        <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                           <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-white text-sm line-clamp-1 flex-1 pr-2">{order.product_name || order.store_name || "Custom Order"}</h4>
+                              {getStatusBadge(order.status)}
+                           </div>
+                           <p className="text-xs text-zinc-500 mb-2">{new Date(order.created_at).toLocaleDateString()}</p>
+                        </div>
+                     ))}
+                  </div>
+               )}
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+
+  const renderSuccessModal = () => (
+    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto flex flex-col p-6 animate-in fade-in zoom-in duration-200 justify-center">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 relative shadow-2xl max-w-md mx-auto w-full text-center">
+        <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 transition-colors"><X className="text-white w-5 h-5" /></button>
+        <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 text-4xl font-black shadow-[0_0_20px_rgba(245,158,11,0.2)]">✓</div>
+        <h2 className="text-2xl font-black text-white mb-4">መረጃዎ ደርሶናል!</h2>
+        <p className="text-zinc-300 text-sm leading-loose mb-8">ማረጋገጫዎ በጥሩ ሁኔታ ተልኳል። ሂደቱ በጥቂት ሰዓታት ውስጥ ይጀምራል።</p>
+        <button onClick={() => setShowSuccessModal(false)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-xl transition-colors text-lg shadow-lg">እሺ (OK)</button>
+      </div>
+    </div>
+  );
+
+  const renderOrderForm = () => {
+    const isSourcingValid = ((reqProductName.trim() ? 1 : 0) + (reqStoreName.trim() ? 1 : 0) + (reqProductLink.trim() ? 1 : 0) + (reqImage ? 1 : 0)) >= 2 && isFullNameValid(orderName) && vipPhone.length === 10;
+
+    return (
+      <div className="fixed inset-0 bg-zinc-900 z-[60] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+        <div className="relative w-full min-h-full flex flex-col px-6 pt-12 pb-24 max-w-lg mx-auto shadow-2xl">
+          <button onClick={() => setShowOrderForm(false)} className="absolute top-4 right-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-10">
+            <X className="text-white w-6 h-6" />
+          </button>
+          
+          {!currentUser ? (
+            <div className="text-center py-20 flex-1 flex flex-col justify-center">
+              <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 mx-auto"><Target className="text-amber-500 w-8 h-8" /></div>
+              <h3 className="text-white font-black mb-3">ለማዘዝ ይግቡ (Login required)</h3>
+              <p className="text-zinc-400 text-sm mb-6 leading-relaxed max-w-xs mx-auto">ልዩ ትዕዛዝዎን ለመላክ በቴሌግራም መለያዎ ይግቡ።</p>
+              <div ref={telegramSourcingRef} className="flex justify-center min-h-[50px]"></div>
+            </div>
+          ) : (
+            <div className="flex-1 w-full flex flex-col">
+              <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">ልዩ እቃ ማዘዣ</h2>
+              <p className="text-zinc-300 text-sm text-center mb-2">ምን እቃ እንድንገዛ እና እንድንልክሎት ይፈልጋሉ? ከታች ካሉት የእቃው አማራጮች ቢያንስ <span className="font-bold text-white">ሁለቱን</span> ያስገቡ።</p>
+              
+              <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg mb-6 text-center">
+                <span className="text-amber-500 font-bold text-xs">የVIP አባል ከሆኑ የነጻ አገልግሎት! የማጓጓዣ ብቻ ይከፍላሉ።</span>
+              </div>
+
+              <form onSubmit={submitOrderForm} className="space-y-3">
+                <input required name="name" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)'); }} />
+                <input required name="phone" type="tel" maxLength="10" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} placeholder="ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-mono" />
+                
+                <div className="border-t border-zinc-800 my-2 pt-3 space-y-2">
+                   <input value={reqProductName} onChange={e => setReqProductName(e.target.value)} placeholder="የእቃው ስም (ለምሳሌ: iPhone 15)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                   <input value={reqStoreName} onChange={e => setReqStoreName(e.target.value)} placeholder="የሱቁ ስም (ለምሳሌ: Amazon)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                   <input value={reqProductLink} onChange={e => setReqProductLink(e.target.value)} type="url" placeholder="የእቃው ሊንክ (ካለ)" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm" />
+                   <div>
+                      <label className="block text-zinc-400 text-xs mb-1 font-bold">ወይም የእቃውን ምስል ያያይዙ (ካለ)</label>
+                      <input type="file" onChange={e => setReqImage(e.target.files[0])} accept="image/*" className="w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                   </div>
+                </div>
+
+                <label className="flex items-center space-x-3 text-zinc-300 mt-2 bg-black p-3 rounded-xl border border-zinc-800 cursor-pointer">
+                  <input type="checkbox" checked={isGift} onChange={e => setIsGift(e.target.checked)} className="w-5 h-5 accent-amber-500 cursor-pointer" />
+                  <span className="font-bold text-sm">ይህ ዕቃ ስጦታ ነው?</span>
+                </label>
+
+                {isGift && (
+                  <div className="p-3 bg-black border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <h4 className="text-amber-500 font-bold text-[10px] uppercase tracking-wider mb-1">የተቀባዩ መረጃ</h4>
+                    <input required value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="የተቀባዩ ሙሉ ስም" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm" />
+                    <input required type="tel" maxLength="10" value={recipientPhone} onChange={e => setRecipientPhone(e.target.value.replace(/\D/g, ""))} placeholder="የተቀባዩ ስልክ ቁጥር (10 አሃዝ)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm font-mono" />
+                    <textarea required value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} rows="2" placeholder="የተቀባዩ ሙሉ አድራሻ (ከተማ, ሰፈር)" className="w-full bg-zinc-900 border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none text-sm"></textarea>
+                  </div>
+                )}
+                
+                <select required name="shipping" className="w-full bg-black border border-zinc-800 text-white p-3 rounded-xl focus:border-amber-500 outline-none transition-colors text-sm font-bold mt-2">
+                  <option value="">ማጓጓዣ ይምረጡ</option>
+                  <option value="3-5 የሰራ ቀናት">ከ3-5 የስራ ቀናት (መደበኛ)</option>
+                  <option value="በሚቀጥለው ቀን አቅርቦት">በሚቀጥለው ቀን (አስቸኳይ)</option>
+                </select>
+                
+                <button type="submit" disabled={uploading || !isSourcingValid} className={`w-full font-black py-4 rounded-xl mt-4 flex items-center justify-center transition-colors text-base ${(!isSourcingValid || uploading) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-lg'}`}>
+                  {uploading ? "በመላክ ላይ..." : <><Send size={18} className="mr-2" /> ትዕዛዙን ላክ</>}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderOrderBanner = () => (
+    <button onClick={handleOpenSourcing} className="col-span-2 w-full bg-gradient-to-br from-zinc-900 to-black rounded-lg p-2 flex justify-between items-center shadow-lg border border-amber-500/20 mb-2 mt-0 hover:border-amber-500/50 transition-all group">
+      <div className="flex-1 flex flex-col items-center text-center">
+        <h3 className="text-amber-500 font-black text-sm tracking-wide drop-shadow-md leading-tight mb-0.5">ልዩ እቃ ማዘዝ ይፈልጋሉ?</h3>
+        <p className="text-zinc-400 text-[10px] font-bold">ከየትም ቦታ : የፈለጉበት ቦታ እናመጣሎታለን!</p>
+      </div>
+      <div className="bg-amber-500/10 p-1.5 rounded-full shadow-inner border border-amber-500/30 group-hover:bg-amber-500/20 transition-colors shrink-0 ml-2">
+         <PlusCircle className="text-amber-500 drop-shadow-lg" size={20} />
+      </div>
+    </button>
+  );
+
+  const renderBodyWithImages = (text, urls) => {
+    if (!text) return null;
+    const regex = /\[image\s*(\d+)\]/gi;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) { parts.push(text.substring(lastIndex, match.index)); }
+      const imgNumber = parseInt(match[1], 10);
+      if (urls && urls[imgNumber]) { parts.push(<img key={match.index} src={urls[imgNumber]} alt="Article Content" className="w-full h-auto rounded-xl my-6 shadow-lg object-cover border border-zinc-800" />); }
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) { parts.push(text.substring(lastIndex)); }
+    return <div className="text-zinc-300 text-sm leading-loose whitespace-pre-wrap">{parts.length > 0 ? parts : text}</div>;
+  };
+
+  const renderRelatedItems = () => {
+    if (!activePost || !activePost.related_links || activePost.related_links.length === 0) return null;
+    const relatedCards = activePost.related_links.map(link => {
+      const [type, idStr] = link.split('_'); const id = parseInt(idStr, 10);
+      if (type === 'post') {
+        const p = posts.find(post => post.id === id); if (!p) return null;
+        const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
+        return (
+          <div key={`post_${p.id}`} onClick={() => { setActiveTab(p.category); openPost(p); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col hover:border-amber-500/30 transition-colors">
+            {img && <img src={img} alt={p.title} className="w-full aspect-[1.91/1] object-cover" />}
+            <div className="p-3"><h4 className="text-white text-xs font-bold line-clamp-2">{p.title}</h4></div>
+          </div>
+        );
+      } else if (type === 'product') {
+        const p = products.find(prod => prod.id === id); if (!p) return null;
+        const img = p.image_urls && p.image_urls.length > 0 ? p.image_urls[0] : null;
+        return (
+          <div key={`prod_${p.id}`} onClick={() => { setActivePost(null); openProduct(p); window.scrollTo(0,0); }} className="bg-zinc-900 rounded-xl overflow-hidden border border-amber-500/50 hover:border-amber-500 cursor-pointer flex flex-col items-center p-3 relative transition-colors">
+             <span className="absolute top-0 right-0 bg-amber-500 text-black text-[9px] font-black px-2 py-0.5 rounded-bl-lg z-10">ወደ ሱቅ</span>
+             {img && <img src={img} alt={p.name} className="h-20 object-contain mb-2 drop-shadow-md" />}
+             <h4 className="text-white text-xs font-bold line-clamp-1 text-center w-full">{p.name}</h4>
+             <p className="text-amber-500 text-xs font-black mt-1">{p.price} ብር</p>
+          </div>
+        );
+      }
+      return null;
+    });
+    return (
+      <div className="mt-10 border-t border-zinc-800 pt-6">
+        <h3 className="text-amber-500 font-black text-sm mb-4">ተያያዥ</h3>
+        <div className="grid grid-cols-2 gap-3">{relatedCards}</div>
+      </div>
+    );
+  };
+
+  const renderSinglePost = () => (
+    <div className="pb-24 animate-in fade-in zoom-in-95 duration-200">
+      <button onClick={() => window.history.back()} className="flex items-center text-zinc-400 mb-6 hover:text-amber-500 transition-colors font-bold text-sm">
+        <ChevronLeft size={20} className="mr-1" /> ወደ ኋላ ተመለስ
+      </button>
+      {isCEO && (
+        <div className="flex space-x-2 mb-6 w-full">
+          <button onClick={() => handleEdit("posts", activePost)} className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors border border-zinc-700"><Edit2 size={14} className="mr-1" /> አስተካክል</button>
+          <button onClick={() => handleDelete("posts", activePost.id)} className="bg-red-900/30 text-red-500 hover:bg-red-900/50 hover:text-red-400 border border-red-900 p-2 rounded-lg text-xs font-bold flex-1 flex items-center justify-center transition-colors"><Trash2 size={14} className="mr-1" /> ሰርዝ</button>
+        </div>
+      )}
+      {(!activePost.body || !/\[image\s*\d+\]/i.test(activePost.body)) && activePost.image_urls && activePost.image_urls[0] && (
+        <img src={activePost.image_urls[0]} alt={activePost.title} className="w-full aspect-[1.91/1] object-cover rounded-xl mb-6 shadow-2xl border border-zinc-800" />
+      )}
+      <h1 className="text-2xl font-black text-white mb-2 leading-tight">{activePost.title}</h1>
+      {activePost.subtitle && <h2 className="text-base text-amber-500 font-bold mb-4">{activePost.subtitle}</h2>}
+      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-8 border-b border-zinc-800 pb-4">{activePost.author}</div>
+      {activePost.excerpt && <p className="text-sm text-white font-medium mb-8 italic border-l-2 border-amber-500 pl-4">{activePost.excerpt}</p>}
+      {renderBodyWithImages(activePost.body, activePost.image_urls)}
+      {renderRelatedItems()}
+      <div className="mt-10">{renderOrderBanner()}</div>
+    </div>
+  );
+
+  const renderProductDetail = () => {
+    if (!selectedProduct) return null;
+    const hasImages = selectedProduct.image_urls && selectedProduct.image_urls.length > 0;
+    const hasVipAccess = isVIP || isCEO;
+
+    return (
+      <div className="fixed inset-0 bg-black z-50 overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-24">
+        <div className="relative">
+          <button onClick={() => window.history.back()} className="absolute top-4 left-4 bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors z-20">
+            <ChevronLeft className="text-white w-6 h-6" />
+          </button>
+          
+          <div className="absolute top-4 right-4 z-20 flex space-x-2">
+             <button onClick={() => setShowCart(true)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition-colors relative">
+                <ShoppingCart className="text-white w-6 h-6" />
+                {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>}
+             </button>
+          </div>
+
+          {isCEO && (
+             <div className="absolute top-4 left-16 flex space-x-2 z-20">
+                <button onClick={(e) => { e.stopPropagation(); handleOpenOfflineSale(selectedProduct); }} className="bg-amber-500 text-black backdrop-blur p-2.5 rounded-full font-black text-xs shadow-lg flex items-center"><DollarSign size={16} className="mr-1"/> Log Sale</button>
+                <button onClick={() => handleEdit("products", selectedProduct)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-white"><Edit2 size={20}/></button>
+                <button onClick={() => handleDelete("products", selectedProduct.id)} className="bg-black/50 backdrop-blur p-2.5 rounded-full border border-zinc-800 text-red-500"><Trash2 size={20}/></button>
+             </div>
+          )}
+
+          {hasImages ? (
+            <div className="relative w-full bg-white mb-4 border-b border-zinc-800 overflow-hidden">
+               {selectedProduct.image_urls.length > 1 && <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-white z-20 flex items-center">← Swipe →</div>}
+               {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg mt-14">ቅናሽ</div>}
+               <div className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-64 w-full relative z-10">
+                  {selectedProduct.image_urls.map((url, idx) => (
+                    <img key={idx} src={url} alt={selectedProduct.name} className="w-full h-full object-contain shrink-0 snap-center mix-blend-multiply" />
+                  ))}
+               </div>
+            </div>
+          ) : (
+            <div className="w-full h-64 bg-zinc-900 flex items-center justify-center mb-4 border border-zinc-800 relative">
+              {selectedProduct.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1.5 z-20 rounded-br-xl shadow-lg mt-14">ቅናሽ</div>}
+              <span className="text-zinc-500 font-bold text-sm">ምስል የለም</span>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 pt-0">
+          <div className="flex justify-between items-start mb-1">
+            <h1 className="text-lg font-black text-white leading-tight">{selectedProduct.name}</h1>
+          </div>
+
+          <div className="mt-3 border-b border-zinc-800 pb-4">
+            {hasVipAccess ? (
+               <div className="flex flex-col space-y-1">
+                 <p className="text-zinc-400 font-black text-lg line-through decoration-red-500">መደበኛ: {selectedProduct.price} <span className="text-sm">ብር</span></p>
+                 <p className="text-amber-500 font-black text-lg">VIP: {selectedProduct.vip_price || selectedProduct.price} <span className="text-sm">ብር</span></p>
+               </div>
+            ) : (
+               <div className="flex flex-col space-y-1">
+                 <p className="text-white font-black text-lg">{selectedProduct.price} <span className="text-sm text-zinc-400">ብር</span></p>
+                 {selectedProduct.vip_price && <p className="text-amber-500 font-black text-lg mt-1">VIP: {selectedProduct.vip_price} <span className="text-sm">ብር</span></p>}
+               </div>
+            )}
+          </div>
+
+          {selectedProduct.description && (
+             <div className="mt-4 border-b border-zinc-800 pb-4">
+               <h3 className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-2">ስለ እቃው (Description)</h3>
+               <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedProduct.description}</p>
+             </div>
+          )}
+
+          <div className="mt-4 border-b border-zinc-800 pb-4">
+            {selectedProduct.options && selectedProduct.options.length > 0 && (
+              <>
+                <h3 className="text-white font-black text-sm mb-3">ምርጫዎትን ይጫኑ</h3>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {selectedProduct.options.map((opt) => (
+                    <button key={opt} onClick={() => setSelectedOption(opt)} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedOption === opt ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-black text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
+                      {formatOptionDisplay(opt)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="bg-black border border-zinc-800 rounded-xl p-3 flex justify-between items-center mb-4 mt-2">
+              <span className="text-sm font-bold text-zinc-300">ብዛት (Quantity):</span>
+              <div className="flex items-center space-x-4 bg-zinc-900 rounded-lg p-1 border border-zinc-700">
+                <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-1 text-white hover:text-amber-500"><Minus size={16} /></button>
+                <span className="font-bold text-lg w-6 text-center text-amber-500">{quantity}</span>
+                <button type="button" onClick={() => setQuantity(quantity + 1)} className="p-1 text-white hover:text-amber-500"><Plus size={16} /></button>
+              </div>
+            </div>
+
+            <button onClick={addToCart} disabled={selectedProduct.options && selectedProduct.options.length > 0 && !selectedOption} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-base shadow-lg transition-colors flex items-center justify-center">
+              <ShoppingCart className="mr-2" size={20} /> ወደ ጋሪ አስገባ (Add to Cart)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPostFeed = () => {
+    const filteredPosts = activeTab === "ዋና" ? posts : posts.filter(p => p.category === activeTab);
+
+    if (filteredPosts.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center mt-20 text-zinc-500">
+          <div className="w-12 h-12 rounded-full border border-zinc-800 flex items-center justify-center mb-4 text-zinc-700 font-black">!</div>
+          <p className="font-medium text-sm">ምንም አልተገኘም</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3 pb-24">
+        <div className="grid grid-cols-2 gap-3">
+          {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderOrderBanner()}
+          {filteredPosts.map((post, index) => {
+            const firstImg = post.image_urls && post.image_urls.length > 0 ? post.image_urls[0] : null;
+            if (index === 0) {
+              return (
+                <div key={post.id} onClick={() => openPost(post)} className="col-span-2 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 cursor-pointer shadow-lg hover:border-zinc-700 transition-colors">
+                  {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
+                  <div className="p-4">
+                    <h2 className="text-lg font-black text-white mb-2 leading-tight line-clamp-2">{post.title}</h2>
+                    <div className="text-amber-500 text-[10px] font-bold tracking-wider mb-2 uppercase">{post.author}</div>
+                    <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">{post.excerpt || post.body.replace(/\[image\s*\d+\]/gi, '')}</p>
+                  </div>
+                </div>
+              );
+            }
+            if (index > 0 && index <= 4) {
+              return (
+                <div key={post.id} onClick={() => openPost(post)} className="col-span-1 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer flex flex-col hover:border-zinc-700 transition-colors">
+                  {firstImg && <img src={firstImg} alt={post.title} className="w-full aspect-[1.91/1] object-cover" />}
+                  <div className="p-3 flex flex-col flex-grow justify-between">
+                    <h3 className="text-xs font-bold text-white mb-2 line-clamp-2 leading-snug">{post.title}</h3>
+                    <div className="text-amber-500 text-[9px] font-bold uppercase mt-auto">{post.author}</div>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={post.id} onClick={() => openPost(post)} className="col-span-2 flex items-center bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 cursor-pointer p-2.5 hover:border-zinc-700 transition-colors">
+                {firstImg && <img src={firstImg} alt={post.title} className="w-24 shrink-0 aspect-square object-cover rounded-lg border border-zinc-800" />}
+                <div className="pl-3 flex flex-col flex-grow">
+                  <h3 className="text-xs font-bold text-white mb-1 line-clamp-2 leading-snug">{post.title}</h3>
+                  <div className="text-amber-500 text-[9px] font-bold uppercase">{post.author}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderShop = () => {
+    const uniquePrimary = ["ሁሉም", ...customCategories.filter(c => !hiddenCategories.includes(c))];
+    const activeSubCats = shopCategory === "ሁሉም" ? [] : (customSubCats[shopCategory] || []).filter(c => !hiddenSubCategories.includes(c));
+    const uniqueSecondary = ["ሁሉም", ...activeSubCats];
+
+    let filtered = products;
+    if (shopCategory !== "ሁሉም") {
+      filtered = filtered.filter(p => {
+        const catList = Array.isArray(p.category) ? p.category : (p.category ? [p.category] : []);
+        return catList.includes(shopCategory);
+      });
+    }
+    if (shopCategory !== "ሁሉም" && shopSubCategory !== "ሁሉም") {
+      filtered = filtered.filter(p => {
+        const subCatList = Array.isArray(p.subcategory) ? p.subcategory : (p.subcategory ? [p.subcategory] : []);
+        return subCatList.includes(shopSubCategory);
+      });
+    }
+
+    const hasVipAccess = isVIP || isCEO;
+
+    return (
+      <div className="pb-24">
+        
+        <div className="flex justify-between items-center mb-3">
+           <div className="flex flex-wrap gap-2 flex-1">
+             {uniquePrimary.map(cat => (
+               <button key={cat} onClick={() => { setShopCategory(cat); setShopSubCategory("ሁሉም"); }} 
+                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${shopCategory === cat ? "bg-amber-500 text-black shadow-lg" : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white"}`}>
+                 {cat}
+               </button>
+             ))}
+           </div>
+           
+           <button onClick={() => setShowCart(true)} className="bg-zinc-900 border border-zinc-800 p-2 rounded-xl relative ml-2 shadow-lg">
+             <ShoppingCart className="text-amber-500 w-5 h-5" />
+             {cart.length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-black text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-black">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>}
+           </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {renderOrderBanner()}
+        </div>
+
+        {shopCategory !== "ሁሉም" && uniqueSecondary.length > 1 && (
+           <div className="flex flex-wrap gap-2 pb-4 mb-2 mt-2">
+           {uniqueSecondary.map(cat => (
+             <button key={cat} onClick={() => setShopSubCategory(cat)} 
+               className={`px-3 py-1 rounded-full text-[10px] font-bold transition-colors ${shopSubCategory === cat ? "bg-zinc-300 text-black" : "bg-zinc-800 text-zinc-400 hover:text-white"}`}>
+               {cat}
+             </button>
+           ))}
+         </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 mt-1">
+          {filtered.map((item) => (
+            <div key={item.id} onClick={() => openProduct(item)} className="cursor-pointer group flex flex-col h-full bg-zinc-900 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors shadow-lg overflow-hidden">
+              <div className="bg-white w-full h-36 flex items-center justify-center relative shadow-sm overflow-hidden">
+                 {isCEO && (
+                    <div className="absolute bottom-2 right-2 flex space-x-1 z-20">
+                      <button onClick={(e) => { e.stopPropagation(); handleOpenOfflineSale(item); }} className="bg-black/80 backdrop-blur p-1.5 rounded-md text-amber-500 font-black text-[10px] flex items-center"><DollarSign size={12} className="mr-0.5"/> POS</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleEdit("products", item); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-white"><Edit2 size={12}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete("products", item.id); }} className="bg-black/50 backdrop-blur p-1.5 rounded-md text-red-400"><Trash2 size={12}/></button>
+                    </div>
+                 )}
+                 {item.is_sale && <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-black px-2 py-1 z-10 rounded-br-lg shadow-sm">ቅናሽ</div>}
+                 {item.image_urls && item.image_urls.length > 0 ? (
+                    <img src={item.image_urls[0]} alt={item.name} className="w-full h-full object-cover mix-blend-multiply transition-transform duration-300 group-hover:scale-105" />
+                 ) : <div className="text-zinc-300 text-xs font-bold">ምስል የለም</div>}
+              </div>
+
+              <div className="p-3 flex flex-col flex-grow">
+                 <h3 className="text-zinc-200 font-bold text-sm line-clamp-2 leading-tight mb-1">{item.name}</h3>
+                 
+                 <div className="mt-auto">
+                    {hasVipAccess ? (
+                      <>
+                        <p className="text-zinc-400 font-bold text-sm line-through mt-0.5">መደበኛ: {item.price} <span className="text-[10px]">ብር</span></p>
+                        <p className="text-amber-500 font-black text-sm leading-none">VIP: {item.vip_price || item.price} <span className="text-[10px]">ብር</span></p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-white font-black text-sm leading-none">{item.price} <span className="text-[10px] text-zinc-400">ብር</span></p>
+                        {item.vip_price && <p className="text-amber-500 font-black text-sm mt-1">VIP: {item.vip_price} <span className="text-[10px]">ብር</span></p>}
+                      </>
+                    )}
+                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderActualGames = (isBlurred = false) => {
+    if (!games || games.length === 0) return null;
+    
+    return (
+      <div className={isBlurred ? "opacity-30 blur-[4px] pointer-events-none select-none mt-8" : "mt-8"}>
+        {Array.isArray(games) && games.map(game => {
+          if (!game || !game.id) return null;
+          const userPred = userPredictions ? userPredictions[game.id] : null;
+          return (
+            <div key={game.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4 shadow-xl">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col items-center w-1/3">
+                  {game.team_a_logo && typeof game.team_a_logo === 'string' && <img src={game.team_a_logo} alt="Team A" className="w-14 h-14 mb-2 object-contain drop-shadow-md"/>}
+                  <span className="font-bold text-center text-xs text-zinc-300">{String(game.team_a || "")}</span>
+                </div>
+                <div className="text-2xl font-black text-amber-500 w-1/3 text-center">VS</div>
+                <div className="flex flex-col items-center w-1/3">
+                  {game.team_b_logo && typeof game.team_b_logo === 'string' && <img src={game.team_b_logo} alt="Team B" className="w-14 h-14 mb-2 object-contain drop-shadow-md"/>}
+                  <span className="font-bold text-center text-xs text-zinc-300">{String(game.team_b || "")}</span>
+                </div>
+              </div>
+
+              {!isBlurred && game.status === 'open' && !userPred && (
+                <div className="flex flex-col items-center space-y-4 border-t border-zinc-800 pt-4">
+                  <div className="flex justify-center items-center space-x-3">
+                    <input type="number" value={predictionInputs[game.id]?.a || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), a: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
+                    <span className="font-black text-zinc-500">-</span>
+                    <input type="number" value={predictionInputs[game.id]?.b || ""} onChange={e => setPredictionInputs(prev => ({...prev, [game.id]: {...(prev[game.id] || {}), b: e.target.value}}))} className="w-16 p-3 rounded-lg bg-black border border-zinc-700 text-white text-center font-black focus:border-amber-500 outline-none" placeholder="0" />
+                  </div>
+                  <button onClick={() => submitPrediction(game.id)} className="w-full bg-amber-500 text-black py-3 rounded-xl font-black shadow-lg hover:bg-amber-400 transition-colors">ውጤት ላክ</button>
+                </div>
+              )}
+
+              {!isBlurred && game.status === 'open' && userPred && (
+                <div className="mt-4 text-center bg-black border border-amber-500/50 text-amber-500 text-sm font-bold p-3 rounded-xl">🔒 ግምትዎ ተቆልፏል: {String(userPred.predicted_score_a ?? '')} - {String(userPred.predicted_score_b ?? '')}</div>
+              )}
+
+              {!isBlurred && game.status === 'finished' && userPred && (
+                <div className="mt-4 text-center border-t border-zinc-800 pt-4">
+                  <div className="text-sm font-bold text-zinc-400 mb-2">ትክክለኛ ውጤት: <span className="text-white">{String(game.final_score_a ?? '')} - {String(game.final_score_b ?? '')}</span></div>
+                  <div className={`p-3 rounded-xl text-sm font-black text-white ${userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? 'bg-green-600/80 border border-green-500' : 'bg-red-900/50 border border-red-800 text-red-200'}`}>
+                    {userPred.predicted_score_a === game.final_score_a && userPred.predicted_score_b === game.final_score_b ? "🎉 አሸናፊ!" : `የእርስዎ ግምት: ${String(userPred.predicted_score_a ?? '')} - ${String(userPred.predicted_score_b ?? '')} ❌`}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderVIP = () => {
+    const handleVipActionClick = () => {
+       if (!currentUser) {
+          setShowLoginModal(true);
+       } else {
+          document.getElementById('vip-payment-form')?.scrollIntoView({ behavior: 'smooth' });
+       }
+    };
+
+    const renderVipBenefits = () => (
+      <div className="text-left mb-8 bg-gradient-to-b from-zinc-900 to-black p-[2px] rounded-2xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Target size={120} /></div>
+        <div className="bg-zinc-950 rounded-2xl p-5 h-full z-10 relative">
+          <h3 className="text-amber-500 font-black mb-5 text-lg border-b border-zinc-800 pb-3 flex items-center">
+            <Target className="mr-2" size={20} /> የVIP አባልነት ጥቅሞች
+          </h3>
+          
+          <div className="grid grid-cols-1 gap-6">
+            <div className="group relative bg-zinc-900/50 p-5 rounded-xl border border-zinc-800/50 hover:border-amber-500/50 transition-all">
+              <div className="flex items-center space-x-4 mb-3">
+                 <div className="bg-amber-500/20 p-3 rounded-xl"><Home className="text-amber-500 w-6 h-6 shrink-0" /></div>
+                 <h4 className="text-lg font-black text-amber-500">የሀገር ውስጥ VIP</h4>
+              </div>
+              <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
+                 <li>ልዩ ቅናሽ ያላቸውን እቃዎች ለVIP ተጠቃሚ ብቻ</li>
+                 <li>በየሳምንቱ እና በየወሩ በሚኖሩን የእግር ኳስ እና ሌሎች የውድድር መርሐ ግብሮች በመሳተፍ የሱቃችን ምርቶችን የማሸነፍ ዕድል ያገኛሉ!</li>
+                 <li>ለእያንዳንዱ እቃ እስከ 3 ብዛት ለሚገዙት ልዩ እና ታላቅ ቅናሾች ተጠቃሚ ይሆናሉ።</li>
+              </ul>
+              <div className="mt-5 pl-16">
+                 <div className="flex items-baseline space-x-1 mb-3">
+                    <p className="text-2xl font-black text-white">300 ብር</p>
+                    <p className="text-sm text-zinc-300 font-bold">/ በወር</p>
+                 </div>
+                 <button onClick={handleVipActionClick} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
+              </div>
+            </div>
+            
+            <div className="group relative bg-zinc-900/50 p-5 rounded-xl border border-zinc-800/50 hover:border-amber-500/50 transition-all">
+              <div className="flex items-center space-x-4 mb-3">
+                 <div className="bg-amber-500/20 p-3 rounded-xl"><Package className="text-amber-500 w-6 h-6 shrink-0" /></div>
+                 <h4 className="text-lg font-black text-amber-500">የዳያስፖራ VIP</h4>
+              </div>
+              <ul className="text-sm text-zinc-300 leading-relaxed pl-16 space-y-2 list-disc">
+                 <li>ልዩ ቅናሽ ያላቸውን እቃዎች ለVIP ተጠቃሚ ብቻ</li>
+                 <li>በወር 2 ጊዜ ከማንኛውም የአገልግሎት ክፍያ ነጻ ይሆናሉ (እቃውን ከገዙ በኋላ የእቃውን እና የማጓጓዣ ክፍያ ብቻ ይከፍላሉ)።</li>
+                 <li>በሳምንት እና በወር በሚኖሩ ውድድሮች በመሳተፍ ምርቶችን ያሸንፉ፤ ያሸነፉትን እቃ ወደ ኢትዮጵያ በነጻ የመላክ እድል ያገኛሉ።</li>
+              </ul>
+              <div className="mt-5 pl-16">
+                 <div className="flex items-baseline space-x-1 mb-3">
+                    <p className="text-2xl font-black text-white">$15</p>
+                    <p className="text-sm text-zinc-300 font-bold">/ በወር</p>
+                 </div>
+                 <button onClick={handleVipActionClick} className="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-8 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">VIP ይሁኑ</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (!currentUser) {
+      return (
+        <div className="pb-24 pt-6">
+          <div className="text-center max-w-sm mx-auto mb-8">
+            {renderVipBenefits()}
+          </div>
+          {renderActualGames(true)}
+        </div>
+      );
+    }
+
+    if (hasPendingVip && !isCEO) {
+      return (
+        <div className="pb-24 pt-6 text-center">
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-8 mb-8 max-w-md mx-auto">
+            <div className="text-amber-500 mb-4 animate-pulse text-4xl">⏳</div>
+            <h2 className="text-xl font-black text-white mb-2">ማረጋገጫ በሂደት ላይ ነው</h2>
+            <p className="text-zinc-400 text-sm leading-relaxed">የላኩት ክፍያ በCEO በመታየት ላይ ነው። ሲፈቀድ መረጃ ይደርስዎታል።</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!isCEO && (!isVIP || vipStatus === "expired" || vipStatus === "none")) {
+      const isPaymentValid = isFullNameValid(orderName) && vipPhone.length === 10 && vipReceiptFile;
+      return (
+        <div className="pb-24 pt-6">
+          <div className="max-w-md mx-auto mb-8">
+
+            <div id="vip-payment-form" className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
+              <h2 className="text-2xl font-black text-amber-500 mb-2 text-center">
+                {vipStatus === "expired" ? "አባልነትዎ አልቋል (Expired)" : "ወርሃዊ የVIP አባልነት"}
+              </h2>
+              <p className="text-center text-zinc-400 text-xs mb-6">የVIP ጥቅሞችን ለማግኘት ከታች ያለውን ፎርም ይሙሉና ይክፈሉ።</p>
+
+              <form onSubmit={handleVipPaymentSubmit} className="space-y-4 animate-in fade-in duration-200">
+                <div className="flex space-x-2 mb-2">
+                  <button type="button" disabled={!!currentUserProfile?.region} onClick={() => setVipPaymentType("ሀገር ውስጥ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${vipPaymentType === "ሀገር ውስጥ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ሀገር ውስጥ</button>
+                  <button type="button" disabled={!!currentUserProfile?.region} onClick={() => setVipPaymentType("ዳያስፖራ")} className={`flex-1 py-3 text-sm font-bold rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${vipPaymentType === "ዳያስፖራ" ? "bg-amber-500 text-black border-amber-500" : "bg-black text-zinc-400 border-zinc-800"}`}>ዳያስፖራ</button>
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800 text-sm text-white space-y-2 mb-6">
+                  {vipPaymentType === "ሀገር ውስጥ" ? (
+                    <>
+                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">300 ብር</span></div>
+                      <p className="font-bold text-amber-500 text-base">📌 የባንክ ማስተላለፊያ መመሪያ፦</p>
+                      <p>የኢትዮጵያ ንግድ ባንክ (CBE) - <span className="text-amber-500 font-mono font-black text-lg">1000123456789</span></p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between mb-3 pb-3 border-b border-zinc-800"><span className="text-zinc-400">ወርሃዊ ክፍያ:</span><span className="text-amber-500 font-black">$15 USD (1950 ብር)</span></div>
+                      <p className="font-bold text-amber-500 text-base">📌 የPayPal ማስተላለፊያ መመሪያ፦</p>
+                      <p>PayPal ኢሜይል: <span className="text-amber-500 font-mono font-black text-lg">demo@goleth.com</span></p>
+                    </>
+                  )}
+                  <p className="text-xs text-zinc-400 pt-2 mt-2">መጀመሪያ ክፍያዎን ያስተላልፉ። በመቀጠል ደረሰኙን ፎቶ አንስተው ከታች ያያይዙ።</p>
+                </div>
+
+                <input required name="fullName" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="ሙሉ ስም (የመጀመሪያ እና የአባት ስም)" className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base" onChange={(e) => { setOrderName(e.target.value); e.target.setCustomValidity(isFullNameValid(e.target.value) ? '' : 'እባክዎ ሙሉ ስም ያስገቡ (የመጀመሪያ እና የአባት ስም)'); }} />
+                <input required type="tel" placeholder="ስልክ ቁጥር (10 አሃዝ)" maxLength="10" pattern="[0-9]{10}" value={vipPhone} onChange={e => setVipPhone(e.target.value.replace(/\D/g, ""))} className="w-full bg-black border border-zinc-800 text-white p-4 rounded-xl focus:border-amber-500 outline-none text-base font-mono" />
+                
+                <div>
+                  <label className="block text-zinc-400 text-sm font-bold mb-2">የክፍያ ማረጋገጫ ፋይል ያያይዙ፦</label>
+                  <input required type="file" name="receiptFile" onChange={(e) => setVipReceiptFile(e.target.files[0])} accept="image/*" className="w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:bg-zinc-800 file:text-white file:border-0 file:cursor-pointer" />
+                </div>
+                
+                <button type="submit" disabled={uploading || !isPaymentValid} className="w-full bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-black py-4 rounded-xl text-lg shadow-lg transition-colors mt-2">
+                  {uploading ? "በመላክ ላይ..." : "ላክ"}
+                </button>
+              </form>
+            </div>
+          </div>
+          {renderActualGames(true)}
+        </div>
+      );
+    }
+
+    return (
+      <div className="pb-24 pt-4">
+        {isCEO && (
+          <div className="bg-amber-500/10 border border-amber-500 text-amber-500 p-3 rounded-xl mb-6 text-center text-xs font-bold uppercase tracking-widest shadow-sm">
+            🛡️ CEO Access Granted
+          </div>
+        )}
+        {vipStatus === "expiring_soon" && !isCEO && (
+          <div className="bg-red-900/50 border border-red-500 text-white p-4 rounded-xl mb-6 text-center text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+            ⚠️ <span className="font-bold">ማሳሰቢያ:</span> የVIP አባልነትዎ ሊያልቅ 2 ቀናት ቀርተውታል። አገልግሎቱ እንዳይቋረጥ እባክዎ ያድሱ።
+          </div>
+        )}
+        {renderActualGames(false)}
+      </div>
+    );
+  };
+
   const renderAdmin = () => {
     
+    // BADGES LOGIC
     const pendingOrdersCount = allOrders.filter(o => o.status === 'pending' && !o.is_offline_sale).length;
     const pendingSourcingCount = allSourcing.filter(o => o.status === 'pending').length;
-    const pendingVipCount = pendingVipRequests.length;
+    const pendingVipCount = vipRequests.length;
     
+    // MENU CONFIG
     const adminMenu = [
-      { id: "overview", label: "Overview", icon: Home, badge: 0 },
+      { id: "overview", label: "Overview", icon: LayoutDashboard, badge: 0 },
       { id: "orders", label: "Orders", icon: Package, badge: pendingOrdersCount },
       { id: "sourcing", label: "Sourcing", icon: PlusCircle, badge: pendingSourcingCount },
       { id: "vip", label: "VIP", icon: Target, badge: pendingVipCount },
       { id: "products", label: "Products", icon: ShoppingBag, badge: 0 },
-      { id: "posts", label: "Articles", icon: Edit3, badge: 0 },
+      { id: "posts", label: "Articles", icon: FileText, badge: 0 },
       { id: "games", label: "Games", icon: Trophy, badge: 0 },
-      { id: "categories", label: "Categories", icon: List, badge: 0 }
+      { id: "categories", label: "Categories", icon: Settings, badge: 0 }
     ];
 
     return (
       <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in duration-200">
         <div className="flex justify-between items-center p-6 pb-4 border-b border-zinc-900 bg-black sticky top-0 z-10 shrink-0">
           <h2 className="text-amber-500 font-black text-2xl tracking-wide flex items-center">
-            {editId ? "Edit Listing" : <><Home className="mr-2" /> CEO Dashboard</>}
+            {editId ? "Edit Listing" : <><LayoutDashboard className="mr-2" /> CEO Dashboard</>}
           </h2>
           <button onClick={() => { setShowAdmin(false); setEditId(null); setExpandedOptionCategories({}); }} className="bg-zinc-900 hover:bg-zinc-800 p-2 rounded-full transition-colors"><X className="text-white w-6 h-6" /></button>
         </div>
@@ -1299,7 +1946,7 @@ export default function App() {
                  )}
               </div>
 
-              <h3 className="text-amber-500 font-bold mb-2 mt-4">Product Metrics</h3>
+              <h3 className="text-amber-500 font-bold mb-2 mt-4">Financial Metrics</h3>
               <div className="grid grid-cols-2 gap-3 mb-4">
                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
                     <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Realized Cash (Sales)</p>
@@ -1316,20 +1963,6 @@ export default function App() {
                  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-center shadow-lg">
                     <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Active Local Stock</p>
                     <p className="text-white font-black text-lg">{activeLocalStock} Items</p>
-                 </div>
-              </div>
-
-              <h3 className="text-amber-500 font-bold mb-2 mt-6">VIP Membership Revenue</h3>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                 <div className="bg-zinc-900 border border-amber-500/30 p-4 rounded-xl text-center shadow-lg">
-                    <p className="text-[10px] text-amber-500 font-bold uppercase mb-1">Local VIP (ሀገር ውስጥ)</p>
-                    <p className="text-white font-black text-lg">{localVipRevenue.toLocaleString()} ብር</p>
-                    <p className="text-[10px] text-zinc-500 mt-1">From {approvedVipPayments.filter(v => v.payment_type === 'ሀገር ውስጥ').length} members</p>
-                 </div>
-                 <div className="bg-zinc-900 border border-amber-500/30 p-4 rounded-xl text-center shadow-lg">
-                    <p className="text-[10px] text-amber-500 font-bold uppercase mb-1">Diaspora VIP (ዳያስፖራ)</p>
-                    <p className="text-white font-black text-lg">{diasporaVipRevenue.toLocaleString()} ብር</p>
-                    <p className="text-[10px] text-zinc-500 mt-1">From {approvedVipPayments.filter(v => v.payment_type === 'ዳያስፖራ').length} members</p>
                  </div>
               </div>
 
@@ -1394,8 +2027,8 @@ export default function App() {
 
           {adminTab === "vip" && (
              <div className="space-y-6">
-                {pendingVipRequests.length === 0 && <p className="text-zinc-500 text-sm">No pending VIP requests.</p>}
-                {pendingVipRequests.map(req => (
+                {vipRequests.length === 0 && <p className="text-zinc-500 text-sm">No pending VIP requests.</p>}
+                {vipRequests.map(req => (
                    <div key={req.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg relative">
                       <p className="text-white font-bold">{req.full_name}</p>
                       <p className="text-xs text-zinc-400">Phone: <span className="font-mono text-white">{req.phone_number}</span></p>
@@ -1418,9 +2051,8 @@ export default function App() {
 
           {adminTab === "orders" && (
              <div className="space-y-6">
-                {allOrders.filter(o => o.status !== 'arrived').length === 0 && <p className="text-zinc-500 text-sm">No active orders found. (Arrived orders are hidden).</p>}
-                
-                {allOrders.filter(o => o.status !== 'arrived').map(order => {
+                {allOrders.length === 0 && <p className="text-zinc-500 text-sm">No orders found.</p>}
+                {allOrders.map(order => {
                    const currentUpdate = orderUpdateData[order.id] || { status: order.status, tracking: order.tracking_number || "" };
                    
                    return (
@@ -1433,7 +2065,7 @@ export default function App() {
                             {order.total_weight_kg > 0 && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className={order.total_weight_kg < 1 ? "text-red-500 font-bold" : "text-white"}>{order.total_weight_kg} kg</span></p>}
                             {order.order_batch_id && <p className="text-[10px] text-zinc-600 font-mono mt-1">Batch: {order.order_batch_id}</p>}
                          </div>
-                         <div className="text-right flex flex-col items-end">
+                         <div className="text-right">
                             {getStatusBadge(order.status)}
                             <p className="text-[10px] text-zinc-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
                          </div>
@@ -1445,9 +2077,9 @@ export default function App() {
                               <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
                               <select value={currentUpdate.status} onChange={(e) => setOrderUpdateData({...orderUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
                                  <option value="pending">Pending (በሂደት ላይ)</option>
-                                 <option value="approved">Approved (ተቀባይነት አግኝቷል - Adds to Batch)</option>
+                                 <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
                                  <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
-                                 <option value="arrived">Arrived (ደርሷል - Hides from view)</option>
+                                 <option value="arrived">Arrived (ደርሷል)</option>
                               </select>
                            </div>
                            <div>
@@ -1470,7 +2102,7 @@ export default function App() {
                 {allSourcing.filter(o => o.status !== 'arrived').length === 0 && <p className="text-zinc-500 text-sm">No active sourcing orders found. (Arrived orders are hidden).</p>}
                 
                 {allSourcing.filter(o => o.status !== 'arrived').map(order => {
-                   const currentUpdate = sourcingUpdateData[order.id] || { status: order.status, weight: order.total_weight_kg || "" };
+                   const currentUpdate = sourcingUpdateData[order.id] || { status: order.status };
                    return (
                    <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col space-y-3 shadow-lg">
                       <div className="flex justify-between items-start">
@@ -1478,7 +2110,6 @@ export default function App() {
                             <p className="text-white font-bold text-sm">{order.full_name}</p>
                             <p className="text-[#2AABEE] font-black text-sm">{order.product_name || "Custom Order"}</p>
                             <p className="text-xs text-zinc-400 mt-1">Store: <span className="text-white">{order.store_name || "N/A"}</span></p>
-                            {order.total_weight_kg > 0 && <p className="text-[10px] text-zinc-400 mt-1">Weight: <span className="text-white">{order.total_weight_kg} kg</span></p>}
                             {order.product_link && <a href={order.product_link} target="_blank" rel="noreferrer" className="text-[10px] text-amber-500 underline mt-1 block truncate w-48">Link</a>}
                          </div>
                          <div className="text-right flex flex-col items-end">
@@ -1498,20 +2129,12 @@ export default function App() {
                             <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Update Status</label>
                             <select value={currentUpdate.status} onChange={(e) => setSourcingUpdateData({...sourcingUpdateData, [order.id]: {...currentUpdate, status: e.target.value}})} className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500">
                                <option value="pending">Pending (በሂደት ላይ)</option>
-                               <option value="approved">Approved (ተቀባይነት አግኝቷል - Adds to Batch)</option>
+                               <option value="approved">Approved (ተቀባይነት አግኝቷል)</option>
                                <option value="shipped">Shipped (በመንገድ ላይ ነው)</option>
                                <option value="arrived">Arrived (ደርሷል - Hides from view)</option>
                             </select>
                          </div>
-                         
-                         {currentUpdate.status === 'approved' && (
-                            <div>
-                               <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Set Weight (For Flight Batch)</label>
-                               <input type="number" step="0.1" value={currentUpdate.weight} onChange={(e) => setSourcingUpdateData({...sourcingUpdateData, [order.id]: {...currentUpdate, weight: e.target.value}})} placeholder="e.g. 0.5" className="w-full bg-zinc-900 border border-amber-500/50 text-white p-2 rounded-lg text-xs outline-none focus:border-amber-500" />
-                            </div>
-                         )}
-
-                         <button onClick={() => handleUpdateSourcing(order.id, order.telegram_id, order.product_name)} disabled={uploading || (currentUpdate.status === 'approved' && !currentUpdate.weight)} className="w-full bg-[#2AABEE] disabled:bg-zinc-800 text-white font-bold py-2 rounded-lg text-xs hover:bg-[#229ED9] transition-colors">
+                         <button onClick={() => handleUpdateSourcing(order.id, order.telegram_id, order.product_name)} disabled={uploading} className="w-full bg-[#2AABEE] text-white font-bold py-2 rounded-lg text-xs hover:bg-[#229ED9] transition-colors">
                             Update & Notify User
                          </button>
                       </div>
@@ -1917,8 +2540,8 @@ export default function App() {
                  ይግቡ
                </button>
             ) : (
-               <button onClick={() => setActiveTab("ፕሮፋይል")} className={`border px-3 py-1.5 rounded-full flex items-center transition-colors shadow-sm ${activeTab === 'ፕሮፋይል' ? 'bg-zinc-800 border-amber-500 text-amber-500' : 'bg-zinc-900 border-zinc-800 hover:border-amber-500/50 text-white'}`}>
-                  <User size={14} className={`${activeTab === 'ፕሮፋይል' ? 'text-amber-500' : 'text-amber-500'} mr-2`} />
+               <button onClick={() => setShowAccountMenu(true)} className="bg-zinc-900 border border-zinc-800 hover:border-amber-500/50 text-white px-3 py-1.5 rounded-full flex items-center transition-colors shadow-sm">
+                  <User size={14} className="text-amber-500 mr-2" />
                   <span className="text-xs font-bold max-w-[80px] truncate">{currentUserProfile?.full_name || "Account"}</span>
                </button>
             )}
@@ -1938,6 +2561,7 @@ export default function App() {
         </div>
       )}
 
+      {showAccountMenu && renderAccountSlideOver()}
       {showCart && renderCartSlideOver()}
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
@@ -1948,13 +2572,13 @@ export default function App() {
             {["ዋና", "ስፖርት", "ሹክሹክታ", "ማህበራዊ"].includes(activeTab) && renderPostFeed()}
             {activeTab === "ቪአይፒ" && renderVIP()}
             {activeTab === "ሱቅ" && renderShop()}
-            {activeTab === "ፕሮፋይል" && renderProfilePage()}
           </>
         )}
       </main>
 
       {renderProductDetail()}
 
+      {showProfileSlideOver && renderProfileSlideOver()}
       {showSuccessModal && renderSuccessModal()}
       {showOrderForm && renderOrderForm()}
       {renderOfflineSaleModal()}
