@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import SuccessModal from "./components/SuccessModal"; // CEO Edit: Linking the new Success Modal
 import AccountSlideOver from "./components/AccountSlideOver"; // CEO Edit: Linking the Account Menu
 import OfflineSaleModal from "./components/OfflineSaleModal"; // CEO Edit: Linking the POS Modal
+import CartSlideOver from "./components/CartSlideOver"; // CEO Edit: Linking the Cart Screen
 // Secure Supabase Connection
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_KEY;
@@ -1613,7 +1614,15 @@ export default function App() {
           getStatusBadge={getStatusBadge}
         />
       )}
-      {showCart && renderCartSlideOver()}
+      {/* CEO Edit: Using the standalone Cart Component */}
+      <CartSlideOver
+        showCart={showCart}
+        setShowCart={setShowCart}
+        cart={cart}
+        removeFromCart={removeFromCart}
+        calculateTotal={calculateTotal}
+        handleCheckout={handleCheckout}
+      />
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
         {activePost && !selectedProduct && renderSinglePost()}
